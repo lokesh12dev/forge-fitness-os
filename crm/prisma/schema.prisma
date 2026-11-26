@@ -1,0 +1,927 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  FRONTDESK
+  TRAINER
+  ACCOUNTANT
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  EXPIRING
+  OVERDUE
+  FROZEN
+  EXPIRED
+}
+
+enum GroupType {
+  FAMILY
+  COUPLE
+  CORPORATE
+}
+
+enum BillingModel {
+  MONTHLY
+  QUARTERLY
+  HALF_YEARLY
+  ANNUAL
+  PT_PACK
+  CLASS_PACK
+  DAY_PASS
+  TRIAL
+}
+
+enum AddonKind {
+  LOCKER
+  TOWEL
+  STEAM
+  PARKING
+}
+
+enum DiscountType {
+  PERCENT_BPS
+  FIXED_PAISE
+}
+
+enum PromoScope {
+  PROMO
+  EARLY_BIRD
+  REFERRAL
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  VOID
+  REFUNDED
+}
+
+enum PaymentMethod {
+  UPI
+  CARD
+  CASH
+  BANK_TRANSFER
+  SPLIT
+}
+
+enum PaymentProvider {
+  RAZORPAY
+  STRIPE
+  MANUAL
+}
+
+enum PaymentStatus {
+  PENDING
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum CheckInMethod {
+  QR
+  MANUAL
+  PHONE
+  TURNSTILE
+}
+
+enum CheckInResult {
+  ALLOWED
+  BLOCKED_EXPIRED
+  BLOCKED_FROZEN
+  OVERRIDE_ALLOWED
+}
+
+enum ConsentChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+  MARKETING
+  HEALTH_DATA
+}
+
+enum DocKind {
+  WAIVER
+  KYC_AADHAAR
+  KYC_PAN
+  MEDICAL
+  OTHER
+}
+
+enum NoteKind {
+  NOTE
+  CALL
+  FOLLOWUP
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSED
+  DLQ
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+}
+
+enum CommChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+  CALL
+  NOTE
+}
+
+enum CommStatus {
+  QUEUED
+  MOCK_SENT
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  TRIAL_BOOKED
+  TRIAL_DONE
+  NEGOTIATION
+  WON
+  LOST
+}
+
+model Organization {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  logoUrl       String?
+  currency      String   @default("INR")
+  timezone      String   @default("Asia/Kolkata")
+  gstin         String?
+  legalStateCode String  @default("KA")
+  invoicePrefix String   @default("FRG")
+  defaultGstBps Int      @default(1800)
+  demoLoaded    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  branches      Branch[]
+  holidays      BranchHoliday[]
+  memberships   OrgMembership[]
+  sessions      Session[]
+  auditLogs     AuditLog[]
+  memberGroups  MemberGroup[]
+  members       Member[]
+  plans         Plan[]
+  addons        PlanAddon[]
+  promoCodes    PromoCode[]
+  subscriptions Membership[]
+  freezes       MembershipFreeze[]
+  invoices      Invoice[]
+  payments      Payment[]
+  refunds       CreditNoteRefund[]
+  mandates      AutopayMandate[]
+  dunning       DunningAttempt[]
+  cashSessions  CashReconciliation[]
+  expenses      Expense[]
+  webhooks      WebhookEvent[]
+  checkIns      CheckIn[]
+  tasks         StaffTask[]
+  comms         CommunicationLog[]
+  consents      ConsentRecord[]
+  measurements  MemberMeasurement[]
+  documents     MemberDocument[]
+  notes         MemberNote[]
+  leads         Lead[]
+}
+
+model Branch {
+  id                  String   @id @default(cuid())
+  orgId               String
+  name                String
+  code                String
+  address             String
+  stateCode           String   @default("KA")
+  timezone            String   @default("Asia/Kolkata")
+  hoursJson           Json
+  invoiceSeriesPrefix String
+  nextInvoiceSeq      Int      @default(1)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  org           Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  holidays      BranchHoliday[]
+  sessions      Session[]
+  auditLogs     AuditLog[]
+  memberGroups  MemberGroup[]
+  members       Member[]
+  plans         Plan[]
+  addons        PlanAddon[]
+  subscriptions Membership[]
+  freezes       MembershipFreeze[]
+  invoices      Invoice[]
+  payments      Payment[]
+  refunds       CreditNoteRefund[]
+  mandates      AutopayMandate[]
+  cashSessions  CashReconciliation[]
+  expenses      Expense[]
+  checkIns      CheckIn[]
+  tasks         StaffTask[]
+  comms         CommunicationLog[]
+  consents      ConsentRecord[]
+  measurements  MemberMeasurement[]
+  documents     MemberDocument[]
+  notes         MemberNote[]
+  leads         Lead[]
+
+  @@unique([orgId, code])
+  @@index([orgId])
+}
+
+model BranchHoliday {
+  id           String   @id @default(cuid())
+  orgId        String
+  branchId     String
+  date         DateTime @db.Date
+  title        String
+  closedAllDay Boolean  @default(true)
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, branchId, date])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  phone        String?  @unique
+  name         String
+  passwordHash String?
+  googleSub    String?  @unique
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships      OrgMembership[]
+  sessions         Session[]
+  auditLogs        AuditLog[]
+  assignedMembers  Member[]            @relation("TrainerAssignedMembers")
+  checkInsHandled  CheckIn[]
+  paymentsHandled  Payment[]
+  refundsIssued    CreditNoteRefund[]
+  cashClosed       CashReconciliation[]
+  expensesCreated  Expense[]
+  notesAuthored    MemberNote[]
+  assignedTasks    StaffTask[]
+  ownedLeads       Lead[]
+}
+
+model OrgMembership {
+  id         String    @id @default(cuid())
+  orgId      String
+  userId     String
+  role       Role
+  branchIds  String[]
+  invitedAt  DateTime  @default(now())
+  acceptedAt DateTime?
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([orgId, role])
+}
+
+model Session {
+  id             String   @id @default(cuid())
+  tokenHash      String   @unique
+  userId         String
+  orgId          String
+  activeBranchId String?
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch?      @relation(fields: [activeBranchId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model OtpChallenge {
+  id           String    @id @default(cuid())
+  phoneOrEmail String
+  codeHash     String
+  channel      String
+  attempts     Int       @default(0)
+  expiresAt    DateTime
+  verifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([phoneOrEmail])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  orgId        String
+  branchId     String?
+  actorUserId  String
+  actorRole    Role
+  action       String
+  resourceType String
+  resourceId   String
+  diffJson     Json?
+  ip           String?
+  requestId    String
+  createdAt    DateTime @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  actor  User         @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+  @@index([orgId, resourceType, resourceId])
+}
+
+model MemberGroup {
+  id              String    @id @default(cuid())
+  orgId           String
+  branchId        String
+  type            GroupType
+  name            String
+  primaryMemberId String?
+  createdAt       DateTime  @default(now())
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch  Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  members Member[]
+
+  @@index([orgId, branchId])
+}
+
+model Member {
+  id                 String       @id @default(cuid())
+  orgId              String
+  branchId           String
+  memberCode         String
+  qrToken            String
+  fullName           String
+  phone              String
+  email              String?
+  dob                DateTime?    @db.Date
+  gender             String?
+  address            String?
+  stateCode          String       @default("KA")
+  emergencyName      String?
+  emergencyPhone     String?
+  goals              String?
+  healthNotesEnc     String?
+  healthConsentAt    DateTime?
+  status             MemberStatus @default(EXPIRED)
+  expiryDate         DateTime?    @db.Date
+  lastVisitedAt      DateTime?
+  groupId            String?
+  assignedTrainerId  String?
+  referralCode       String
+  referredByMemberId String?
+  tags               String[]
+  mergedIntoMemberId String?
+  deletedAt          DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  org             Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch          Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  group           MemberGroup?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  assignedTrainer User?               @relation("TrainerAssignedMembers", fields: [assignedTrainerId], references: [id], onDelete: SetNull)
+  referredBy      Member?             @relation("MemberReferrals", fields: [referredByMemberId], references: [id], onDelete: SetNull)
+  referrals       Member[]            @relation("MemberReferrals")
+  subscriptions   Membership[]
+  freezes         MembershipFreeze[]
+  invoices        Invoice[]
+  payments        Payment[]
+  mandates        AutopayMandate[]
+  checkIns        CheckIn[]
+  consents        ConsentRecord[]
+  measurements    MemberMeasurement[]
+  documents       MemberDocument[]
+  notes           MemberNote[]
+  comms           CommunicationLog[]
+  tasks           StaffTask[]
+  convertedLeads  Lead[]
+
+  @@unique([orgId, memberCode])
+  @@unique([orgId, qrToken])
+  @@unique([orgId, referralCode])
+  @@index([orgId, status, expiryDate])
+  @@index([orgId, branchId, phone])
+  @@index([orgId, branchId, status])
+}
+
+model ConsentRecord {
+  id         String         @id @default(cuid())
+  orgId      String
+  branchId   String
+  memberId   String
+  channel    ConsentChannel
+  granted    Boolean
+  source     String
+  ip         String?
+  recordedAt DateTime       @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, memberId, channel])
+}
+
+model MemberMeasurement {
+  id           String   @id @default(cuid())
+  orgId        String
+  branchId     String
+  memberId     String
+  recordedAt   DateTime @default(now())
+  weightGrams  Int
+  bodyFatBps   Int?
+  chestMm      Int?
+  waistMm      Int?
+  hipsMm       Int?
+  armMm        Int?
+  thighMm      Int?
+  notes        String?
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, recordedAt])
+}
+
+model MemberDocument {
+  id           String    @id @default(cuid())
+  orgId        String
+  branchId     String
+  memberId     String
+  kind         DocKind
+  title        String
+  fileKey      String?
+  kycLast4     String?
+  kycNumberEnc String?
+  signedAt     DateTime?
+  signedIp     String?
+  signerName   String?
+  createdAt    DateTime  @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, memberId])
+}
+
+model MemberNote {
+  id           String   @id @default(cuid())
+  orgId        String
+  branchId     String
+  memberId     String
+  authorUserId String
+  kind         NoteKind @default(NOTE)
+  body         String
+  pinned       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  author User         @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, memberId, createdAt])
+}
+
+model Plan {
+  id               String       @id @default(cuid())
+  orgId            String
+  branchId         String?
+  name             String
+  code             String
+  billingModel     BillingModel
+  durationDays     Int
+  sessionCredits   Int?
+  pricePaise       Int
+  joiningFeePaise  Int          @default(0)
+  sacCode          String       @default("999723")
+  gstRateBps       Int          @default(1800)
+  maxFreezeDays    Int          @default(30)
+  freezeFeePaise   Int          @default(0)
+  autoRenewDefault Boolean      @default(false)
+  description      String?
+  isActive         Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+
+  org           Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch        Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  subscriptions Membership[]
+
+  @@unique([orgId, code])
+  @@index([orgId, billingModel, isActive])
+}
+
+model PlanAddon {
+  id           String    @id @default(cuid())
+  orgId        String
+  branchId     String?
+  name         String
+  kind         AddonKind
+  pricePaise   Int
+  durationDays Int
+  gstRateBps   Int       @default(1800)
+  isActive     Boolean   @default(true)
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+}
+
+model PromoCode {
+  id             String       @id @default(cuid())
+  orgId          String
+  code           String
+  discountType   DiscountType
+  discountValue  Int
+  scope          PromoScope   @default(PROMO)
+  maxRedemptions Int          @default(100)
+  redeemedCount  Int          @default(0)
+  validFrom      DateTime
+  validUntil     DateTime
+  isActive       Boolean      @default(true)
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, code])
+}
+
+model Membership {
+  id                      String       @id @default(cuid())
+  orgId                   String
+  branchId                String
+  memberId                String
+  planId                  String
+  status                  MemberStatus @default(ACTIVE)
+  startDate               DateTime     @db.Date
+  endDate                 DateTime     @db.Date
+  basePricePaise          Int
+  discountPaise           Int          @default(0)
+  joiningFeePaise         Int          @default(0)
+  sessionsTotal           Int?
+  sessionsRemaining       Int?
+  autoRenew               Boolean      @default(false)
+  freezeDaysUsed          Int          @default(0)
+  promoCode               String?
+  addonsJson              Json?
+  upgradedFromId          String?
+  transferredFromMemberId String?
+  createdAt               DateTime     @default(now())
+
+  org      Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch   Branch             @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member   Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  plan     Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  freezes  MembershipFreeze[]
+  invoices Invoice[]
+  mandates AutopayMandate[]
+
+  @@index([orgId, branchId, status, endDate])
+  @@index([memberId])
+}
+
+model MembershipFreeze {
+  id           String   @id @default(cuid())
+  orgId        String
+  branchId     String
+  membershipId String
+  memberId     String
+  startDate    DateTime @db.Date
+  endDate      DateTime @db.Date
+  daysCount    Int
+  feePaise     Int      @default(0)
+  reason       String
+  approvedById String
+  createdAt    DateTime @default(now())
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch     Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  membership Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  member     Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId])
+}
+
+model Invoice {
+  id                 String        @id @default(cuid())
+  orgId              String
+  branchId           String
+  memberId           String
+  membershipId       String?
+  invoiceNumber      String
+  issueDate          DateTime      @default(now())
+  dueDate            DateTime      @db.Date
+  status             InvoiceStatus @default(ISSUED)
+  currency           String        @default("INR")
+  sacCode            String        @default("999723")
+  placeOfSupplyState String        @default("KA")
+  branchStateCode    String        @default("KA")
+  subtotalPaise      Int
+  discountPaise      Int           @default(0)
+  taxablePaise       Int
+  cgstPaise          Int           @default(0)
+  sgstPaise          Int           @default(0)
+  igstPaise          Int           @default(0)
+  totalPaise         Int
+  paidPaise          Int           @default(0)
+  balanceDuePaise    Int
+  createdAt          DateTime      @default(now())
+
+  org        Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch     Branch             @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member     Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  membership Membership?        @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  lineItems  InvoiceLineItem[]
+  payments   Payment[]
+  refunds    CreditNoteRefund[]
+  dunning    DunningAttempt[]
+
+  @@unique([orgId, branchId, invoiceNumber])
+  @@index([orgId, status, dueDate])
+  @@index([orgId, branchId, issueDate])
+}
+
+model InvoiceLineItem {
+  id             String @id @default(cuid())
+  orgId          String
+  branchId       String
+  invoiceId      String
+  description    String
+  quantity       Int    @default(1)
+  unitPricePaise Int
+  discountPaise  Int    @default(0)
+  gstRateBps     Int    @default(1800)
+  cgstPaise      Int    @default(0)
+  sgstPaise      Int    @default(0)
+  igstPaise      Int    @default(0)
+  totalPaise     Int
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id                String          @id @default(cuid())
+  orgId             String
+  branchId          String
+  memberId          String
+  invoiceId         String
+  amountPaise       Int
+  method            PaymentMethod
+  provider          PaymentProvider @default(MANUAL)
+  providerOrderId   String?
+  providerPaymentId String?
+  idempotencyKey    String          @unique
+  status            PaymentStatus   @default(CAPTURED)
+  paidAt            DateTime        @default(now())
+  collectedById     String?
+  splitMetaJson     Json?
+  referenceText     String?
+  createdAt         DateTime        @default(now())
+
+  org         Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch      Branch             @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member      Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  invoice     Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  collectedBy User?              @relation(fields: [collectedById], references: [id], onDelete: SetNull)
+  refunds     CreditNoteRefund[]
+
+  @@index([orgId, branchId, paidAt])
+}
+
+model CreditNoteRefund {
+  id               String   @id @default(cuid())
+  orgId            String
+  branchId         String
+  invoiceId        String
+  paymentId        String
+  creditNoteNumber String
+  amountPaise      Int
+  reason           String
+  issuedById       String
+  issuedAt         DateTime @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch   Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  invoice  Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  payment  Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  issuedBy User         @relation(fields: [issuedById], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, branchId, creditNoteNumber])
+}
+
+model AutopayMandate {
+  id             String   @id @default(cuid())
+  orgId          String
+  branchId       String
+  memberId       String
+  membershipId   String
+  provider       PaymentProvider
+  mandateRef     String
+  status         String
+  maxAmountPaise Int
+  nextChargeDate DateTime @db.Date
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch     Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member     Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  membership Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status])
+}
+
+model DunningAttempt {
+  id          String    @id @default(cuid())
+  orgId       String
+  invoiceId   String
+  attemptNo   Int
+  scheduledAt DateTime
+  status      String
+  errorCode   String?
+  executedAt  DateTime?
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invoice Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, status])
+}
+
+model CashReconciliation {
+  id                 String   @id @default(cuid())
+  orgId              String
+  branchId           String
+  date               DateTime @db.Date
+  openingCashPaise   Int
+  collectedCashPaise Int
+  countedCashPaise   Int
+  variancePaise      Int
+  notes              String?
+  closedById         String
+  closedAt           DateTime @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch   Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  closedBy User         @relation(fields: [closedById], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, branchId, date])
+}
+
+model Expense {
+  id             String   @id @default(cuid())
+  orgId          String
+  branchId       String
+  category       String
+  vendorName     String
+  description    String
+  amountPaise    Int
+  gstPaise       Int      @default(0)
+  incurredOn     DateTime @db.Date
+  receiptFileKey String?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch    Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdBy User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([orgId, branchId, incurredOn])
+}
+
+model WebhookEvent {
+  id              String        @id @default(cuid())
+  orgId           String
+  provider        PaymentProvider
+  externalEventId String
+  signatureValid  Boolean
+  payloadJson     Json
+  status          WebhookStatus @default(RECEIVED)
+  attempts        Int           @default(0)
+  lastError       String?
+  processedAt     DateTime?
+  createdAt       DateTime      @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalEventId])
+  @@index([orgId, status])
+}
+
+model CheckIn {
+  id             String        @id @default(cuid())
+  orgId          String
+  branchId       String
+  memberId       String
+  visitedAt      DateTime      @default(now())
+  method         CheckInMethod @default(QR)
+  result         CheckInResult
+  overrideReason String?
+  checkedInById  String?
+  deviceId       String?
+
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch      Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member      Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  checkedInBy User?        @relation(fields: [checkedInById], references: [id], onDelete: SetNull)
+
+  @@index([orgId, branchId, visitedAt])
+  @@index([memberId, visitedAt])
+}
+
+model StaffTask {
+  id              String     @id @default(cuid())
+  orgId           String
+  branchId        String
+  title           String
+  priority        String     @default("MEDIUM")
+  dueDate         DateTime   @db.Date
+  assignedToId    String?
+  relatedMemberId String?
+  status          TaskStatus @default(OPEN)
+  createdAt       DateTime   @default(now())
+
+  org           Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch        Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  assignedTo    User?        @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  relatedMember Member?      @relation(fields: [relatedMemberId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, branchId, status])
+}
+
+model CommunicationLog {
+  id            String      @id @default(cuid())
+  orgId         String
+  branchId      String
+  memberId      String
+  channel       CommChannel
+  direction     String      @default("OUTBOUND")
+  templateCode  String?
+  body          String
+  status        CommStatus  @default(MOCK_SENT)
+  providerMsgId String?
+  createdAt     DateTime    @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, memberId, createdAt])
+}
+
+model Lead {
+  id                String    @id @default(cuid())
+  orgId             String
+  branchId          String
+  fullName          String
+  phone             String
+  email             String?
+  source            String
+  stage             LeadStage @default(NEW)
+  score             Int       @default(50)
+  trialAt           DateTime?
+  ownerId           String?
+  convertedMemberId String?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch          Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  owner           User?        @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  convertedMember Member?      @relation(fields: [convertedMemberId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, branchId, stage])
+  @@index([orgId, createdAt])
+}

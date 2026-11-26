@@ -1,158 +1,176 @@
-# FORGE BUILD PLAN — Master Phased Roadmap
+# FORGE CRM — Master Architecture, Data Model, Roles Matrix & Phased Build Plan
 
-> One prompt, six phases. Each phase ends with a report and review gate.
-
----
-
-## Phase 0: Audit & Bug Fixes ← **COMPLETE**
-
-### Milestones
-
-| # | Milestone | Status |
-|---|-----------|--------|
-| 0.1 | Full codebase audit → `/docs/AUDIT.md` | ✅ Done |
-| 0.2 | Fix TypeScript errors (landing page imports) | ✅ Done |
-| 0.3 | Fix level/XP formula — single source of truth | ✅ Done (`computeLevelProgress`) |
-| 0.4 | Fix weekly session checkmarks (done/skipped/next/upcoming) | ✅ Done (date-keyed completion) |
-| 0.5 | Fix "Week N of M" computation | ✅ Done (`currentProgramWeek`) |
-| 0.6 | Fix readiness card — labels, dates, factor breakdown | ✅ Done (breakdown + confidence badge) |
-| 0.7 | Fix Start session CTA — sticky bottom bar on mobile | ✅ Done (train + dashboard cards) |
-| 0.8 | Fix sign-out clipping + hide dev badge | ✅ Done (profile menu, drawer sign-out) |
-| 0.9 | Add target weights to exercise rows on Train | ✅ Done (`suggestedLoad`) |
-| 0.10 | Differentiate Dashboard vs Train session cards | ✅ Done (dashboard = readiness/fuel, train = plan table) |
-| 0.11 | Fix fabricated leaderboard volume | ✅ Partial (real streak; peer volume still unavailable) |
-| 0.12 | Fix "6-week load" and "14.7k kg proj." labels | ✅ Done ("Weekly load", real target weights) |
-| 0.13 | Create seed baseline with deterministic test fixtures | ✅ Seed baseline (fixtures pending) |
-| 0.14 | Typecheck + build pass | ✅ Done |
-| 0.15 | Phase 0 report → stop for review | ✅ This document |
-
-### Phase 0 verification (2026-11-26)
-- `npm run build` — clean
-- `npx vitest run` — 28/28 passing (`src/lib/engine.test.ts`)
-- All 14 routes return HTTP 200
-- Known gaps: peer leaderboard volume needs historical sets per user; real auth, offline sync, PWA, and full monorepo remain Sprint 1+.
-
+> **Note:** The existing FORGE Consumer Training OS documentation has been preserved verbatim at [FORGE-APP-PLAN.md](./FORGE-APP-PLAN.md). This document defines **FORGE CRM**, a multi-tenant India-first B2B gym CRM and operations SaaS platform.
 
 ---
 
-## Sprint 1: The Perfect Logger (A1–A10, I1–I2) ← **COMPLETE**
+## 1. Product Scope, Workspace Placement & Stack
 
-### Goal
-The fastest, most reliable set logger in the category. Built Active Workout screen first with 2-tap logging, superset auto-advance, Olympic plate calculator, floating rest timer, live PR detection, and offline sync.
+**FORGE CRM** will live in a dedicated sibling Next.js workspace at `/crm` (`http://localhost:3001`), keeping the existing FORGE member training app (`/app`, port `3000`, SQLite + Drizzle) intact while providing a clean REST/webhook bridge in Phase 3 to sync assigned workout/diet plans and logged sessions.
 
-### Milestones
-| # | Feature | IDs | Status |
-|---|---------|-----|--------|
-| 1.1 | 2-tap `SetRow` with previous ghost values & rapid stepper | A1 | ✅ Done |
-| 1.2 | Set type cycling (Normal, Warmup `W`, Drop `D`, Failure `F`) | A1 | ✅ Done |
-| 1.3 | Superset visual badges (`SS-1A`, `SS-1B`) & auto-advance partner focus | A2 | ✅ Done |
-| 1.4 | `FloatingRestTimer` with Web Audio harmonic chime & vibration haptics | A3 | ✅ Done |
-| 1.5 | Previous performance ghost values & target pre-fills | A4 | ✅ Done |
-| 1.6 | `PlateCalculatorModal` (Olympic sleeve visualization + warm-up generator) | A5 | ✅ Done |
-| 1.7 | Live PR detection, projected e1RM calculation & PR celebration card | A6 | ✅ Done |
-| 1.8 | Exercise library expansion with alias search ("rdl", "ohp", "bb bench", etc.) | A8 | ✅ Done |
-| 1.9 | Active workout crash recovery via local state snapshots | A9 | ✅ Done |
-| 1.10 | Offline-first sync manager (`syncManager`, queue, idempotency, `SyncStatusPill`) | A10 | ✅ Done |
-| 1.11 | Responsive shell with bottom navigation & sticky action CTAs | I2 | ✅ Done |
-| 1.12 | Tests: 41/41 unit tests pass + Playwright e2e (360px, 768px, 1440px) | — | ✅ Done |
+### Stack
+| Layer | Technology | Notes |
+| --- | --- | --- |
+| **Framework** | Next.js 16 (App Router) + TypeScript (`strict: true`) | Server Actions + Route Handlers with Zod request/form validation |
+| **Styling** | Tailwind CSS v4 (Bauhaus / Swiss Poster Tokens) | `#F6F1E4` paper, `#151515` ink, `#C8372B` red, `#2B4BCC` blue, `#EBC95B` yellow; light + dark theme |
+| **Database** | PostgreSQL 16 + Prisma ORM | Native PostgreSQL 16 (`postgresql@16` verified locally) & Docker `postgres:16-alpine`; every tenant table includes `orgId` + `branchId` |
+| **Queue & Cache** | Redis + BullMQ | Local `redis-server` v8 / Docker `redis:7-alpine`; handles billing dunning, webhook retries, DLQ, scheduled reports, and campaign fan-out |
+| **Auth & Sessions** | Auth.js v5 / Custom Iron Session Adapter | Email + password (Argon2id/scrypt), Phone OTP (adapter), Google OAuth (adapter), HTTP-only `SameSite=Lax` cookies, CSRF protection |
+| **Payments** | Razorpay + Stripe Provider Adapters | UPI QR/intent, cards, autopay mandates, HMAC-SHA256 webhook verification, idempotency keys, mock webhook simulator when keys absent |
+| **Messaging** | WhatsApp Business Cloud API + SMS + Email Adapters | Template approval states, opt-in/opt-out enforcement, mock delivery adapter + inbox log when keys absent |
+| **Storage** | S3-Compatible Client (MinIO / AWS S3) + Signed URLs | Local signed file store fallback when MinIO/S3 env vars omitted; MIME + size validation on uploads |
+| **Observability** | Sentry SDK + Structured JSON Logger + `requestId` | Health checks (`/api/health`, `/api/ready`), BullMQ queue inspector in Admin |
+| **Testing & CI** | Vitest + Fast-check/Property Math Tests + Playwright | Multi-viewport desktop (`1440px`), tablet (`768px`), mobile (`390px`), migration dry-run |
+| **Infra** | `docker-compose.yml` (`postgres`, `redis`, `minio`, `crm`, `worker`) | One-command boot |
 
-### Sprint 1 Verification Results (2026-11-26)
-- **TypeScript Typecheck:** 0 errors (`npx tsc --noEmit`)
-- **Unit Tests:** 41/41 passed (`src/lib/engine.test.ts`, `src/lib/exercise-aliases.test.ts`, `src/lib/sprint1-features.test.ts`)
-- **Production Build:** Clean (`next build` across all 14 routes)
-- **1-Tap Set Logging Latency Benchmark:** 29ms–48ms across viewports (target: < 100ms)
-- **Console Errors:** 0 console errors across all viewports in Playwright e2e runs
-- **Artifacts:** Full-page screenshots captured at 360px, 768px, 1440px
+### Core Engineering Invariants
+1. **Integer Money Only**: Every currency amount is stored in **integer paise** (`Int` / `BigInt`, e.g., `₹1,999.00 = 199900`) — zero floating-point arithmetic anywhere in pricing, GST splits, dues, refunds, or charts.
+2. **UTC Storage / Branch Timezone Display**: All datetimes are stored in UTC (`timestamptz`) and formatted strictly in `branch.timezone` (default `Asia/Kolkata`). Date arithmetic (`extension`, `freeze`, `T-7` expiry) operates in calendar date math per branch TZ.
+3. **Strict Multi-Tenant Server Scoping**: Every server query reads `session.orgId` and authorized `branchIds` from verified session state via `scopedDb(ctx)` — never trusting client-supplied `orgId` or unauthorized `branchId`.
+4. **Encryption & Compliance (India DPDP Act 2023 + GDPR)**: Sensitive medical (`healthNotesEnc`) and KYC (`kycNumberEnc`) fields are encrypted at rest with AES-256-GCM. Explicit marketing/WhatsApp/email opt-in records and IP+timestamped digital waivers are mandatory before outreach.
+5. **Idempotent Webhooks**: Payment webhooks verify HMAC signature, record `WebhookEvent(provider, externalEventId)` in a unique transaction, and never mark an invoice `PAID` without cryptographic verification or an audited staff cash/manual settlement.
 
 ---
 
-## Sprint 2: Adaptive + Voice (B1–B5, C1)
+## 2. Bauhaus / Swiss Poster Design System
 
-### Goal
-Smart auto-regulation that earns trust by showing its reasoning, plus voice/text logging.
-
-### Milestones
-| # | Feature | IDs | Status | Notes |
-|---|---------|-----|--------|-------|
-| 2.1 | Readiness daily check-in + ring + 7-day chart | B1 | **COMPLETE** | Interactive modal, sleep/HRV/RHR/soreness sliders, instant score update |
-| 2.2 | Auto-regulated loads (target weights from engine + "why") | B2 | **COMPLETE** | Target weight engine with explainable "Why this weight?" calculation badge |
-| 2.3 | One-tap equipment swap (ranked equivalents + equipment profiles) | B3 | **COMPLETE** | Commercial, Home Gym, Hotel/Travel, and Calisthenics kit filters |
-| 2.4 | "I have N minutes" session compression with diff | B4 | **COMPLETE** | 15m Blitz, 25m Standard, 40m Moderate with antagonist supersets & diff |
-| 2.5 | Muscle fatigue heatmap (front/back SVG, tap for detail) | B5 | **COMPLETE** | Interactive BodyMap with tap-for-detail recovery drawer & exercise suggestions |
-| 2.6 | Voice and text logging (LLM parser + regex fallback + confirm sheet) | C1 | **COMPLETE** | Shorthand (100x8@8), plate slang, spoken units, VoiceConfirmSheet safety |
-| 2.7 | Tests: 60+ parser phrases, engine property tests, swap tests | — | **COMPLETE** | 115/115 tests passing, Playwright e2e across 360px, 768px, 1440px |
+- **Palette (Light / Default):** Paper `#F6F1E4`, Ink `#151515`, Red `#C8372B`, Blue `#2B4BCC`, Yellow `#EBC95B`, White `#FFFFFF`, Grey `#6F6B61`.
+- **Palette (Dark Theme Toggle):** Canvas `#151515`, Panel `#222222`, Elevated `#2B2B2B`, Text `#F6F1E4`, Muted `#9B968B`, borders `#F6F1E4`.
+- **Contrast Rules:** Crisp white (`#FFFFFF`) text on Red/Blue/Ink blocks; `#151515` ink on Yellow/Paper/White blocks. Never place text over decorative geometry. Color is always reinforced by uppercase labels, icons, or crisp stripe/hatch patterns.
+- **Typography:** `Archivo Black` (`uppercase`, `line-height: 0.9`, negative tracking) for display headlines; `Space Grotesk` with `tabular-nums` for body & numbers. Scale strictly `12 / 14 / 16 / 18 / 24 / 32 / 44 / 64` px — **zero text below `12px`**. Eyebrow labels `12–13px` bold uppercase, `0.12em` tracking, prefixed `//`, max 2 lines.
+- **Rules & Motion:** Flat color blocks, `2px` (`2px–3px`) solid `#151515` borders, `0px` corner radius (`rounded-none`; true circles only for explicit Bauhaus dots, avatars, or geometric illustrations), zero gradients/shadows/blur/glass/emoji/stock photos/purple/indigo/teal. Mechanical `150–200ms` transitions honoring `prefers-reduced-motion`.
+- **Reusable Primitive Library (`/crm/src/components/ui`):** `Button` (`primary` `#C8372B` `56px`/`40px`, `secondary` `#151515`, `tertiary` bordered), `StatTile`, `DataTable` (sticky thead, `2px` dividers, column chooser, saved filters, row action menu, CSV export), `FilterBar`, `KanbanBoard`, `Timeline`, `Drawer`, `Modal`, `Toast`, `EmptyState`, `SegmentedProgress`, `Calendar`, `Charts` (thick SVG strokes, square points, labelled axes), `StatusPill` (`ACTIVE` `#2B4BCC`, `EXPIRING` `#EBC95B`, `OVERDUE` `#C8372B`, `FROZEN` `#6F6B61`), `Avatar`, `QRCode`.
+- **Shell & Responsive Breakpoints:** `4px` base grid, `12-column` desktop grid (`1440px`), tablet rail (`768px`), mobile (`390px`) bottom tab bar with `>= 48px` tap targets, global `⌘K` search palette, branch switcher, quick-add (`+ Member`, `+ Payment`, `+ Check-in`), theme toggle.
 
 ---
 
-## Sprint 3: Retention + Platform (D1–D4, E1–E3, G1, I3–I4, E7) ← **COMPLETE**
+## 3. Data Model (PostgreSQL + Prisma)
 
-### Goal
-Food log with authentic Indian foods and standard regional units, smart protein optimizer, 7-day smoothed progress trends, server-authoritative gamification, data export sovereignty, and subscription plans with mock checkout adapters.
+Every tenant table carries `orgId String` and `branchId String` (or nullable `branchId` when org-wide such as Org Settings / Catalog Plan definitions, always filtered server-side by `orgId`). Core indexes on `(orgId, status, expiryDate)` and `(memberId, visitedAt)`.
 
-### Milestones
-| # | Feature | IDs | Status | Notes |
-|---|---------|-----|--------|-------|
-| 3.1 | Food log (search, barcode scanner mock, recents, custom foods, recipes) | D1 | **COMPLETE** | Live animated viewfinder barcode scanner mock, verified EAN presets (Amul, ON Whey, Epigamia, Fortune) |
-| 3.2 | Indian and regional foods (IFCT authentic data, katori/roti/piece units) | D2 | **COMPLETE** | Authentic nutritional items: Dal Tadka, Paneer Bhurji, Soya Chunks, Biryani, Rohu Fish, Roti, Idli, Dosa |
-| 3.3 | Targets and macro rings (Mifflin-St Jeor TDEE calc, editable goals) | D3 | **COMPLETE** | Animated multi-ring concentric SVG (Calories, Lime Protein, Sky Carbs, Amber Fat) + countdown center |
-| 3.4 | "Hit my remaining protein" smart suggestions | D4 | **COMPLETE** | Pure ranking engine evaluating protein density per 100 kcal with dietary preference filtering |
-| 3.5 | Exercise charts (e1RM, volume, PRs, range selector: 4w, 8w, 12w, 24w) | E1 | **COMPLETE** | Interactive multi-range period selector (`4w · 1M`, `8w · 2M`, `12w · 3M`, `24w · 6M`) on volume and e1RM |
-| 3.6 | Body tracking (weight trend with 7-day moving average, body fat %, photos) | E2 | **COMPLETE** | 7-day smoothed moving average dampening glycogen/water fluctuations with "7-Day Smoothed" badge |
-| 3.7 | Reports (weekly/monthly digests, 1-click CSV & JSON export) | E3 | **COMPLETE** | User data sovereignty with unencumbered CSV & JSON historical records export |
-| 3.8 | Gamification (streaks, XP, levels, badges, server-authoritative evaluation) | G1 | **COMPLETE** | Century Club, Iron Streak, Double BW Squat, Volume Titan, Protein Champion badge cards with progress bars |
-| 3.9 | Privacy & Data Sovereignty (visibility controls, telemetry toggle, cache reset) | I3 | **COMPLETE** | Profile visibility toggle, telemetry disable switch, local IndexedDB wipe, and account purge danger zone |
-| 3.10 | Plans (Free/Pro/Gym B2B, feature flags, PaywallCard, Razorpay + Stripe) | I4 | **COMPLETE** | Tier comparison cards, INR (₹799) / USD ($9.99) currency toggle, mock Razorpay UPI & Stripe sessions |
-| 3.11 | Consistency module (shared metrics, one value per screen) | E7 | **COMPLETE** | Single source of truth for `formatProgramWeek`, `formatVolumeMetric`, `formatUserLevel`, `formatStreak` |
-| 3.12 | Tests: unit tests + Playwright e2e across 3 viewports | — | **COMPLETE** | 131/131 unit tests passing, Playwright e2e passing across 360px, 768px, and 1440px with 0 console errors |
+### Phase 1 Tables (Implemented in Phase 1)
+| Model | Key Columns | Scoping & Indexes |
+| --- | --- | --- |
+| `Organization` | `id`, `name`, `slug`, `logoUrl`, `primaryColor`, `currency` (`INR`), `timezone` (`Asia/Kolkata`), `gstin`, `legalStateCode`, `invoicePrefix`, `taxRatesJson`, `demoLoaded` | Root tenant |
+| `Branch` | `id`, `orgId`, `name`, `code`, `address`, `stateCode`, `timezone`, `hoursJson`, `invoiceSeriesPrefix`, `nextInvoiceSeq`, `isActive` | `@@index([orgId])` |
+| `BranchHoliday` | `id`, `orgId`, `branchId`, `date`, `title`, `closedAllDay` | `@@index([orgId, branchId, date])` |
+| `User` | `id`, `email`, `phone`, `name`, `passwordHash`, `googleSub`, `avatarUrl`, `isActive` | Unique `email`, `phone` |
+| `OrgMembership` | `id`, `orgId`, `userId`, `role` (`OWNER\|MANAGER\|FRONTDESK\|TRAINER\|ACCOUNTANT\|MEMBER`), `branchIds String[]`, `invitedById`, `acceptedAt` | `@@unique([orgId, userId])`, `@@index([orgId, role])` |
+| `Session` | `id`, `userId`, `orgId`, `activeBranchId`, `tokenHash`, `expiresAt`, `ip`, `userAgent` | `@@index([userId])`, `@@index([expiresAt])` |
+| `OtpChallenge` | `id`, `phoneOrEmail`, `codeHash`, `channel`, `attempts`, `expiresAt`, `verifiedAt` | `@@index([phoneOrEmail])` |
+| `AuditLog` | `id`, `orgId`, `branchId`, `actorUserId`, `actorRole`, `action`, `resourceType`, `resourceId`, `diffJson`, `ip`, `requestId`, `createdAt` | Immutable append-only; `@@index([orgId, createdAt])` |
+| `ConsentRecord` | `id`, `orgId`, `branchId`, `memberId`, `channel` (`WHATSAPP\|SMS\|EMAIL\|MARKETING\|HEALTH_DATA`), `granted`, `source`, `ip`, `recordedAt` | `@@index([orgId, memberId, channel])` |
+| `MemberGroup` | `id`, `orgId`, `branchId`, `type` (`FAMILY\|COUPLE\|CORPORATE`), `name`, `primaryMemberId` | `@@index([orgId, branchId])` |
+| `Member` | `id`, `orgId`, `branchId`, `memberCode`, `qrToken`, `fullName`, `phone`, `email`, `dob`, `gender`, `address`, `stateCode`, `emergencyName`, `emergencyPhone`, `goals`, `healthNotesEnc`, `status` (`ACTIVE\|EXPIRING\|OVERDUE\|FROZEN\|EXPIRED`), `expiryDate`, `groupId`, `assignedTrainerId`, `referralCode`, `referredByMemberId`, `tags String[]`, `mergedIntoMemberId`, `deletedAt` | `@@unique([orgId, memberCode])`, `@@unique([orgId, qrToken])`, `@@index([orgId, status, expiryDate])`, `@@index([orgId, branchId, phone])` |
+| `MemberMeasurement` | `id`, `orgId`, `branchId`, `memberId`, `recordedAt`, `weightGrams`, `bodyFatBps`, `chestMm`, `waistMm`, `hipsMm`, `armMm`, `thighMm`, `notes` | `@@index([memberId, recordedAt])` |
+| `MemberDocument` | `id`, `orgId`, `branchId`, `memberId`, `kind` (`WAIVER\|KYC_AADHAAR\|KYC_PAN\|MEDICAL\|OTHER`), `fileKey`, `kycLast4`, `kycNumberEnc`, `signedAt`, `signedIp`, `signerName` | `@@index([orgId, memberId])` |
+| `MemberNote` | `id`, `orgId`, `branchId`, `memberId`, `authorUserId`, `kind` (`NOTE\|CALL\|FOLLOWUP`), `body`, `pinned`, `createdAt` | `@@index([orgId, memberId, createdAt])` |
+| `Plan` | `id`, `orgId`, `branchId` (nullable for org-wide), `name`, `code`, `billingModel` (`MONTHLY\|QUARTERLY\|HALF_YEARLY\|ANNUAL\|PT_PACK\|CLASS_PACK\|DAY_PASS\|TRIAL`), `durationDays`, `sessionCredits`, `pricePaise`, `joiningFeePaise`, `sacCode` (`999723`), `gstRateBps` (`1800`), `maxFreezeDays`, `freezeFeePaise`, `autoRenewDefault`, `isActive` | `@@index([orgId, billingModel, isActive])` |
+| `PlanAddon` | `id`, `orgId`, `branchId`, `name`, `kind` (`LOCKER\|TOWEL\|STEAM\|PARKING`), `pricePaise`, `durationDays`, `gstRateBps`, `isActive` | `@@index([orgId])` |
+| `PromoCode` | `id`, `orgId`, `code`, `discountType` (`PERCENT_BPS\|FIXED_PAISE`), `discountValue`, `scope` (`PROMO\|EARLY_BIRD\|REFERRAL`), `maxRedemptions`, `redeemedCount`, `validFrom`, `validUntil`, `isActive` | `@@unique([orgId, code])` |
+| `Membership` | `id`, `orgId`, `branchId`, `memberId`, `planId`, `status`, `startDate`, `endDate`, `basePricePaise`, `discountPaise`, `joiningFeePaise`, `sessionsTotal`, `sessionsRemaining`, `autoRenew`, `freezeDaysUsed`, `upgradedFromId`, `transferredFromMemberId` | `@@index([orgId, branchId, status, endDate])`, `@@index([memberId])` |
+| `MembershipFreeze` | `id`, `orgId`, `branchId`, `membershipId`, `memberId`, `startDate`, `endDate`, `daysCount`, `feePaise`, `reason`, `approvedById` | `@@index([membershipId])` |
+| `Invoice` | `id`, `orgId`, `branchId`, `memberId`, `membershipId`, `invoiceNumber`, `issueDate`, `dueDate`, `status` (`DRAFT\|ISSUED\|PARTIALLY_PAID\|PAID\|VOID\|REFUNDED`), `currency`, `sacCode`, `placeOfSupplyState`, `subtotalPaise`, `discountPaise`, `taxablePaise`, `cgstPaise`, `sgstPaise`, `igstPaise`, `totalPaise`, `paidPaise`, `balanceDuePaise` | `@@unique([orgId, branchId, invoiceNumber])`, `@@index([orgId, status, dueDate])` |
+| `InvoiceLineItem` | `id`, `orgId`, `branchId`, `invoiceId`, `description`, `quantity`, `unitPricePaise`, `discountPaise`, `gstRateBps`, `cgstPaise`, `sgstPaise`, `igstPaise`, `totalPaise` | `@@index([invoiceId])` |
+| `Payment` | `id`, `orgId`, `branchId`, `memberId`, `invoiceId`, `amountPaise`, `method` (`UPI\|CARD\|CASH\|BANK_TRANSFER\|SPLIT`), `provider` (`RAZORPAY\|STRIPE\|MANUAL`), `providerOrderId`, `providerPaymentId`, `idempotencyKey`, `status` (`PENDING\|CAPTURED\|FAILED\|REFUNDED`), `paidAt`, `collectedById`, `splitMetaJson` | `@@unique([idempotencyKey])`, `@@index([orgId, branchId, paidAt])` |
+| `CreditNoteRefund` | `id`, `orgId`, `branchId`, `invoiceId`, `paymentId`, `creditNoteNumber`, `amountPaise`, `reason`, `issuedById`, `issuedAt` | `@@unique([orgId, branchId, creditNoteNumber])` |
+| `AutopayMandate` | `id`, `orgId`, `branchId`, `memberId`, `membershipId`, `provider`, `mandateRef`, `status`, `maxAmountPaise`, `nextChargeDate` | `@@index([orgId, status])` |
+| `DunningAttempt` | `id`, `orgId`, `branchId`, `invoiceId`, `attemptNo`, `scheduledAt`, `status`, `errorCode`, `executedAt` | `@@index([orgId, status])` |
+| `CashReconciliation` | `id`, `orgId`, `branchId`, `date`, `openingCashPaise`, `collectedCashPaise`, `countedCashPaise`, `variancePaise`, `notes`, `closedById`, `closedAt` | `@@unique([orgId, branchId, date])` |
+| `Expense` | `id`, `orgId`, `branchId`, `category`, `vendorName`, `description`, `amountPaise`, `gstPaise`, `incurredOn`, `receiptFileKey`, `createdById` | `@@index([orgId, branchId, incurredOn])` |
+| `WebhookEvent` | `id`, `orgId`, `provider`, `externalEventId`, `signatureValid`, `payloadJson`, `status` (`RECEIVED\|PROCESSED\|DLQ`), `attempts`, `lastError`, `processedAt` | `@@unique([provider, externalEventId])` |
+| `CheckIn` | `id`, `orgId`, `branchId`, `memberId`, `visitedAt`, `method` (`QR\|MANUAL\|PHONE\|TURNSTILE`), `result` (`ALLOWED\|BLOCKED_EXPIRED\|BLOCKED_FROZEN\|OVERRIDE_ALLOWED`), `overrideReason`, `checkedInById`, `deviceId` | `@@index([orgId, branchId, visitedAt])`, `@@index([memberId, visitedAt])` |
+| `StaffTask` | `id`, `orgId`, `branchId`, `title`, `priority`, `dueDate`, `assignedToId`, `relatedMemberId`, `status` (`OPEN\|DONE`) | `@@index([orgId, branchId, status])` |
+| `CommunicationLog` | `id`, `orgId`, `branchId`, `memberId`, `channel` (`WHATSAPP\|SMS\|EMAIL\|CALL\|NOTE`), `direction`, `templateCode`, `body`, `status` (`QUEUED\|MOCK_SENT\|SENT\|DELIVERED\|READ\|FAILED`), `providerMsgId`, `createdAt` | `@@index([orgId, memberId, createdAt])` |
 
-### Sprint 3 Verification Results (2026-11-26)
-- **TypeScript Typecheck:** 0 errors (`npx tsc --noEmit`)
-- **Unit Tests:** 131/131 passed (`src/lib/sprint3-features.test.ts` 16/16, full suite 131/131)
-- **Production Build:** Clean (`next build` across all 14 routes)
-- **Console Errors:** 0 console errors across all viewports in Playwright e2e runs
-- **Playwright E2E:** Verified across 360px (mobile), 768px (tablet), and 1440px (desktop)
-- **Artifacts:** Full screenshots captured for `/app/nutrition`, `/app/progress`, and `/app/settings` saved in `/docs/screens/` and artifact brain directory.
-
----
-
-## Phase 4: P1 Features (each behind feature flag)
-
-### Completed Core Milestones (Part 1 & Part 2)
-| # | Feature | IDs | Status | Notes |
-|---|---------|-----|--------|-------|
-| 4.1 | Universal CSV Import/Export (Hevy, Strong, FitNotes, Jefit) | A11 | **COMPLETE** | Live multi-app CSV parser, auto weight unit conversion (lbs to kg), alias matching, drag-and-drop modal |
-| 4.2 | 10 Built-in Programs Catalog & Selector | F1 | **COMPLETE** | PPL, Upper/Lower, Full Body 3x, 5/3/1 BBB, GZCLP, PHUL, Arnold Split, Calisthenics, Glute Focus, Athletic |
-| 4.3 | AI Coach Advanced Intelligence & Context Quick-Pills | F2 | **COMPLETE** | Contextual responses for bench plateau analysis, deload week structuring, crowded gym swaps, missed workouts |
-| 4.4 | Plateau Detection & Actionable Periodization | B6 | **COMPLETE** | Detects stalled e1RM over 3 consecutive sessions at RPE ≥ 8.0, prescribes micro-loading, rep shifts, 10% resets |
-| 4.5 | Missed-Session Rescheduling Engine | B9, B10 | **COMPLETE** | Rolling calendar slide, antagonist superset merge, and forgive & advance macrocycle modes |
-| 4.6 | Crowded Gym Mode (1-Tap Barbell Swaps) | B7 | **COMPLETE** | Replaces occupied squat racks/benches with heavy DB bench, Bulgarian split squats, and DB rows |
-| 4.7 | Phase 4 Feature Flags System | — | **COMPLETE** | Centralized flag registry in `lib/feature-flags.ts` with runtime override support |
-| 4.8 | Cardio Engine & Advanced Set Types | A12, A13 | **COMPLETE** | Tanaka HR zones 1–5, ACSM MET calorie formula, pace/speed calculator, GPS Haversine, 4-digit tempo, unilateral asymmetry, Myo-reps |
-| 4.9 | Multimodal Photo-to-Macro Vision Scanner | D5 | **COMPLETE** | Multimodal bounding-box food scanner with confidence scores, ingredient segmentation, and 1-tap logging |
-| 4.10 | Social ShareCard Generator (1:1 & 9:16) | G2, G3 | **COMPLETE** | Aesthetic achievement card exporter with PR badge, volume, and level stats in Square and Story formats |
-| 4.11 | Trainer & Athlete Roster Portal | F3, F4 | **COMPLETE** | Full athlete roster, adherence monitoring, fatigue alerts, and 1-tap program prescription with custom load modifiers |
-| 4.12 | Gym Owner Operations & Attendance Portal | H1-H4 | **COMPLETE** | Live floor occupancy gauge, equipment sensor bottlenecks, fast check-in terminal, and real-time MRR analytics |
-| 4.13 | Wearables & Platform Sync Engine | C3-C6, I5 | **COMPLETE** | Bidirectional sync with Apple Health / Health Connect / Garmin; imports resting HR, HRV, sleep into CNS readiness engine |
-| 4.14 | On-Device Form Check Studio | C2 | **COMPLETE** | 17-joint tracking simulation, depth checking (hip < knee), bar path analysis, and real-time biomechanical cues |
-| 4.15 | Complete Verification & Multi-Viewport E2E | — | **COMPLETE** | 174/174 unit tests passing, Playwright e2e passing across 360px, 768px, and 1440px with 0 console errors |
-
-### Phase 4 Verification Results (2026-11-26)
-- **TypeScript Typecheck:** 0 errors (`npx tsc --noEmit`)
-- **Unit Tests:** 174/174 passed across 10 test suites (`cardio-engine`, `wearables-sync`, `voice-parser`, `b2b-portal`, `engine`, `sprint1`, `sprint2`, `sprint3`, `phase4-features`, `exercise-aliases`)
-- **Production Build:** Clean (`next build` across all 16 routes)
-- **Console Errors:** 0 console errors across all viewports in Playwright e2e runs
-- **Playwright E2E:** Verified across 360px (mobile), 768px (tablet), and 1440px (desktop)
-- **Artifacts:** Full screenshots captured for `/app/programs`, `/app/coach`, `/app/nutrition`, `/app/train`, `/app/social`, `/app/trainer`, `/app/gym`, `/app/settings` (wearables), and `/app/form-check` saved in `/docs/screens/` and artifact brain directory.
+### Phase 2–4 Planned Tables (Added per Phase)
+- **Phase 2 (Growth Engine):** `Lead` (with pipeline stages `NEW|CONTACTED|TRIAL_BOOKED|TRIAL_DONE|NEGOTIATION|WON|LOST`, `source`, `score`, `ownerId`), `LeadTask`, `CampaignCost`, `MessageTemplate` (WhatsApp DLT/Meta approval state), `InboxThread`, `BroadcastCampaign`, `AutomationRule` (visual trigger/condition/action/delay + quiet hours + per-member cap + dry-run mode), `AutomationRun`, `ChurnRiskSnapshot`, `ReferralReward`, `LoyaltyPointsLedger`, `LoyaltyTier`.
+- **Phase 3 (Operations):** `ClassType`, `ClassSession`, `ClassBooking` (capacity, waitlist, cutoff, no-show fee), `TrainerProfile`, `TrainerCommissionRule`, `PtSession`, `CommissionPayroll`, `WorkoutDietTemplate` (Indian veg/egg/non-veg/jain diet + workouts + FORGE `/app` API sync token), `MemberWorkoutAssignment`, `InventoryItem`, `Supplier`, `PurchaseOrder`, `PosSale`, `EquipmentAsset`, `EquipmentMaintenanceLog`, `StaffShift`, `StaffAttendanceLog`, `MemberFeedbackNps`.
+- **Phase 4 (Intelligence & Admin):** `ScheduledReport`, `AiAssistantLog` (tool citations, token/org budget), `MigrationImportJob` (Gymdesk/Mindbody/Hevy/CSV dry-run), `ApiKey`, `WebhookSubscription`, `DataExportDeletionJob`.
 
 ---
 
-## Definition of Done (per phase gate)
+## 4. Roles & Permissions Matrix (Server-Enforced RBAC + Branch Scoping)
 
-- [ ] No console errors
-- [ ] No hardcoded or fake numbers
-- [ ] No clipped UI at 360px, 768px, 1440px
-- [ ] New user can sign up → onboard → workout → 10 sets offline → sync → see PRs/charts
-- [ ] Every route: loading, empty, error states
-- [ ] Typecheck, lint, unit, e2e, a11y all pass
-- [ ] README with one-command setup
-- [ ] Screenshots at 3 breakpoints in `/docs/screens/`
+Legend: **ALL** = All Org Branches · **OWN-B** = Assigned Branch(es) Only · **OWN-C** = Assigned Clients Only · **RO** = Read-Only · **SELF** = Own Member Account · **—** = Denied (`403 Forbidden`)
+
+| Capability / Resource | OWNER | MANAGER | FRONTDESK | TRAINER | ACCOUNTANT | MEMBER |
+| --- | --- | --- | --- | --- | --- | --- |
+| Org Setup, Tax/GST Config, Holidays, RBAC | ALL | — | — | — | — | — |
+| Branch Switcher Scope | ALL | OWN-B | OWN-B | OWN-B | ALL (RO) | Home Branch |
+| Dashboard (`TODAY.`) Financial Tiles | ALL | OWN-B | Day Total | — (Blocked) | ALL (RO) | — |
+| Dashboard (`TODAY.`) Ops & Check-ins | ALL | OWN-B | OWN-B | Own Clients | — | — |
+| Members Directory & Create/Edit | ALL | OWN-B | OWN-B | OWN-C (RO bio + notes) | OWN-B (Name/Inv ref only) | — |
+| Members Sensitive Health Notes / KYC | ALL | OWN-B (Audit logged) | Waiver upload | OWN-C (Health notes only) | — | SELF (Download/consent) |
+| Freeze / Transfer / Merge Duplicates | ALL | OWN-B | Freeze Req | — | — | Freeze Req |
+| Plans, Pricing & Promo Codes | ALL (Create/Edit) | RO (Apply only) | RO (Sell only) | — | RO | Browse public plans |
+| Collect Payment (UPI/Card/Cash/Split) | ALL | OWN-B | OWN-B | — | — | Pay own dues |
+| Issue Refund / Credit Note / Void Inv | ALL | OWN-B (Up to cap) | — | — | — | — |
+| GST Invoices, P&L & Cash Reconciliation | ALL | OWN-B | Day-End Cash | — (**Never Finance**) | ALL (RO) | Own Invoices PDF |
+| Expenses & Vendors | ALL | OWN-B | — | — | ALL (RO) | — |
+| QR Check-In, Scanner & Override Expired | ALL | OWN-B | OWN-B | OWN-C | — | QR Pass + Self Scan |
+| Leads Pipeline & Sales (Phase 2) | ALL | OWN-B | OWN-B | Assigned Trials | — | Public Enquiry |
+| Broadcasts & Automations (Phase 2) | ALL | OWN-B | Template DM | — | — | Opt-in/out Prefs |
+| Classes, PT Sessions & Commissions (Phase 3) | ALL | OWN-B | Book/Mark | Own Sessions + Read Own Comm | Own Branch Payroll (RO) | Book/Cancel Class |
+| Workout / Diet Plans & Check-Ins (Phase 3) | ALL | OWN-B | — | OWN-C (Full CRUD) | — | View & Log |
+| Reports CSV/PDF & AI Assistant (Phase 4) | ALL | OWN-B | Ops Lists | Own Client Adherence | Financial/GST Only | Data Export / Delete |
+| Audit Log Viewer | ALL | OWN-B | — | — | Billing Audit Only | — |
+
+**Server Enforcement Contract:**
+- Every Server Action / Route Handler calls `const ctx = await requireAuthContext({ permission, branchId })`.
+- A `TRAINER` requesting `/app/billing`, `/app/plans`, or any financial API receives `403 Forbidden` (no finance metrics hydrated in React Server Components).
+- A `MANAGER` requesting another `branchId` receives `403 Forbidden`.
+- All sensitive mutations (`REFUND`, `OVERRIDE_EXPIRED_CHECKIN`, `VIEW_HEALTH_NOTES`, `ROLE_CHANGE`, `FREEZE_APPROVAL`, `VOID_INVOICE`, `EXPORT_DATA`) append synchronously to `AuditLog`.
+
+---
+
+## 5. Complete Screen & Route Inventory
+
+### Phase 1 Screens (Built in Phase 1)
+| Route | Screen Name | Roles Allowed | Layout & Primary Workflows |
+| --- | --- | --- | --- |
+| `/login` | Sign In | Public | Bauhaus split grid: Email+Password, Phone OTP mock/adapter, Google OAuth, quick role switcher hint in demo mode |
+| `/onboarding` | Org Setup Wizard | `OWNER` | 4-step wizard: Gym Name & GSTIN, Branch(es) + Working Hours + Holidays, Currency/Invoice Series/Tax Slabs, Staff Role Invites |
+| `/app` | **TODAY.** Dashboard | Staff (`OWNER`..`ACCOUNTANT`) | 6 live `StatTile` KPIs (Check-ins now, Today's Revenue, New Leads, Expiring 7d, Overdue Dues, Trial Bookings), Revenue + Active Members SVG Chart (thick strokes, square points), Peak-Hours Day×Hour Heatmap, Top 5 Churn Risks, Staff Task Checklist, Owner Multi-Branch Comparison |
+| `/app/members` | Members Directory | Staff (role-filtered) | Dense `DataTable`, sticky headers, status filter (`ACTIVE`/`EXPIRING`/`OVERDUE`/`FROZEN`), search, column chooser, saved filters, CSV export, `+ Add Member`, duplicate merger drawer |
+| `/app/members/[id]` | Member 360° Profile | Staff + `TRAINER` (own) | 8 Bauhaus tabs: Overview (+ encrypted health consent), Membership (renew/upgrade/freeze/transfer/groups/referral), Payments & GST Invoices, Attendance Calendar, Body Measurements & Progress Photos, Workouts/Diet stub, Communication Timeline (WhatsApp/SMS/email/calls), Documents (Waiver e-sign & KYC) + Notes/Tags |
+| `/app/plans` | Plans, Add-ons & Promos | `OWNER`, `MANAGER`, `FRONTDESK`, `ACCOUNTANT` | Tier matrix (Monthly/Quarterly/Half-Yearly/Annual/PT/Class Pack/Day Pass/Trial), Add-ons (`Locker`/`Towel`/`Steam`), Promo/Early-Bird/Referral codes, pro-rata calculator & freeze rule editor |
+| `/app/billing` | Payments, GST & Ledger | `OWNER`, `MANAGER`, `FRONTDESK`, `ACCOUNTANT` | Collect Payment Drawer (UPI QR / Card / Cash / Bank / Split / Part-Pay), Dues Aging Ledger, Razorpay/Stripe adapter + Webhook Log & Retry/DLQ, Refunds & Credit Notes, Day-End Cash Reconciliation, Expenses Tracker |
+| `/app/billing/invoices/[id]` | Tax Invoice (GST PDF/Print) | `OWNER`, `MANAGER`, `FRONTDESK`, `ACCOUNTANT` | Print-ready Swiss Bauhaus Tax Invoice: CGST/SGST (intra-state) vs IGST (inter-state), SAC `999723`, branch GSTIN, sequential invoice #, itemized breakup, WhatsApp/Email receipt send |
+| `/app/checkin` | Attendance & Access Terminal | `OWNER`, `MANAGER`, `FRONTDESK`, `TRAINER` | Split front-desk scanner: Live QR Token Scan + Phone/Code Lookup, Expired/Frozen Gate Block modal requiring Staff Override Reason, Live Floor Count gauge, Turnstile Adapter status, Check-in History & Absentee list (`7d` / `14d` / `30d`) |
+
+### Phase 2–4 Screens (Roadmap)
+- **Phase 2 (Growth):** `/app/leads` (7-stage Kanban + table + ROI + QR Poster + public `/enquire/[orgSlug]` embed), `/app/inbox` (2-way WhatsApp inbox + templates + broadcasts + opt-in/out), `/app/automations` (visual trigger/condition/action builder + dry-run + quiet hours), `/app/retention` (churn scores + explainable factors + save-plan outreach + cohorts), `/app/loyalty` (referrals + points + tiers leaderboard).
+- **Phase 3 (Operations):** `/app/classes` (schedule/waitlist/cutoffs), `/app/trainers` (availability/PT/commission slabs/payroll), `/app/training-plans` (workout + veg/non-veg/egg/jain diet + FORGE app API sync), `/app/inventory` (POS w/ GST/stock/equipment maintenance), `/app/staff` (shifts/attendance/handover), `/portal` (Member PWA with Phone OTP, QR pass, dues payment, freeze request, bookings, plans, streaks, invoices).
+- **Phase 4 (Intelligence & Admin):** `/app/reports` (14 filterable CSV/PDF reports + GSTR sheets + daily 9pm WhatsApp summary), `/app/ai` (tool-grounded Org Data AI Assistant with human-approval drafts), `/app/settings` (RBAC matrix, branches, hours, holidays, gateways, message keys, CSV/Gymdesk/Mindbody/Hevy importer, audit viewer, API keys, backups, DPDP export/delete).
+
+---
+
+## 6. Pure Unit-Tested Business Modules & Demo Seed
+
+- `src/lib/money.ts`: Integer paise formatters, percentage bps splits, pro-rata credits, reconciliation checks (+ property tests).
+- `src/lib/gst.ts`: Intra-state (`CGST` + `SGST`) vs Inter-state (`IGST`) integer rounding preserving `subtotal - discount + tax = total` exactly.
+- `src/lib/membership-math.ts`: Exact UTC/branch-TZ expiry extension, mid-cycle pro-rated upgrades, freeze extension day counts (`maxFreezeDays` + fee enforcement).
+- `src/lib/dues-ledger.ts`: Part-payment allocation, remaining balance dues, credit note reversals.
+- `src/lib/rbac.ts`: Declarative role × branch × resource matrix + fail-closed guards.
+- `src/lib/checkin-gate.ts`: QR lookup, `ACTIVE` / `EXPIRING` / `OVERDUE` / `FROZEN` decisions, audited override gate.
+- `src/lib/encryption.ts`: AES-256-GCM encrypt/decrypt helper for `healthNotesEnc` & `kycNumberEnc`.
+- **Seed Script (`prisma/seed.ts`) + Settings "Load demo data":** `1` org (`Ironworks Athletics India`), `2` branches (`Indiranagar HQ — KA`, `Bandra West — MH`), `600` members across all statuses, `12` plans + add-ons + promos, `6` trainers, `18` months of invoices/payments/expenses, `40,000` realistic check-ins with morning/evening peak curve, `300` pipeline leads, classes, and inventory fixtures. Freshly registered orgs start completely empty with Bauhaus `EmptyState` guidance.
+
+---
+
+## 7. Verification Gates per Phase
+
+Before ending Phase 1, the following MUST pass with screenshots and a "Needs your input" adapter key list:
+- Zero TypeScript errors, zero ESLint/console warnings in Next.js or Playwright.
+- Vitest pure unit + property test suite (all money/GST/date/RBAC/gate modules green).
+- Playwright E2E across `390px`, `768px`, and `1440px` verifying: signup/onboarding wizard, adding a member, selling a plan with partial payment, generating a sequential CGST/SGST GST invoice, QR check-in, expired-member block + audited override, freeze & renew, CSV export, dark/light theme toggle, and strict role denial checks (Trainer denied finance; Branch Manager denied sibling branch).
+
+---
+
+## Needs Your Input (Optional Provider Credentials — Mock Adapters Active Until Configured)
+- **PostgreSQL / Redis / S3**: Local `postgresql@16` + `redis` run locally without keys; for cloud deployment provide `DATABASE_URL`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`.
+- **Auth**: `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, SMS OTP sender key (`MSG91_AUTH_KEY` or `TWILIO_*`).
+- **Payments**: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, optional `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET`.
+- **Messaging**: `WHATSAPP_CLOUD_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_APP_SECRET`, SMTP / Resend API key (`RESEND_API_KEY`).
+- **Hardware & Monitoring**: `SENTRY_DSN`, optional turnstile/biometric webhook token.

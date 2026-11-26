@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+:root,
+[data-theme="light"] {
+  --bg-paper: #F6F1E4;
+  --bg-surface: #FFFFFF;
+  --bg-muted: #EBE4D3;
+  --bg-dark-panel: #222222;
+  --fg-ink: #151515;
+  --fg-grey: #6F6B61;
+  --fg-on-dark: #FFFFFF;
+  --border-ink: #151515;
+  --accent-red: #C8372B;
+  --accent-blue: #2B4BCC;
+  --accent-yellow: #EBC95B;
+}
+
+[data-theme="dark"] {
+  --bg-paper: #151515;
+  --bg-surface: #222222;
+  --bg-muted: #2B2B2B;
+  --bg-dark-panel: #151515;
+  --fg-ink: #F6F1E4;
+  --fg-grey: #B5AFA2;
+  --fg-on-dark: #F6F1E4;
+  --border-ink: #F6F1E4;
+  --accent-red: #C8372B;
+  --accent-blue: #2B4BCC;
+  --accent-yellow: #EBC95B;
+}
+
+@layer base {
+  * {
+    border-radius: 0px;
+    box-shadow: none;
+  }
+
+  html {
+    background-color: var(--bg-paper);
+    color: var(--fg-ink);
+    font-family: var(--font-space-grotesk), system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+
+  body {
+    background-color: var(--bg-paper);
+    color: var(--fg-ink);
+    font-size: 14px;
+    line-height: 1.4;
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-headline {
+    font-family: var(--font-archivo-black), "Arial Black", sans-serif;
+    text-transform: uppercase;
+    line-height: 0.9;
+    letter-spacing: -0.02em;
+  }
+
+  .tabular-nums,
+  .font-tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    transition-property: background-color, color, border-color, transform;
+    transition-duration: 160ms;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 3px solid #C8372B;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+.bauhaus-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+}
+
+.bauhaus-card {
+  background-color: var(--bg-surface);
+  border: 2px solid var(--border-ink);
+}
+
+.bauhaus-hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 5px,
+    rgba(21, 21, 21, 0.16) 5px,
+    rgba(21, 21, 21, 0.16) 7px
+  );
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #FFFFFF !important;
+    color: #151515 !important;
+  }
+}

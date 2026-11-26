@@ -246,9 +246,9 @@ export function BodyMap({
           const rec = getRecovery(mKey);
           const hasLoggedSets = (recovery?.[mKey]?.sets ?? 0) > 0;
 
-          // Shading rule: selected > recovery-colored > resting charcoal
-          let fill = "#1E2530";
-          let opacity = 0.85;
+          // Shading rule: selected > recovery-colored > resting defined charcoal
+          let fill = "#2A3446";
+          let opacity = 0.92;
 
           if (selected) {
             fill = highlightColor;
@@ -273,8 +273,8 @@ export function BodyMap({
                   d={d}
                   fill={fill}
                   fillOpacity={opacity}
-                  stroke={selected ? "#FFFFFF" : "rgba(255,255,255,0.15)"}
-                  strokeWidth={selected ? 1.6 : 0.8}
+                  stroke={selected ? "#FFFFFF" : "rgba(255,255,255,0.22)"}
+                  strokeWidth={selected ? 1.6 : 0.85}
                   filter={selected ? `url(#glow-${viewKey})` : undefined}
                 >
                   <title>{`${MUSCLE_METADATA[mKey]?.name || mKey}: ${rec}% recovery`}</title>

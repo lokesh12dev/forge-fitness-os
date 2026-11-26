@@ -94,8 +94,8 @@ export default async function TrainPage() {
               </div>
             </div>
 
-            <div className="mt-5 overflow-hidden rounded-2xl border border-white/[0.07] bg-black/20">
-              <div className="grid grid-cols-[auto_1.2fr_auto_auto_auto_auto] items-center gap-3 border-b border-white/[0.06] px-3.5 py-2.5">
+            <div className="mt-5 overflow-x-auto no-scrollbar rounded-2xl border border-white/[0.07] bg-black/20">
+              <div className="min-w-[500px] grid grid-cols-[auto_1.2fr_auto_auto_auto_auto] items-center gap-3 border-b border-white/[0.06] px-3.5 py-2.5">
                 <span className="label-mono">#</span>
                 <span className="label-mono">Exercise</span>
                 <span className="label-mono text-right">Target</span>
@@ -109,7 +109,7 @@ export default async function TrainPage() {
                 const pr = personalRecordFor(ws, item.exerciseId);
                 const hasPr = pr != null && pr.value > 0;
                 return (
-                  <div key={item.id} className="grid grid-cols-[auto_1.2fr_auto_auto_auto_auto] items-center gap-3 border-b border-white/[0.04] px-3.5 py-3 last:border-0 hover:bg-white/[0.02] transition-colors">
+                  <div key={item.id} className="min-w-[500px] grid grid-cols-[auto_1.2fr_auto_auto_auto_auto] items-center gap-3 border-b border-white/[0.04] px-3.5 py-3 last:border-0 hover:bg-white/[0.02] transition-colors">
                     <span className="grid size-6 place-items-center rounded-md border border-white/[0.08] bg-white/[0.03] font-mono text-[9.5px] text-dim">{String(i + 1).padStart(2, "0")}</span>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">

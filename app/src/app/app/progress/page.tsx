@@ -435,7 +435,7 @@ export default async function ProgressPage() {
         </Card>
 
         {/* ANTHROPOMETRIC TAPE MEASUREMENTS (wger) */}
-        <div className="xl:col-span-12">
+        <div className="xl:col-span-8">
           <AnthropometricMeasurementsCard />
         </div>
 

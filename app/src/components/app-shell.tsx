@@ -76,7 +76,10 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const active = (href: string) => (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
+  const active = (href: string) =>
+    href === "/app"
+      ? pathname === "/app"
+      : pathname === href || pathname.startsWith(`${href}/`);
   const title = Object.entries(TITLES).sort((a, b) => b[0].length - a[0].length).find(([k]) => pathname.startsWith(k))?.[1] ?? "FORGE";
   const { level, progress } = computeLevelProgress(user.xp);
 
@@ -219,6 +222,14 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
             </Link>
 
             <div className="flex items-center gap-2 md:gap-3">
+              <Link
+                href="/app/coach"
+                className="grid size-8 place-items-center rounded-full bg-acid text-ink shadow-sm md:hidden"
+                aria-label="AI Coach"
+                title="AI Coach"
+              >
+                <Sparkles className="size-4" />
+              </Link>
               <Link href="/app/social" className="hidden items-center gap-1.5 rounded-full border border-flame/20 bg-flame/[0.07] px-3 py-1.5 sm:flex">
                 <Flame className="size-3.5 text-flame" />
                 <span className="font-numeric text-[12px] font-semibold text-flame">{user.streak}</span>
@@ -259,14 +270,6 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
           })}
         </div>
       </nav>
-
-      <Link
-        href="/app/coach"
-        className="fixed bottom-24 right-4 z-50 grid size-12 place-items-center rounded-full bg-acid text-ink shadow-[0_10px_35px_-8px_rgba(201,247,58,0.6)] md:hidden"
-        aria-label="AI Coach"
-      >
-        <Sparkles className="size-5" />
-      </Link>
     </div>
   );
 }

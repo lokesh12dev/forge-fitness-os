@@ -227,7 +227,7 @@ export function CoachChat({
       </div>
 
       <div className="border-t border-white/[0.07] bg-black/20 px-3.5 pb-3.5 pt-3">
-        <div className="mb-2.5 flex gap-1.5 overflow-x-auto no-scrollbar">
+        <div className="mb-2.5 flex flex-wrap gap-1.5">
           {QUICK_PROMPTS.map((p) => {
             const Icon = p.icon;
             return (

@@ -750,7 +750,7 @@ export function AnthropometricMeasurementsCard() {
       </div>
 
       {/* Grid of Measurements */}
-      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+      <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
         {sites.map((site) => {
           const curVal = formatMetric(site.current, site.unit);
           const baseVal = formatMetric(site.baseline, site.unit);
@@ -761,7 +761,7 @@ export function AnthropometricMeasurementsCard() {
           return (
             <div
               key={site.key}
-              className="rounded-2xl border border-white/[0.06] bg-black/25 p-3.5 transition-all hover:border-white/12"
+              className="rounded-2xl border border-white/[0.06] bg-black/25 p-3 transition-all hover:border-white/12"
             >
               <div className="flex items-start justify-between">
                 <span className="font-mono text-[8.5px] uppercase tracking-wider text-dim">

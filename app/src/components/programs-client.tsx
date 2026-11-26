@@ -251,8 +251,10 @@ export function ProgramsClient({
             type="button"
             onClick={() => setSelectedFolder("all")}
             className={cn(
-              "rounded-xl px-2.5 py-1 font-mono text-[9.5px] transition-colors",
-              selectedFolder === "all" ? "bg-white/15 text-chalk font-bold" : "text-mist hover:text-chalk"
+              "rounded-xl border px-2.5 py-1 font-mono text-[9.5px] transition-colors",
+              selectedFolder === "all"
+                ? "border-white/25 bg-white/12 text-chalk font-bold"
+                : "border-transparent text-mist hover:text-chalk"
             )}
           >
             All ({BUILTIN_PROGRAMS.length})
@@ -261,8 +263,10 @@ export function ProgramsClient({
             type="button"
             onClick={() => setSelectedFolder("saved")}
             className={cn(
-              "inline-flex items-center gap-1 rounded-xl px-2.5 py-1 font-mono text-[9.5px] transition-colors",
-              selectedFolder === "saved" ? "bg-amber/20 text-amber font-bold" : "text-mist hover:text-chalk"
+              "inline-flex items-center gap-1 rounded-xl border px-2.5 py-1 font-mono text-[9.5px] transition-colors",
+              selectedFolder === "saved"
+                ? "border-amber/40 bg-amber/15 text-amber font-bold"
+                : "border-transparent text-mist hover:text-chalk"
             )}
           >
             <Bookmark className="size-3" /> Saved ({savedIds.length})
@@ -273,8 +277,10 @@ export function ProgramsClient({
               type="button"
               onClick={() => setSelectedFolder(folder.id)}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 font-mono text-[9.5px] transition-colors",
-                selectedFolder === folder.id ? "bg-acid/15 text-acid font-bold" : "text-mist hover:text-chalk"
+                "inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 font-mono text-[9.5px] transition-colors",
+                selectedFolder === folder.id
+                  ? "border-acid/45 bg-acid/15 text-acid font-bold"
+                  : "border-transparent text-mist hover:text-chalk"
               )}
             >
               <span className="size-1.5 rounded-full" style={{ background: folder.accent }} />

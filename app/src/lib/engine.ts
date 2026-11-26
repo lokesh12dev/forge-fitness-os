@@ -52,10 +52,10 @@ export function readinessScore(input: {
 }
 
 export function readinessVerdict(score: number) {
-  if (score >= 85) return { label: "Primed", tone: "acid", advice: "Push the top set. Your body is ready for a PR attempt." };
-  if (score >= 70) return { label: "Ready", tone: "mint", advice: "Train as planned. Auto-regulate the last set by feel." };
-  if (score >= 55) return { label: "Moderate", tone: "amber", advice: "Keep the volume, drop intensity 5–8%. Quality reps only." };
-  return { label: "Depleted", tone: "flame", advice: "Deload or zone-2 today. Recovery is the workout." };
+  if (score >= 85) return { label: "Primed", tone: "acid", advice: "Push the top set. Your body is ready for a PR attempt.", coachAction: "Push top set" };
+  if (score >= 70) return { label: "Ready", tone: "mint", advice: "Train as planned. Auto-regulate the last set by feel.", coachAction: "Train as planned" };
+  if (score >= 55) return { label: "Moderate", tone: "amber", advice: "Keep the volume, drop intensity 5–8%. Quality reps only.", coachAction: "Drop intensity 5%" };
+  return { label: "Depleted", tone: "flame", advice: "Deload or zone-2 today. Recovery is the workout.", coachAction: "Deload / recovery" };
 }
 
 /**
@@ -170,6 +170,82 @@ export function adaptiveTargetWeight(
   return roundTo(next, step);
 }
 
+export type AdaptiveRecommendation = {
+  targetWeight: number;
+  baseWeight: number;
+  adjustmentKg: number;
+  factor: "high_readiness" | "low_readiness" | "rpe_adjustment" | "double_progression" | "baseline" | "no_history";
+  reason: string;
+  confidence: number;
+  readinessScore: number;
+  rpeTarget: number;
+};
+
+/**
+ * Enhanced auto-regulation providing the exact numeric target plus the "why" explanation.
+ */
+export function adaptiveTargetWeightWithReason(
+  previousWeight: number,
+  readiness: number,
+  rpeTarget: number = 8,
+  equipment: string = "barbell",
+  previousReps?: number,
+  targetRepsMax?: number,
+): AdaptiveRecommendation {
+  if (!previousWeight || previousWeight <= 0) {
+    return {
+      targetWeight: 0,
+      baseWeight: 0,
+      adjustmentKg: 0,
+      factor: "no_history",
+      reason: "First time logging this lift. Select a comfortable warmup weight to establish baseline.",
+      confidence: 0,
+      readinessScore: readiness,
+      rpeTarget,
+    };
+  }
+
+  const step = equipment === "dumbbell" ? 2 : equipment === "machine" ? 5 : 2.5;
+  const baseWeight = previousWeight;
+  const rpeAdjustment = 1 + (rpeTarget - 8) * 0.005;
+  let next = baseWeight * rpeAdjustment;
+
+  let factor: AdaptiveRecommendation["factor"] = "baseline";
+  let reason = `Target weight calculated from your previous ${baseWeight}kg at RPE ${rpeTarget}.`;
+
+  // Double progression check: hit or exceeded top of rep range
+  if (previousReps !== undefined && targetRepsMax !== undefined && previousReps >= targetRepsMax) {
+    next += step;
+    factor = "double_progression";
+    reason = `Double progression: Hit top of rep range (${previousReps}/${targetRepsMax} reps) last session. Adding +${step}kg.`;
+  } else if (readiness >= 85) {
+    next *= 1.025;
+    factor = "high_readiness";
+    reason = `Primed recovery (${readiness}/100): Neurological state is optimal. Auto-regulated +2.5% load progression.`;
+  } else if (readiness < 60) {
+    next *= 0.95;
+    factor = "low_readiness";
+    reason = `Fatigue back-off (${readiness}/100): Nervous system is under-recovered. Trimmed -5% load to protect form.`;
+  } else if (rpeTarget !== 8) {
+    factor = "rpe_adjustment";
+    reason = `RPE calibrated: Adjusted load for target RPE ${rpeTarget} vs standard RPE 8.`;
+  }
+
+  const targetWeight = roundTo(next, step);
+  const adjustmentKg = Math.round((targetWeight - baseWeight) * 10) / 10;
+
+  return {
+    targetWeight,
+    baseWeight,
+    adjustmentKg,
+    factor,
+    reason,
+    confidence: readiness >= 70 ? 0.95 : 0.85,
+    readinessScore: readiness,
+    rpeTarget,
+  };
+}
+
 /** Recovery % per muscle from recent training stress. */
 export function recoveryMap(
   sets: { primaryMuscle: string; completedAt: Date | number; weightKg: number; reps: number }[],
@@ -194,6 +270,48 @@ export function recoveryMap(
   }
   return out;
 }
+
+export type EquipmentProfileId = "commercial" | "home_gym" | "hotel_travel" | "bodyweight";
+
+export const EQUIPMENT_PROFILES: Record<
+  EquipmentProfileId,
+  {
+    id: EquipmentProfileId;
+    name: string;
+    tagline: string;
+    description: string;
+    equipment: string[];
+  }
+> = {
+  commercial: {
+    id: "commercial",
+    name: "Commercial Gym",
+    tagline: "Full facility",
+    description: "Full barbell, dumbbell, cable stack, and selectorized machine selection",
+    equipment: ["barbell", "dumbbell", "machine", "cable", "bodyweight", "kettlebell", "bands", "ez-bar", "smith-machine", "trap-bar", "pull-up-bar", "sled"],
+  },
+  home_gym: {
+    id: "home_gym",
+    name: "Home Garage Gym",
+    tagline: "Barbell & dumbbells",
+    description: "Power rack, barbell, plates, dumbbells, pull-up bar, and bench",
+    equipment: ["barbell", "dumbbell", "bodyweight", "bands", "ez-bar", "pull-up-bar"],
+  },
+  hotel_travel: {
+    id: "hotel_travel",
+    name: "Hotel / Travel",
+    tagline: "Dumbbells & cables",
+    description: "Dumbbells up to 25kg, cable station, and bodyweight area",
+    equipment: ["dumbbell", "cable", "bodyweight", "bands", "pull-up-bar"],
+  },
+  bodyweight: {
+    id: "bodyweight",
+    name: "Calisthenics / Minimal",
+    tagline: "Zero kit required",
+    description: "Pull-up bar, dip bars, resistance loops, bodyweight only",
+    equipment: ["bodyweight", "bands", "pull-up-bar"],
+  },
+};
 
 /** Ranked equipment-swap alternatives for a crowded gym. */
 export function alternativesFor<
@@ -238,28 +356,152 @@ export function estimateSessionMinutes(
 }
 
 /** Converts straight sets into supersets and trims rest without losing volume. */
-export function compressSession<T extends { id: string; targetSets: number; restSec: number; supersetGroup?: string | null; exerciseId: string }>(
+export function compressSession<
+  T extends {
+    id: string;
+    targetSets: number;
+    restSec: number;
+    supersetGroup?: string | null;
+    exerciseId: string;
+    category?: string;
+    position?: number;
+  },
+>(
   exercises: T[],
   targetMinutes = 25,
 ) {
   const originalMin = estimateSessionMinutes(exercises);
   if (exercises.length < 2) {
-    return { exercises, originalMin, compressedMin: originalMin, groups: [] as { a: string; b: string }[] };
+    return {
+      exercises,
+      originalMin,
+      compressedMin: originalMin,
+      targetMinutes,
+      groups: [] as { a: string; b: string; label: string }[],
+      dropped: [] as T[],
+      diffSummary: ["Single exercise session cannot be compressed."],
+    };
   }
-  const paired = exercises.map((ex, i) => ({
-    ...ex,
-    supersetGroup: i < exercises.length - (exercises.length % 2) ? (i % 2 === 0 ? `SS-${Math.floor(i / 2) + 1}A` : `SS-${Math.floor(i / 2)}B`) : null,
-    restSec: Math.round(ex.restSec * 0.5),
-  }));
+
+  // Multi-tier compression:
+  // For tight 15-minute blitz, preserve compound anchors and drop isolation accessories if >2 exercises
+  let kept = [...exercises];
+  let dropped: T[] = [];
+  if (targetMinutes <= 15 && exercises.length > 2) {
+    const compounds = exercises.filter((e) => e.category === "compound" || (e.position !== undefined && e.position < 2));
+    if (compounds.length >= 2) {
+      kept = compounds.slice(0, 3);
+      dropped = exercises.filter((e) => !kept.some((k) => k.id === e.id));
+    }
+  }
+
+  const restFactor = targetMinutes <= 15 ? 0.35 : targetMinutes <= 25 ? 0.5 : 0.75;
+  const paired = kept.map((ex, i) => {
+    const isPaired = i < kept.length - (kept.length % 2);
+    const pairNum = Math.floor(i / 2) + 1;
+    const pairLetter = i % 2 === 0 ? "A" : "B";
+    return {
+      ...ex,
+      supersetGroup: isPaired ? `SS-${pairNum}${pairLetter}` : null,
+      restSec: Math.max(30, Math.round(ex.restSec * restFactor)),
+    };
+  });
+
+  const groups: { a: string; b: string; label: string }[] = [];
+  for (let i = 0; i + 1 < paired.length; i += 2) {
+    groups.push({
+      a: paired[i].id,
+      b: paired[i + 1].id,
+      label: `Superset ${Math.floor(i / 2) + 1}`,
+    });
+  }
+
   const compressedMin = Math.max(
     targetMinutes,
-    Math.round(originalMin * 0.6),
+    estimateSessionMinutes(paired),
   );
-  const groups: { a: string; b: string }[] = [];
-  for (let i = 0; i + 1 < paired.length; i += 2) {
-    groups.push({ a: paired[i].id, b: paired[i + 1].id });
+
+  const diffSummary: string[] = [];
+  if (groups.length > 0) {
+    diffSummary.push(`Paired ${groups.length * 2} lifts into ${groups.length} antagonist superset${groups.length > 1 ? "s" : ""}.`);
   }
-  return { exercises: paired, originalMin, compressedMin, groups };
+  diffSummary.push(`Trimmed rest intervals by ${Math.round((1 - restFactor) * 100)}% (to ${Math.round(90 * restFactor)}s average).`);
+  if (dropped.length > 0) {
+    diffSummary.push(`Temporarily pruned ${dropped.length} isolation accessory lift${dropped.length > 1 ? "s" : ""} to fit ${targetMinutes}-min blitz window.`);
+  } else {
+    diffSummary.push(`Preserved 100% of working set volume (${kept.reduce((a, e) => a + e.targetSets, 0)} total sets).`);
+  }
+
+  return {
+    exercises: paired,
+    originalMin,
+    compressedMin,
+    targetMinutes,
+    groups,
+    dropped,
+    diffSummary,
+  };
+}
+
+export type DeloadRecommendation = {
+  shouldDeload: boolean;
+  score: number;
+  reasons: string[];
+  suggestedAction: "full_deload" | "active_recovery" | "volume_taper" | "train_as_planned";
+  deloadProtocol?: {
+    intensityPct: number;
+    volumePct: number;
+    restAdjustment: string;
+  };
+};
+
+/**
+ * Evaluates accumulated fatigue and performance signals to auto-detect deload requirements.
+ */
+export function checkDeloadRecommendation(
+  recentSessions: { volume: number; rpeAvg: number; completedAt: Date | number }[],
+  recentReadiness: number[],
+  accumulatedWeeks: number = 4,
+): DeloadRecommendation {
+  const reasons: string[] = [];
+  let fatigueScore = 0;
+
+  // Signal 1: 4+ consecutive hard weeks
+  if (accumulatedWeeks >= 4) {
+    fatigueScore += 35;
+    reasons.push(`${accumulatedWeeks} consecutive training weeks completed without programmed deload.`);
+  }
+
+  // Signal 2: Chronic low readiness (< 65 for 3+ consecutive logs)
+  const lowReadinessCount = recentReadiness.slice(-4).filter((r) => r < 65).length;
+  if (lowReadinessCount >= 3) {
+    fatigueScore += 35;
+    reasons.push("Readiness score remained below 65 for 3 of your last 4 recorded days.");
+  }
+
+  // Signal 3: High RPE trend (avg RPE >= 9.0 over last 3 sessions)
+  const avgRpe = recentSessions.slice(-3).reduce((acc, s) => acc + s.rpeAvg, 0) / Math.max(1, Math.min(3, recentSessions.length));
+  if (avgRpe >= 9.0) {
+    fatigueScore += 30;
+    reasons.push(`Session RPE averaged ${avgRpe.toFixed(1)} across recent sessions (high CNS strain).`);
+  }
+
+  const shouldDeload = fatigueScore >= 60;
+  return {
+    shouldDeload,
+    score: Math.min(100, fatigueScore),
+    reasons: reasons.length ? reasons : ["Physiological markers show excellent recovery. No deload needed."],
+    suggestedAction: shouldDeload
+      ? fatigueScore >= 80 ? "full_deload" : "volume_taper"
+      : "train_as_planned",
+    deloadProtocol: shouldDeload
+      ? {
+          intensityPct: 60,
+          volumePct: 50,
+          restAdjustment: "Keep sets crisp at RPE 5-6 with generous 2-3 min rest.",
+        }
+      : undefined,
+  };
 }
 
 export const PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];

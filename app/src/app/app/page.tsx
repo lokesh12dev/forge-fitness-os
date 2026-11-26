@@ -10,7 +10,7 @@ import {
 } from "@/lib/queries";
 import { dateKey, weekdayName } from "@/lib/date";
 import {
-  adaptiveTargetWeight, estimateSessionMinutes, muscleLabel, proteinPlan, readinessBreakdown,
+  adaptiveTargetWeight, adaptiveTargetWeightWithReason, estimateSessionMinutes, muscleLabel, proteinPlan, readinessBreakdown,
   readinessConfidence, readinessScore, readinessVerdict, recoveryMap,
 } from "@/lib/engine";
 import { Badge, ButtonLink, ProgressBar, Stat } from "@/components/ui";
@@ -18,6 +18,7 @@ import { Card, CardHeader, PageHeader } from "@/components/page-header";
 import { LabeledTrendChart, MacroBar, Ring, Sparkline } from "@/components/charts";
 import { VolumeChart } from "@/components/volume-chart";
 import { BodyMap, RecoveryLegend } from "@/components/body-map";
+import { ReadinessCheckInTrigger } from "@/components/readiness-checkin";
 import { formatVolume } from "@/lib/utils";
 import { startWorkout } from "@/app/actions";
 
@@ -87,11 +88,19 @@ export default async function DashboardPage() {
     const prev = ws.sets
       .filter((s) => s.exerciseId === item.exerciseId)
       .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())[0];
-    const targetWeight = adaptiveTargetWeight(prev?.weightKg ?? 0, ws.readiness, item.rpeTarget, item.exercise.equipment);
+    const rec = adaptiveTargetWeightWithReason(
+      prev?.weightKg ?? 0,
+      ws.readiness,
+      item.rpeTarget,
+      item.exercise.equipment,
+      prev?.reps,
+      item.repsMax,
+    );
     return {
       ...item,
       prev,
-      targetWeight,
+      targetWeight: rec.targetWeight,
+      rec,
     };
   });
 
@@ -173,10 +182,29 @@ export default async function DashboardPage() {
                     <p className="mt-1 truncate text-[13px] font-semibold text-chalk">{lift.exercise.name}</p>
                     <div className="mt-2.5 flex items-baseline justify-between border-t border-white/[0.06] pt-2">
                       <div>
-                        <p className="font-numeric text-base font-bold text-acid">
-                          {lift.targetWeight > 0 ? `${lift.targetWeight} kg` : lift.exercise.equipment === "bodyweight" ? "Bodyweight" : "—"}
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-numeric text-base font-bold text-acid">
+                            {lift.targetWeight > 0 ? `${lift.targetWeight} kg` : lift.exercise.equipment === "bodyweight" ? "Bodyweight" : "—"}
+                          </p>
+                          {lift.rec.factor === "high_readiness" && (
+                            <span className="rounded bg-acid/15 px-1 py-0.5 font-mono text-[7px] font-bold text-acid">
+                              +2.5% Primed
+                            </span>
+                          )}
+                          {lift.rec.factor === "low_readiness" && (
+                            <span className="rounded bg-flame/15 px-1 py-0.5 font-mono text-[7px] font-bold text-flame">
+                              -5% Back-off
+                            </span>
+                          )}
+                          {lift.rec.factor === "double_progression" && (
+                            <span className="rounded bg-sky/15 px-1 py-0.5 font-mono text-[7px] font-bold text-sky">
+                              +Plate
+                            </span>
+                          )}
+                        </div>
+                        <p className="font-mono text-[7.5px] uppercase tracking-wider text-dim">
+                          target load · {lift.rec.factor === "no_history" ? "calibrate" : `why: ${lift.rec.reason.slice(0, 32)}…`}
                         </p>
-                        <p className="font-mono text-[7.5px] uppercase tracking-wider text-dim">target load</p>
                       </div>
                       <div className="text-right">
                         <p className="font-numeric text-[12px] font-medium text-mist">{lift.sets} × {lift.repsMin}–{lift.repsMax}</p>
@@ -223,6 +251,17 @@ export default async function DashboardPage() {
             title="Daily physiological engine"
             action={
               <div className="flex items-center gap-1.5">
+                <ReadinessCheckInTrigger
+                  currentScore={ws.readiness}
+                  hasCheckedInToday={ws.latestMetric?.date === dateKey(today)}
+                  initialValues={{
+                    sleepHours: ws.latestMetric?.sleepHours,
+                    hrv: ws.latestMetric?.hrv,
+                    restingHr: ws.latestMetric?.restingHr,
+                    soreness: ws.latestMetric?.soreness,
+                    weightKg: ws.latestMetric?.weightKg ?? user.weightKg,
+                  }}
+                />
                 {confidence < 0.8 && <Badge tone="neutral">Est.</Badge>}
                 <Badge tone={ws.readiness >= 85 ? "acid" : ws.readiness >= 70 ? "mint" : "amber"}>{verdict.label}</Badge>
               </div>

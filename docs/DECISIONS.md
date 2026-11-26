@@ -144,3 +144,45 @@ Each entry records a decision made during development, including context, option
 - Implemented `src/lib/exercise-aliases.ts` mapping comprehensive gym abbreviations and acronyms to exercise slugs and full movement patterns.
 - Integrated into `ExerciseLibrary` and `AddExerciseSheet` for instant search filtering.
 
+---
+
+## D-015 — Explainable Auto-Regulation with "Why This Weight?" Engine Explainer (B2)
+
+**Date:** 2026-11-26
+**Context:** Black-box AI weight suggestions alienate serious lifters who demand to know why a specific load is prescribed.
+**Decision:**
+- Implemented `adaptiveTargetWeightWithReason()` in `app/src/lib/engine.ts`.
+- Evaluates double progression (reps at top of target range with RPE ≤ 8), RPE threshold adherence, and physiological readiness score (<60 trims 2.5–7.5%, ≥85 primes for top-set overload).
+- Returns human-readable explanation and factor breakdown displayed inline via expandable "Why this weight?" explainer badge on each exercise card.
+
+---
+
+## D-016 — Equipment Profile Presets for Live Workout Swaps (B3)
+
+**Date:** 2026-11-26
+**Context:** Lifters frequently switch environments (commercial gym, home garage, hotel gym, travel/calisthenics) and need alternative exercises matched to accessible equipment.
+**Decision:**
+- Implemented `EQUIPMENT_PROFILES` (`commercial`, `home_gym`, `hotel_travel`, `bodyweight`) filtering ranked movement pattern equivalents.
+- Interactive switcher in `Sheet` swap modal re-ranks movement equivalents in real time, keeping set, rep, and stimulus intent intact.
+
+---
+
+## D-017 — Multi-Tier Session Compression with Live Diff Preview (B4)
+
+**Date:** 2026-11-26
+**Context:** Lifters pressed for time need quick session truncation without losing primary compound training volume.
+**Decision:**
+- Implemented `compressSession()` with three preset windows: 15-minute Blitz (prunes accessories, scales rest 0.70x, antagonist pairs), 25-minute Standard (pairs supersets, scales rest 0.80x), and 40-minute Moderate (pairs isolation movements, scales rest 0.85x).
+- Renders live diff comparison card showing original vs compressed duration, superset pairings, and preserved working volume.
+
+---
+
+## D-018 — Deterministic Voice/NLP Command Parser with Explicit Confirmation Sheet (C1)
+
+**Date:** 2026-11-26
+**Context:** Voice dictation in noisy gym environments or quick shorthand typing must never silently log incorrect exercises or hazardous loads.
+**Decision:**
+- Implemented `parseWorkoutVoiceCommand()` supporting 61+ syntax variations: shorthand (`100x8@8`), plate slang (`two plates = 100kg`, `three plates = 140kg`), spoken numbers (`one hundred twenty`), imperial conversions (`225 lbs`), and RIR notation (`1 rir -> RPE 9`).
+- Enforces an explicit `VoiceConfirmSheet` requiring single-tap user verification before writing to local state or sync queue.
+
+

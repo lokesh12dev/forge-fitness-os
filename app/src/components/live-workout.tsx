@@ -17,7 +17,11 @@ import { SetRow, type SetType } from "@/components/workout-keypad";
 import { syncManager } from "@/lib/offline-sync";
 import { matchExercise } from "@/lib/exercise-aliases";
 import { cn, formatClock, formatVolume, titleCase } from "@/lib/utils";
-import { alternativesFor, compressSession, e1rm, muscleColor, muscleLabel, plateBreakdown } from "@/lib/engine";
+import {
+  alternativesFor, compressSession, e1rm, muscleColor, muscleLabel, plateBreakdown,
+  adaptiveTargetWeightWithReason, EQUIPMENT_PROFILES, type EquipmentProfileId,
+} from "@/lib/engine";
+import { parseWorkoutVoiceCommand, type ParsedLogCommand } from "@/lib/voice-parser";
 import {
   addExerciseToWorkout, completeSet, compressWorkout, finishWorkout,
   swapExercise, undoSet, updateTargetSets,
@@ -86,6 +90,11 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
   const [showFinish, setShowFinish] = useState(false);
   const [showCues, setShowCues] = useState(false);
   const [showPlateCalc, setShowPlateCalc] = useState(false);
+  const [showCompress, setShowCompress] = useState(false);
+  const [showWhy, setShowWhy] = useState(false);
+  const [activeProfile, setActiveProfile] = useState<EquipmentProfileId>("commercial");
+  const [voiceConfirm, setVoiceConfirm] = useState<ParsedLogCommand | null>(null);
+  const [commandInput, setCommandInput] = useState("");
   const [celebrate, setCelebrate] = useState<{ exercise: string; value: number; previous: number | null; weight: number; reps: number } | null>(null);
   const [pending, startTransition] = useTransition();
   const [finishing, setFinishing] = useState(false);
@@ -262,14 +271,30 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
     });
   };
 
-  const doCompress = () => {
-    const result = compressSession(items.map((i) => ({ ...i, exerciseId: i.exerciseId, targetSets: i.targetSets, restSec: i.restSec, supersetGroup: i.supersetGroup })), 25);
+  const doCompressWithTime = (targetMinutes = 25) => {
+    const result = compressSession(
+      items.map((i) => ({
+        ...i,
+        exerciseId: i.exerciseId,
+        targetSets: i.targetSets,
+        restSec: i.restSec,
+        supersetGroup: i.supersetGroup,
+        category: i.exercise.category,
+        position: i.position,
+      })),
+      targetMinutes,
+    );
     const map = new Map(result.exercises.map((e) => [e.id, e]));
-    setItems((prev) => prev.map((i) => {
-      const e = map.get(i.id);
-      return e ? { ...i, restSec: e.restSec, supersetGroup: e.supersetGroup } : i;
-    }));
-    setToast(`Compressed to ~${result.compressedMin} min. Rest cut to 45s, lifts paired.`);
+    setItems((prev) =>
+      prev
+        .filter((i) => !result.dropped.some((d) => d.id === i.id))
+        .map((i) => {
+          const e = map.get(i.id);
+          return e ? { ...i, restSec: e.restSec, supersetGroup: e.supersetGroup } : i;
+        }),
+    );
+    setShowCompress(false);
+    setToast(`Compressed to ~${result.compressedMin} min. ${result.diffSummary[0] ?? ""}`);
     startTransition(async () => {
       await compressWorkout(workout.id);
       router.refresh();
@@ -299,9 +324,20 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
   };
 
   const plates = active ? plateBreakdown(Number(draft.weight) || 0) : null;
-  const alternatives = active ? alternativesFor(active.exercise, allExercises, equipment, 6) : [];
+  const profileEquipment = EQUIPMENT_PROFILES[activeProfile]?.equipment ?? equipment;
+  const alternatives = active ? alternativesFor(active.exercise, allExercises, profileEquipment, 6) : [];
   const prForActive = active ? prs.find((p) => p.exerciseId === active.exerciseId) : null;
   const projectedE1rm = active ? e1rm(Number(draft.weight) || 0, Number(draft.reps) || 0) : 0;
+  const recommendation = active
+    ? adaptiveTargetWeightWithReason(
+        active.history.weight || 0,
+        workout.readiness,
+        active.rpeTarget,
+        active.exercise.equipment,
+        active.history.reps,
+        active.repsMax,
+      )
+    : null;
 
   if (!active) {
     return <div className="p-8 text-center text-mist">This session has no exercises. Add one from the library.</div>;
@@ -418,6 +454,43 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
             </div>
           </div>
 
+          {/* Auto-Regulation Explainer (Why) */}
+          {recommendation && recommendation.targetWeight > 0 && (
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => setShowWhy((w) => !w)}
+                className="flex w-full items-center justify-between rounded-xl border border-acid/25 bg-acid/[0.06] p-2.5 text-left transition-colors hover:border-acid/40"
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles className="size-3.5 text-acid shrink-0" />
+                  <span className="text-[11.5px] font-medium text-chalk">
+                    Adaptive Target: <strong className="text-acid">{recommendation.targetWeight} kg</strong>
+                  </span>
+                  <span className="rounded bg-acid/15 px-1.5 py-0.5 font-mono text-[7.5px] font-bold uppercase text-acid">
+                    {recommendation.factor.replace("_", " ")}
+                  </span>
+                </div>
+                <span className="font-mono text-[8.5px] text-acid/90 hover:underline">
+                  {showWhy ? "Hide why ▲" : "Why this weight? ▼"}
+                </span>
+              </button>
+
+              {showWhy && (
+                <div className="animate-fade-in mt-1.5 rounded-xl border border-white/[0.08] bg-black/40 p-3 text-[11px] text-mist space-y-1.5">
+                  <p className="font-semibold text-chalk">Engine Auto-Regulation Reason:</p>
+                  <p className="leading-relaxed">{recommendation.reason}</p>
+                  <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-white/[0.06] font-mono text-[8.5px] text-dim">
+                    <span>Baseline: {recommendation.baseWeight} kg</span>
+                    <span>Adjustment: {recommendation.adjustmentKg > 0 ? `+${recommendation.adjustmentKg}` : recommendation.adjustmentKg} kg</span>
+                    <span>Readiness: {recommendation.readinessScore}/100</span>
+                    <span>RPE Target: {recommendation.rpeTarget}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="mt-3 flex items-center justify-between gap-2">
             <button onClick={() => setShowCues((v) => !v)} className="flex items-center gap-1.5 text-[11px] text-mist hover:text-chalk">
               <Info className="size-3.5" /> Form cues <ChevronDown className={cn("size-3 transition-transform", showCues && "rotate-180")} />
@@ -512,13 +585,14 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
           );
         })}
 
-        {/* Quick Stepper & Voice input */}
+        {/* Quick Stepper & Voice / NLP Input (C1) */}
         <div className="pt-2 border-t border-white/[0.04] flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1">
             <span className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-dim">Quick Load</span>
             {[-10, -5, -2.5, 2.5, 5, 10].map((delta) => (
               <button
                 key={delta}
+                type="button"
                 onClick={() =>
                   setDraft({
                     weight: String(Math.max(0, roundTo((Number(draft.weight) || active.suggestion || 40) + delta))),
@@ -530,44 +604,82 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
               </button>
             ))}
           </div>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const SR =
-                  (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
-                if (!SR) {
-                  setToast("Voice logging needs Chrome or Safari. Type it for now.");
-                  return;
-                }
-                const rec = new SR();
-                rec.lang = "en-US";
-                rec.interimResults = false;
-                rec.onresult = (e: any) => {
-                  const text = e.results[0][0].transcript.toLowerCase();
-                  const nums = text.match(/\d+(\.\d+)?/g)?.map(Number) ?? [];
-                  const rpeMatch = text.match(/rpe\s*(\d+(\.\d+)?)/);
-                  const forMatch = text.match(/(?:for|x)\s*(\d+)/);
-                  if (nums.length) {
-                    const weight = nums[0];
-                    const reps = forMatch ? Number(forMatch[1]) : nums[1] ?? Number(draft.reps);
-                    const rpeVal = rpeMatch ? Number(rpeMatch[1]) : draft.rpe;
-                    setDraft({ weight: String(weight), reps: String(reps), rpe: rpeVal });
-                    setToast(`Heard: ${weight}kg × ${reps} @ RPE ${rpeVal}`);
-                    logSetSpecific(weight, reps, rpeVal);
+        {/* NLP Command Bar & Voice Recognition (C1) */}
+        <div className="mt-2.5 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-black/30 p-1.5">
+          <input
+            type="text"
+            value={commandInput}
+            onChange={(e) => setCommandInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && commandInput.trim()) {
+                const parsed = parseWorkoutVoiceCommand(commandInput, {
+                  currentExercise: active.exercise.name,
+                  currentWeight: Number(draft.weight) || active.suggestion || 40,
+                  currentReps: Number(draft.reps) || 8,
+                  currentRpe: draft.rpe,
+                });
+                if (parsed.matched) {
+                  if (parsed.action === "skip_rest") {
+                    setRest(null);
+                    setToast("Rest timer skipped.");
+                  } else if (parsed.action === "adjust_rest" && parsed.restAdjustmentSec) {
+                    setRest((r) => r ? { ...r, remainingSec: r.remainingSec + parsed.restAdjustmentSec!, totalSec: r.totalSec + parsed.restAdjustmentSec! } : null);
+                    setToast(`Added ${parsed.restAdjustmentSec}s to rest.`);
                   } else {
-                    setToast("Couldn't parse that. Try “100 kilos for 8”.");
+                    setVoiceConfirm(parsed);
                   }
-                };
-                rec.onerror = () => setToast("Mic unavailable. Check permissions.");
-                rec.start();
-                setToast("Listening… say “100 kilos for 8”");
-              }}
-              className="flex h-7 items-center gap-1 rounded-md border border-white/10 px-2.5 text-[10px] text-mist hover:border-acid/40 hover:text-acid"
-            >
-              <Mic className="size-3" /> Voice Log
-            </button>
-          </div>
+                  setCommandInput("");
+                } else {
+                  setToast("Command not recognized. Try e.g. '100x8@8' or 'two plates for 5'.");
+                }
+              }
+            }}
+            placeholder="Command or shorthand (e.g. 100x8@8, 2 plates for 5, skip rest)..."
+            className="flex-1 bg-transparent px-2.5 text-[11px] text-chalk placeholder:text-dim focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+              if (!SR) {
+                setToast("Voice logging requires Chrome or Safari speech API. Use the command bar to type shorthand.");
+                return;
+              }
+              const rec = new SR();
+              rec.lang = "en-US";
+              rec.interimResults = false;
+              rec.onresult = (e: any) => {
+                const transcript = e.results[0][0].transcript;
+                const parsed = parseWorkoutVoiceCommand(transcript, {
+                  currentExercise: active.exercise.name,
+                  currentWeight: Number(draft.weight) || active.suggestion || 40,
+                  currentReps: Number(draft.reps) || 8,
+                  currentRpe: draft.rpe,
+                });
+                if (parsed.matched) {
+                  if (parsed.action === "skip_rest") {
+                    setRest(null);
+                    setToast("Rest timer skipped.");
+                  } else if (parsed.action === "adjust_rest" && parsed.restAdjustmentSec) {
+                    setRest((r) => r ? { ...r, remainingSec: r.remainingSec + parsed.restAdjustmentSec!, totalSec: r.totalSec + parsed.restAdjustmentSec! } : null);
+                    setToast(`Added ${parsed.restAdjustmentSec}s to rest.`);
+                  } else {
+                    setVoiceConfirm(parsed);
+                  }
+                } else {
+                  setToast(`Heard: "${transcript}". Couldn't parse set. Try e.g. "100 kilos for 8".`);
+                }
+              };
+              rec.onerror = () => setToast("Mic unavailable. Please check microphone permissions.");
+              rec.start();
+              setToast("Listening… say e.g. “bench 100 kilos for 8” or “two plates for 5”");
+            }}
+            className="flex h-7 items-center gap-1.5 rounded-lg border border-acid/30 bg-acid/[0.1] px-2.5 font-mono text-[9.5px] font-semibold text-acid hover:bg-acid/[0.2] transition-colors"
+          >
+            <Mic className="size-3" /> Voice
+          </button>
         </div>
 
         {nudge && (
@@ -580,7 +692,7 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
 
       {/* actions */}
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <button onClick={doCompress} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[10px] text-mist hover:border-grape/30 hover:text-grape">
+        <button onClick={() => setShowCompress(true)} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[10px] text-mist hover:border-grape/30 hover:text-grape">
           <Wand2 className="size-4" /> Compress
         </button>
         <button onClick={() => setShowSwap(true)} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[10px] text-mist hover:border-sky/30 hover:text-sky">
@@ -648,9 +760,35 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
         }}
       />
 
-      {/* swap modal */}
+      {/* swap modal with equipment profiles (B3) */}
       {showSwap && (
         <Sheet title="Swap exercise" subtitle="Same pattern, same stimulus — ranked for your kit." onClose={() => setShowSwap(false)}>
+          <div className="mb-3">
+            <span className="font-mono text-[8px] uppercase tracking-wider text-dim block mb-1.5">
+              Gym Equipment Profile:
+            </span>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              {(Object.keys(EQUIPMENT_PROFILES) as EquipmentProfileId[]).map((pid) => (
+                <button
+                  key={pid}
+                  type="button"
+                  onClick={() => setActiveProfile(pid)}
+                  className={cn(
+                    "shrink-0 rounded-full border px-2.5 py-1 text-[9.5px] font-medium transition-colors",
+                    activeProfile === pid
+                      ? "border-acid bg-acid/10 text-acid font-semibold"
+                      : "border-white/[0.08] bg-white/[0.02] text-dim hover:text-mist",
+                  )}
+                >
+                  {EQUIPMENT_PROFILES[pid].name}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 font-mono text-[8px] text-dim">
+              {EQUIPMENT_PROFILES[activeProfile].description}
+            </p>
+          </div>
+
           <div className="space-y-2">
             {alternatives.map((alt) => (
               <button key={alt.id} onClick={() => doSwap(alt)} className="group flex w-full items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 text-left transition-colors hover:border-acid/30 hover:bg-acid/[0.04]">
@@ -666,19 +804,42 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
             ))}
             {!alternatives.length && (
               <p className="rounded-xl border border-white/[0.07] p-6 text-center text-[12px] text-mist">
-                No ranked matches with your current equipment. Add more kit in Settings, or pick any lift below.
+                No ranked matches with {EQUIPMENT_PROFILES[activeProfile].name} profile. Switch profile above or pick any compatible lift below.
               </p>
             )}
           </div>
           <p className="mt-4 label-mono">All compatible lifts</p>
           <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {allExercises.filter((e) => equipment.includes(e.equipment) && e.id !== active.exerciseId && !alternatives.some((a) => a.id === e.id)).slice(0, 8).map((e) => (
+            {allExercises.filter((e) => profileEquipment.includes(e.equipment) && e.id !== active.exerciseId && !alternatives.some((a) => a.id === e.id)).slice(0, 8).map((e) => (
               <button key={e.id} onClick={() => doSwap(e)} className="rounded-lg border border-white/[0.05] px-3 py-2 text-left text-[11px] text-mist hover:border-white/15 hover:text-chalk">
                 {e.name}
               </button>
             ))}
           </div>
         </Sheet>
+      )}
+
+      {/* session compression modal (B4) */}
+      {showCompress && (
+        <CompressionModal
+          exercises={items}
+          onApply={(targetMin) => doCompressWithTime(targetMin)}
+          onClose={() => setShowCompress(false)}
+        />
+      )}
+
+      {/* voice / command confirmation sheet (C1) */}
+      {voiceConfirm && (
+        <VoiceConfirmSheet
+          command={voiceConfirm}
+          activeExerciseName={active.exercise.name}
+          onConfirm={(w, r, rpe, t) => {
+            logSetSpecific(w, r, rpe, t);
+            setVoiceConfirm(null);
+            setToast(`Logged: ${w}kg × ${r} @ RPE ${rpe}`);
+          }}
+          onClose={() => setVoiceConfirm(null)}
+        />
       )}
 
       {/* add modal */}
@@ -782,6 +943,227 @@ function AddExerciseSheet({ allExercises, onAdd, onClose }: { allExercises: Exer
             <Plus className="size-3.5 shrink-0 text-dim" />
           </button>
         ))}
+      </div>
+    </Sheet>
+  );
+}
+
+function CompressionModal({
+  exercises,
+  onApply,
+  onClose,
+}: {
+  exercises: SessionExercise[];
+  onApply: (targetMin: number) => void;
+  onClose: () => void;
+}) {
+  const [selectedMin, setSelectedMin] = useState<number>(25);
+  const diff = useMemo(() => {
+    return compressSession(
+      exercises.map((i) => ({
+        ...i,
+        exerciseId: i.exerciseId,
+        targetSets: i.targetSets,
+        restSec: i.restSec,
+        supersetGroup: i.supersetGroup,
+        category: i.exercise.category,
+        position: i.position,
+      })),
+      selectedMin,
+    );
+  }, [exercises, selectedMin]);
+
+  return (
+    <Sheet
+      title="Compress Session (B4)"
+      subtitle="Running short on time? Compress straight sets into paired supersets and trim rest."
+      onClose={onClose}
+    >
+      <div className="space-y-4">
+        {/* Time Target Selector */}
+        <div>
+          <span className="font-mono text-[8.5px] uppercase tracking-wider text-dim">
+            Select Time Window:
+          </span>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {[15, 25, 40].map((mins) => (
+              <button
+                key={mins}
+                type="button"
+                onClick={() => setSelectedMin(mins)}
+                className={cn(
+                  "rounded-xl border p-3 text-center transition-all",
+                  selectedMin === mins
+                    ? "border-acid bg-acid/10 text-chalk"
+                    : "border-white/[0.08] bg-white/[0.02] text-mist hover:border-white/20",
+                )}
+              >
+                <p className="font-numeric text-xl font-bold">{mins}</p>
+                <p className="font-mono text-[8px] uppercase tracking-wider text-dim">
+                  {mins === 15 ? "Blitz" : mins === 25 ? "Standard" : "Moderate"} min
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Diff Comparison Card */}
+        <div className="rounded-2xl border border-white/[0.08] bg-black/30 p-4">
+          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+            <div>
+              <span className="font-mono text-[8px] uppercase tracking-wider text-dim">Original Estimate</span>
+              <p className="font-numeric text-base text-mist line-through">~{diff.originalMin} min</p>
+            </div>
+            <ArrowRight className="size-4 text-acid" />
+            <div className="text-right">
+              <span className="font-mono text-[8px] uppercase tracking-wider text-acid">Compressed Duration</span>
+              <p className="font-numeric text-xl font-bold text-acid">~{diff.compressedMin} min</p>
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-1.5">
+            <span className="font-mono text-[8px] uppercase tracking-wider text-dim">Changes Applied:</span>
+            {diff.diffSummary.map((item, idx) => (
+              <div key={idx} className="flex items-start gap-2 text-[11px] text-chalk/90">
+                <span className="mt-1 size-1.5 rounded-full bg-acid shrink-0" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-white/10 px-4 py-2.5 text-[12px] text-mist hover:text-chalk"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onApply(selectedMin)}
+            className="press inline-flex items-center gap-2 rounded-full bg-acid px-6 py-2.5 text-[12px] font-semibold text-ink"
+          >
+            Apply {selectedMin}-Min Compression <Wand2 className="size-3.5" />
+          </button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+function VoiceConfirmSheet({
+  command,
+  activeExerciseName,
+  onConfirm,
+  onClose,
+}: {
+  command: ParsedLogCommand;
+  activeExerciseName: string;
+  onConfirm: (weight: number, reps: number, rpe: number, type: SetType) => void;
+  onClose: () => void;
+}) {
+  const [weight, setWeight] = useState(command.weightKg ?? 40);
+  const [reps, setReps] = useState(command.reps ?? 8);
+  const [rpe, setRpe] = useState(command.rpe ?? 8);
+  const [type, setType] = useState<SetType>(command.isWarmup ? "warmup" : command.isFailure ? "failure" : "normal");
+
+  return (
+    <Sheet
+      title="Confirm Logged Set (C1)"
+      subtitle={command.rawText ? `Parsed: “${command.rawText}”` : "Verify logged set details"}
+      onClose={onClose}
+    >
+      <div className="rounded-2xl border border-white/[0.08] bg-black/30 p-4">
+        <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+          <div>
+            <span className="font-mono text-[8px] uppercase tracking-wider text-dim">Exercise</span>
+            <p className="text-[14px] font-semibold text-chalk">
+              {command.exerciseName ?? activeExerciseName}
+            </p>
+          </div>
+          <span className="rounded-full bg-acid/15 px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-acid">
+            {Math.round(command.confidence * 100)}% match
+          </span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5">
+            <span className="font-mono text-[8px] uppercase tracking-wider text-dim">Weight</span>
+            <div className="mt-1 flex items-center justify-center gap-1">
+              <input
+                type="number"
+                value={weight}
+                onChange={(e) => setWeight(Number(e.target.value))}
+                className="w-16 bg-transparent text-center font-numeric text-lg font-bold text-acid focus:outline-none"
+              />
+              <span className="text-[11px] text-dim">kg</span>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5">
+            <span className="font-mono text-[8px] uppercase tracking-wider text-dim">Reps</span>
+            <div className="mt-1 flex items-center justify-center gap-1">
+              <input
+                type="number"
+                value={reps}
+                onChange={(e) => setReps(Number(e.target.value))}
+                className="w-12 bg-transparent text-center font-numeric text-lg font-bold text-chalk focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5">
+            <span className="font-mono text-[8px] uppercase tracking-wider text-dim">RPE</span>
+            <div className="mt-1 flex items-center justify-center gap-1">
+              <input
+                type="number"
+                step="0.5"
+                value={rpe}
+                onChange={(e) => setRpe(Number(e.target.value))}
+                className="w-12 bg-transparent text-center font-numeric text-lg font-bold text-amber focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-3">
+          <span className="font-mono text-[9px] uppercase tracking-wider text-dim">Set Type</span>
+          <div className="flex gap-1">
+            {(["normal", "warmup", "failure"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setType(t)}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-[10px] font-medium transition-colors",
+                  type === t ? "bg-acid text-ink font-semibold" : "bg-white/[0.04] text-mist hover:text-chalk",
+                )}
+              >
+                {t === "normal" ? "Normal" : t === "warmup" ? "Warmup" : "Failure"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-full border border-white/10 px-4 py-2.5 text-[12px] text-mist hover:text-chalk"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => onConfirm(weight, reps, rpe, type)}
+          className="press inline-flex items-center gap-1.5 rounded-full bg-acid px-6 py-2.5 text-[12px] font-semibold text-ink"
+        >
+          Confirm &amp; Log Set <Check className="size-3.5" />
+        </button>
       </div>
     </Sheet>
   );

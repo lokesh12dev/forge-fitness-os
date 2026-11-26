@@ -555,6 +555,69 @@ export async function updateProfile(formData: FormData) {
   revalidatePath("/app");
 }
 
+export async function saveDailyCheckIn(data: {
+  sleepHours: number;
+  hrv: number;
+  restingHr: number;
+  soreness: number;
+  weightKg?: number;
+}) {
+  const user = await requireUser();
+  const sleep = Math.max(0, Math.min(24, Number(data.sleepHours) || 7));
+  const hrv = Math.max(10, Math.min(250, Math.round(Number(data.hrv) || 60)));
+  const rhr = Math.max(30, Math.min(180, Math.round(Number(data.restingHr) || 58)));
+  const soreness = Math.max(0, Math.min(10, Math.round(Number(data.soreness) || 2)));
+  const weight = data.weightKg ? Math.max(30, Math.min(300, Number(data.weightKg))) : user.weightKg;
+
+  const today = dateKey();
+  const [existing] = await db
+    .select()
+    .from(schema.bodyMetrics)
+    .where(and(eq(schema.bodyMetrics.userId, user.id), eq(schema.bodyMetrics.date, today)))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(schema.bodyMetrics)
+      .set({
+        sleepHours: sleep,
+        hrv,
+        restingHr: rhr,
+        soreness,
+        weightKg: weight,
+      })
+      .where(eq(schema.bodyMetrics.id, existing.id));
+  } else {
+    await db.insert(schema.bodyMetrics).values({
+      id: rid("bm"),
+      userId: user.id,
+      date: today,
+      sleepHours: sleep,
+      hrv,
+      restingHr: rhr,
+      soreness,
+      weightKg: weight,
+    });
+  }
+
+  if (data.weightKg) {
+    await db.update(schema.users).set({ weightKg: weight }).where(eq(schema.users.id, user.id));
+  }
+
+  const newScore = readinessScore({ sleepHours: sleep, hrv, restingHr: rhr, soreness });
+
+  await db
+    .update(schema.workouts)
+    .set({ readiness: newScore })
+    .where(and(eq(schema.workouts.userId, user.id), eq(schema.workouts.status, "active")));
+
+  revalidatePath("/app");
+  revalidatePath("/app/train");
+  revalidatePath("/app/progress");
+
+  return { ok: true as const, score: newScore, date: today };
+}
+
 export async function enrollProgram(formData: FormData) {
   const user = await requireUser();
   const routineId = String(formData.get("routineId") ?? "");

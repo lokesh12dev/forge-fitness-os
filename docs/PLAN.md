@@ -72,15 +72,15 @@ The fastest, most reliable set logger in the category. Built Active Workout scre
 Smart auto-regulation that earns trust by showing its reasoning, plus voice/text logging.
 
 ### Milestones
-| # | Feature | IDs |
-|---|---------|-----|
-| 2.1 | Readiness daily check-in + ring + 7-day chart | B1 |
-| 2.2 | Auto-regulated loads (target weights from engine + "why") | B2 |
-| 2.3 | One-tap equipment swap (ranked equivalents + equipment profiles) | B3 |
-| 2.4 | "I have N minutes" session compression with diff | B4 |
-| 2.5 | Muscle fatigue heatmap (front/back SVG, tap for detail) | B5 |
-| 2.6 | Voice and text logging (LLM parser + regex fallback + confirm sheet) | C1 |
-| 2.7 | Tests: 60+ parser phrases, engine property tests, swap tests | — |
+| # | Feature | IDs | Status | Notes |
+|---|---------|-----|--------|-------|
+| 2.1 | Readiness daily check-in + ring + 7-day chart | B1 | **COMPLETE** | Interactive modal, sleep/HRV/RHR/soreness sliders, instant score update |
+| 2.2 | Auto-regulated loads (target weights from engine + "why") | B2 | **COMPLETE** | Target weight engine with explainable "Why this weight?" calculation badge |
+| 2.3 | One-tap equipment swap (ranked equivalents + equipment profiles) | B3 | **COMPLETE** | Commercial, Home Gym, Hotel/Travel, and Calisthenics kit filters |
+| 2.4 | "I have N minutes" session compression with diff | B4 | **COMPLETE** | 15m Blitz, 25m Standard, 40m Moderate with antagonist supersets & diff |
+| 2.5 | Muscle fatigue heatmap (front/back SVG, tap for detail) | B5 | **COMPLETE** | Interactive BodyMap with tap-for-detail recovery drawer & exercise suggestions |
+| 2.6 | Voice and text logging (LLM parser + regex fallback + confirm sheet) | C1 | **COMPLETE** | Shorthand (100x8@8), plate slang, spoken units, VoiceConfirmSheet safety |
+| 2.7 | Tests: 60+ parser phrases, engine property tests, swap tests | — | **COMPLETE** | 115/115 tests passing, Playwright e2e across 360px, 768px, 1440px |
 
 ---
 

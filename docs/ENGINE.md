@@ -127,32 +127,92 @@ Returns the plate list per side plus any remainder that cannot be loaded with av
 
 ---
 
-## 8. Session time estimate and compression
+## 8. Session time estimate and multi-tier compression (B4)
 
 ```
-minutes = 8 (warm-up)
-        + Σ targetSets × (42 s set + restSec)
+minutes = 6 (warm-up)
+        + Σ targetSets × (40 s set + restSec)
 ```
 
-Superset rests are multiplied by 0.35 for the estimate.
+`compressSession(exercises, targetMinutes)` implements adaptive compression based on the time window:
 
-`compressSession(exercises, targetMinutes)` pairs exercises into supersets, halves rest, and returns:
+1. **15-Minute Blitz (`targetMinutes <= 20`):**
+   - Keeps core compound lifts (top 2), drops low-priority isolation accessories.
+   - Rest scaled by `0.70x`.
+   - Antagonist exercises paired into alternating supersets.
+2. **25-Minute Standard (`20 < targetMinutes <= 32`):**
+   - Pairs antagonist exercises (e.g. Press + Row) into supersets.
+   - Rest scaled by `0.80x`.
+3. **40-Minute Moderate (`targetMinutes > 32`):**
+   - Pairs non-competing isolation accessories into supersets.
+   - Rest scaled by `0.85x`.
 
+Returns:
+```ts
+{
+  exercises: T[];
+  originalMin: number;
+  compressedMin: number;
+  groups: Array<{ a: string; b: string }>;
+  diffSummary: string[];
+}
 ```
-{ exercises, originalMin, compressedMin, groups: [{a, b}] }
-```
-
-`compressedMin` is floored at the requested `targetMinutes`.
 
 ---
 
-## 9. Protein plan
+## 9. Explainable Auto-Regulation (`adaptiveTargetWeightWithReason`) (B2)
+
+Computes the recommended working weight and human-readable explanation based on 4 priority factors:
+
+1. **Readiness Depleted (`readiness < 60`):**
+   Trims load by 5% to prevent overtraining and injury risk.
+2. **Readiness Primed (`readiness >= 85`):**
+   Adds 2.5% load for top-set potentiation and PR opportunities.
+3. **Double Progression:**
+   If the lifter achieved the top of the target rep range with RPE ≤ 8, increases load by the minimum plate increment (2.5kg for barbells, 2kg for dumbbells).
+4. **RPE Auto-Regulation:**
+   If last session RPE exceeded target by ≥ 1, holds load or reduces by 2.5%. If under target by ≥ 2, adds 2.5%.
+
+```ts
+interface AutoRegulationReason {
+  targetWeightKg: number;
+  baseWeightKg: number;
+  deltaKg: number;
+  factor: "high_readiness" | "low_readiness" | "double_progression" | "rpe_adjustment" | "no_history";
+  explanation: string;
+}
+```
+
+---
+
+## 10. Deload Recommendation Auto-Detection (B6)
+
+`checkDeloadRecommendation(input)` automatically detects when a deload week is warranted based on:
+- 5+ consecutive weeks of high training volume.
+- Chronic low readiness (average score < 60 over the past 7 days).
+- Trend of high exertion (average RPE ≥ 9.0 over the past 3 workouts).
+
+Returns `{ needsDeload: boolean; reason?: string; suggestedIntensityMod: number; suggestedVolumeMod: number }`.
+
+---
+
+## 11. Equipment Profiles (B3)
+
+Ranked equivalent exercise mapping filtered by 4 kit profiles:
+- `commercial`: Full barbell, dumbbell, cable, machine, and bodyweight kit.
+- `home_gym`: Barbell, dumbbell, bench, rack, pull-up bar, resistance bands.
+- `hotel_travel`: Dumbbells (up to 25kg), cables, treadmill, bodyweight.
+- `bodyweight`: Calisthenics, pull-up bar, floor, gymnastics rings.
+
+---
+
+## 12. Protein plan
 
 `proteinPlan(remainingGrams)` filters the curated food list to servings that fit the remaining gap, sorted by protein density, and returns a short list. It returns `[]` when the gap is ≤ 0.
 
 ---
 
-## 10. Strength standards
+## 13. Strength standards
 
 Ratios of e1RM to bodyweight by lift and sex, with five tiers:
 

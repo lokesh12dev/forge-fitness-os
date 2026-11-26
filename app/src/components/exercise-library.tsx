@@ -18,6 +18,8 @@ import {
 import { addExerciseToWorkout, startRoutineWorkout } from "@/app/actions";
 import { BodyMap, MUSCLE_METADATA } from "@/components/body-map";
 import { ExerciseMotionDemo } from "@/components/exercise-motion";
+import { ExerciseDetailSheet } from "@/components/exercise-detail-sheet";
+import { loadAllExercisePrefs, saveExercisePrefs, type ExercisePrefs } from "@/lib/own-media-db";
 
 export type ExerciseStat = {
   pr: number | null;
@@ -94,7 +96,7 @@ export function ExerciseLibrary({
   const [eqFilter, setEqFilter] = useState("");
   const [catFilter, setCatFilter] = useState("");
   const [onlyMyGym, setOnlyMyGym] = useState(false);
-  const [viewLayout, setViewLayout] = useState<"list" | "grid">("list");
+  const [viewLayout, setViewLayout] = useState<"list" | "grid">("grid");
   const [shown, setShown] = useState(40);
   const [showFiltersModal, setShowFiltersModal] = useState(false);
   const [showLaddersModal, setShowLaddersModal] = useState(false);
@@ -105,12 +107,12 @@ export function ExerciseLibrary({
   // Explorer states
   const [explorerMuscles, setExplorerMuscles] = useState<string[]>(initialMuscle ? [initialMuscle] : []);
   const [explorerMatch, setExplorerMatch] = useState<"all" | "any">("all");
-  const [explorerDetailMode, setExplorerDetailMode] = useState<"motion" | "anatomy">("motion");
 
   // Persistent client customizations
   const [customExercises, setCustomExercises] = useState<CatalogExercise[]>([]);
   const [favIds, setFavIds] = useState<string[]>([]);
   const [customLadders, setCustomLadders] = useState<SkillLadderDef[]>([]);
+  const [exercisePrefs, setExercisePrefs] = useState<Record<string, ExercisePrefs>>({});
 
   // Custom exercise form
   const [cxName, setCxName] = useState("");
@@ -127,7 +129,12 @@ export function ExerciseLibrary({
     setCustomExercises(loadJson<CatalogExercise[]>(CUSTOM_EX_KEY, []));
     setFavIds(loadJson<string[]>(FAV_EX_KEY, []));
     setCustomLadders(loadJson<SkillLadderDef[]>(CUSTOM_LADDERS_KEY, []));
+    setExercisePrefs(loadAllExercisePrefs());
   }, []);
+
+  const updateExercisePrefs = (exerciseId: string, patch: ExercisePrefs) => {
+    setExercisePrefs(saveExercisePrefs(exerciseId, patch));
+  };
 
   const flashToast = (msg: string) => {
     setToastMsg(msg);
@@ -177,8 +184,10 @@ export function ExerciseLibrary({
       if (eqFilter && e.equipment !== eqFilter) return false;
       if (catFilter && e.category !== catFilter) return false;
       if (ql) {
+        const aliases = exercisePrefs[e.id]?.aliases ?? [];
         const match =
           e.name.toLowerCase().includes(ql) ||
+          aliases.some((al) => al.toLowerCase().includes(ql)) ||
           e.primaryMuscle.toLowerCase().includes(ql) ||
           e.equipment.toLowerCase().includes(ql) ||
           e.bodyPart.toLowerCase().includes(ql) ||
@@ -193,12 +202,14 @@ export function ExerciseLibrary({
       const af = favSet.has(a.id) ? 1 : 0;
       const bf = favSet.has(b.id) ? 1 : 0;
       if (af !== bf) return bf - af;
-      const ap = stats[a.id]?.totalSets ?? 0;
-      const bp = stats[b.id]?.totalSets ?? 0;
-      if ((ap > 0 ? 1 : 0) !== (bp > 0 ? 1 : 0)) return (bp > 0 ? 1 : 0) - (ap > 0 ? 1 : 0);
-      return b.popularity - a.popularity;
+      if (ql) {
+        const ae = a.name.toLowerCase().startsWith(ql) ? 1 : 0;
+        const be = b.name.toLowerCase().startsWith(ql) ? 1 : 0;
+        if (ae !== be) return be - ae;
+      }
+      return a.name.localeCompare(b.name);
     });
-  }, [fullCatalog, onlyMyGym, equipment, bodyPart, eqFilter, catFilter, q, favIds, stats]);
+  }, [fullCatalog, onlyMyGym, equipment, bodyPart, eqFilter, catFilter, q, favIds, exercisePrefs]);
 
   const explorerCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -599,11 +610,11 @@ export function ExerciseLibrary({
         <div
           className={cn(
             viewLayout === "grid"
-              ? "grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3"
+              ? "grid grid-cols-1 gap-2.5 md:grid-cols-2"
               : "overflow-hidden rounded-[20px] border border-white/[0.07] bg-panel divide-y divide-white/[0.06]",
           )}
         >
-          {/* Create your own exercise row matching library.png */}
+          {/* Create your own exercise row matching Screenshot 2 */}
           {mode === "library" && (
             <button
               type="button"
@@ -613,12 +624,12 @@ export function ExerciseLibrary({
                 viewLayout === "grid" && "rounded-2xl border border-white/[0.08] bg-panel",
               )}
             >
-              <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-panel-2 text-mist">
+              <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-panel-2 text-mist">
                 <Plus className="size-5" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-[14.5px] font-medium text-chalk">Create your own exercise</p>
-                <p className="truncate text-[12.5px] text-mist">Name, target muscle, equipment & custom cues</p>
+                <p className="truncate text-[12.5px] text-mist">name + body part, and a photo or video if you like</p>
               </div>
               <Plus className="size-4 shrink-0 text-dim" />
             </button>
@@ -637,20 +648,25 @@ export function ExerciseLibrary({
               >
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedEx(ex);
-                    setExplorerDetailMode("motion");
-                  }}
+                  onClick={() => setSelectedEx(ex)}
                   className="flex min-w-0 flex-1 items-center gap-3 text-left"
                 >
-                  <ExerciseMotionDemo pattern={ex.pattern} equipment={ex.equipment} size="sm" />
+                  <ExerciseMotionDemo
+                    pattern={ex.pattern}
+                    equipment={ex.equipment}
+                    primaryMuscle={ex.primaryMuscle}
+                    secondaryMuscles={ex.secondaryMuscles}
+                    muscleWeights={ex.muscleWeights}
+                    name={ex.name}
+                    size="sm"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1.5 truncate text-[14.5px] font-medium text-chalk">
                       {isFav && <Star className="size-3.5 shrink-0 fill-amber text-amber" />}
                       <span className="truncate">{ex.name}</span>
                     </p>
                     <p className="truncate text-[12.5px] text-mist">
-                      {MUSCLE_METADATA[ex.primaryMuscle]?.name ?? titleCase(ex.primaryMuscle)} · {titleCase(ex.equipment)}
+                      {ex.targetName ?? MUSCLE_METADATA[ex.primaryMuscle]?.name ?? titleCase(ex.primaryMuscle)} · {titleCase(ex.equipment)}
                     </p>
                   </div>
                 </button>
@@ -996,144 +1012,23 @@ export function ExerciseLibrary({
         </div>
       )}
 
-      {/* Rich Exercise Detail Modal */}
+      {/* Rich OpenGym Exercise Detail Sheet (Screenshot 1) */}
       {selectedEx && (
-        <div className="fixed inset-0 z-[75] flex items-end justify-center bg-black/80 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-white/12 bg-panel p-5 sm:rounded-3xl">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="font-display text-2xl font-semibold text-chalk">{selectedEx.name}</h2>
-                <p className="mt-0.5 text-[13px] text-mist">
-                  {MUSCLE_METADATA[selectedEx.primaryMuscle]?.name ?? titleCase(selectedEx.primaryMuscle)} · {titleCase(selectedEx.equipment)} · {titleCase(selectedEx.category)}
-                </p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => toggleFav(selectedEx.id)}
-                  aria-label="Bookmark favorite"
-                  className="grid size-8 place-items-center rounded-full bg-panel-2 text-mist hover:text-amber"
-                >
-                  <Star className={cn("size-4", favIds.includes(selectedEx.id) && "fill-amber text-amber")} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedEx(null)}
-                  className="grid size-8 place-items-center rounded-full bg-panel-2 text-mist hover:text-chalk"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Motion Guide / Anatomy Toggle */}
-            <div className="mt-4 inline-flex rounded-xl bg-panel-2 p-1">
-              <button
-                type="button"
-                onClick={() => setExplorerDetailMode("motion")}
-                className={cn("rounded-lg px-3 py-1 text-[12px] font-medium", explorerDetailMode === "motion" ? "bg-panel-3 text-chalk" : "text-mist")}
-              >
-                Motion guide
-              </button>
-              <button
-                type="button"
-                onClick={() => setExplorerDetailMode("anatomy")}
-                className={cn("rounded-lg px-3 py-1 text-[12px] font-medium", explorerDetailMode === "anatomy" ? "bg-panel-3 text-chalk" : "text-mist")}
-              >
-                Muscle map
-              </button>
-            </div>
-
-            <div className="mt-3 grid gap-4 md:grid-cols-2">
-              {explorerDetailMode === "motion" ? (
-                <ExerciseMotionDemo pattern={selectedEx.pattern} equipment={selectedEx.equipment} size="lg" interactive />
-              ) : (
-                <div className="flex items-center justify-center rounded-2xl border border-white/[0.08] bg-[#141416] p-4">
-                  <BodyMap
-                    selectedMuscle={selectedEx.primaryMuscle}
-                    secondaryMuscles={selectedEx.secondaryMuscles}
-                    highlightWeights={selectedEx.muscleWeights}
-                    interactive={false}
-                    showDetailsCard={false}
-                    svgHeightClass="max-h-[210px]"
-                  />
-                </div>
-              )}
-
-              <div className="space-y-3">
-                {/* PR / Last session summary */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-2xl bg-panel-2 p-3">
-                    <p className="flex items-center gap-1 text-[11px] text-mist">
-                      <Trophy className="size-3 text-acid" /> Best e1RM
-                    </p>
-                    <p className="mt-1 font-numeric text-xl font-semibold text-chalk">
-                      {stats[selectedEx.id]?.pr ? `${stats[selectedEx.id].pr} kg` : "—"}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-panel-2 p-3">
-                    <p className="flex items-center gap-1 text-[11px] text-mist">
-                      <TrendingUp className="size-3 text-mint" /> Suggested next
-                    </p>
-                    <p className="mt-1 font-numeric text-xl font-semibold text-chalk">
-                      {stats[selectedEx.id]?.target ? `${stats[selectedEx.id].target} kg` : "RPE 8"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl bg-panel-2 p-3">
-                  <p className="text-[11px] font-medium text-mist">Muscles trained</p>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    <span className="rounded-full bg-acid/18 px-2.5 py-0.5 text-[11.5px] font-medium text-acid">
-                      Primary: {MUSCLE_METADATA[selectedEx.primaryMuscle]?.name ?? titleCase(selectedEx.primaryMuscle)}
-                    </span>
-                    {selectedEx.secondaryMuscles.map((sec) => (
-                      <span key={sec} className="rounded-full bg-panel-3 px-2.5 py-0.5 text-[11.5px] text-mist">
-                        {MUSCLE_METADATA[sec]?.name ?? titleCase(sec)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Instructions */}
-            <div className="mt-4 rounded-2xl bg-panel-2 p-4">
-              <h4 className="text-[13px] font-semibold text-chalk">How to perform</h4>
-              <ol className="mt-2 space-y-1.5 text-[13px] leading-relaxed text-mist">
-                {selectedEx.instructions.map((step, idx) => (
-                  <li key={idx} className="flex gap-2">
-                    <span className="font-numeric text-acid">{idx + 1}.</span>
-                    <span>{step}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => {
-                  const target = selectedEx;
-                  setSelectedEx(null);
-                  handleAddToWorkout(target);
-                }}
-                className="press flex flex-1 items-center justify-center gap-2 rounded-full bg-acid py-2.5 text-[14px] font-semibold text-ink"
-              >
-                <Play className="size-4 fill-current" />
-                {activeWorkoutId ? "Add to active session" : "Train this now"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedEx(null)}
-                className="rounded-full bg-panel-2 px-5 py-2.5 text-[14px] font-medium text-chalk"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
+        <ExerciseDetailSheet
+          exercise={selectedEx}
+          stat={stats[selectedEx.id]}
+          isFav={favIds.includes(selectedEx.id)}
+          prefs={exercisePrefs[selectedEx.id] ?? {}}
+          activeWorkoutId={activeWorkoutId}
+          pending={pending}
+          onToggleFav={toggleFav}
+          onUpdatePrefs={updateExercisePrefs}
+          onClose={() => setSelectedEx(null)}
+          onTrainNow={(target) => {
+            setSelectedEx(null);
+            handleAddToWorkout(target);
+          }}
+        />
       )}
     </div>
   );

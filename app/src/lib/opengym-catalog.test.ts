@@ -6,6 +6,8 @@ import {
   OPENGYM_STARTER_PLANS,
   SKILL_LADDERS,
   buildSessionFromMuscles,
+  computeEpley1RM,
+  computeMusclePercentages,
   computeRoutineMuscleLoad,
 } from "./opengym-catalog";
 import {
@@ -15,10 +17,21 @@ import {
   getScheduledRoutinesForDate,
 } from "./plan-store";
 
-describe("Unified openGym MIT ExerciseDB Catalog & Ladders", () => {
-  it("loads over 1,320 deduplicated exercises combining FORGE + MIT ExerciseDB", () => {
-    expect(FULL_EXERCISE_CATALOG.length).toBeGreaterThanOrEqual(1320);
+describe("Unified openGym Catalog, Ladders & Epley 1RM", () => {
+  it("loads all 5,632 exercises combining FORGE + openGym full catalogue", () => {
+    expect(FULL_EXERCISE_CATALOG.length).toBeGreaterThanOrEqual(5600);
     expect(CATALOG_BY_ID.get("ex-bench-press")?.name).toBe("Barbell Bench Press");
+    const jumpBox = CATALOG_BY_ID.get("og-4209");
+    expect(jumpBox?.name).toBe("1 To 2 Jump Box");
+    expect(jumpBox?.description).toContain("Push off with one leg");
+  });
+
+  it("computes muscle share percentages and Epley 1RM accurately", () => {
+    const jumpBox = CATALOG_BY_ID.get("og-4209")!;
+    const shares = computeMusclePercentages(jumpBox);
+    expect(shares[0].label.toLowerCase()).toContain("quad");
+    expect(shares.reduce((s, x) => s + x.pct, 0)).toBe(100);
+    expect(computeEpley1RM(20, 5)).toBe(23.3);
   });
 
   it("resolves every Skill Ladder step cleanly in CATALOG_BY_ID", () => {

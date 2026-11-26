@@ -4,11 +4,10 @@ import {
 } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getWorkspace, nutritionTotals } from "@/lib/queries";
-import { readinessVerdict, recoveryMap } from "@/lib/engine";
+import { e1rm, readinessVerdict, recoveryMap } from "@/lib/engine";
 import { Badge, ProgressBar } from "@/components/ui";
 import { Card, CardHeader, PageHeader } from "@/components/page-header";
-import { CoachChat } from "@/components/coach-client";
-import type { ChatMessage } from "@/components/coach-client";
+import { CoachChat, type ChatMessage, type CoachContextSnapshot } from "@/components/coach-client";
 
 export default async function CoachPage() {
   const user = await requireUser();
@@ -53,6 +52,57 @@ export default async function CoachPage() {
     ? Math.min(100, Math.round((ws.weekWorkouts.length / Math.max(1, ws.enrolledRoutine.daysPerWeek)) * 100))
     : 0;
 
+  const latestWorkout = ws.completedWorkouts[0] ?? null;
+  const latestWorkoutSets = latestWorkout
+    ? ws.sets.filter((s) => s.workoutId === latestWorkout.id)
+    : [];
+  const bestByEx = new Map<string, { name: string; weightKg: number; reps: number; e1rm: number }>();
+  for (const s of latestWorkoutSets) {
+    const exName = ws.exerciseMap.get(s.exerciseId)?.name ?? "Lift";
+    const score = e1rm(s.weightKg, s.reps);
+    const prev = bestByEx.get(s.exerciseId);
+    if (!prev || score > prev.e1rm) {
+      bestByEx.set(s.exerciseId, {
+        name: exName,
+        weightKg: s.weightKg,
+        reps: s.reps,
+        e1rm: Math.round(score * 10) / 10,
+      });
+    }
+  }
+
+  const bpCounts = new Map<string, number>();
+  for (const s of ws.sets) {
+    const pm = ws.exerciseMap.get(s.exerciseId)?.primaryMuscle ?? "core";
+    bpCounts.set(pm, (bpCounts.get(pm) ?? 0) + 1);
+  }
+
+  const coachContext: CoachContextSnapshot = {
+    sessionsCount: sessionCount,
+    setsCount: ws.sets.length,
+    readiness: ws.readiness,
+    goal: user.goal || "Build muscle",
+    experience: user.experience || "Training regularly",
+    equipment: Array.isArray(user.equipment) ? user.equipment : ["barbell", "dumbbell", "bodyweight"],
+    lastWorkout: latestWorkout
+      ? {
+          id: latestWorkout.id,
+          name: latestWorkout.name,
+          focus: latestWorkout.focus,
+          dateLabel: new Date(latestWorkout.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+          durationMin: Math.max(15, Math.round(latestWorkout.durationSec / 60)),
+          totalVolume: Math.round(latestWorkout.totalVolume),
+          setCount: latestWorkoutSets.length,
+          prsCount: ws.prs.filter((p) => p.workoutId === latestWorkout.id).length,
+          bestLifts: [...bestByEx.values()].sort((a, b) => b.e1rm - a.e1rm).slice(0, 5),
+        }
+      : null,
+    bodyPartSets: [...bpCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([part, sets]) => ({ part, sets })),
+  };
+
   return (
     <>
       <PageHeader
@@ -64,7 +114,7 @@ export default async function CoachPage() {
           </>
         }
         title="Your corner."
-        subtitle="Not a chatbot with a pump-up quote. Forge Coach reads your sleep, HRV, RPE, volume and protein gap before it says a word — then tells you exactly what to do next."
+        subtitle="Not a chatbot with a pump-up quote. Coach builds your plan from your answers and adjusts it from what you actually log — nothing changes until you say so."
       />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
@@ -72,6 +122,7 @@ export default async function CoachPage() {
           <CoachChat
             initialMessages={messages}
             user={{ name: user.name, initials: user.initials, accent: user.accent }}
+            context={coachContext}
           />
         </div>
 

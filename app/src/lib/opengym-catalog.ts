@@ -6,20 +6,27 @@
  * and CC-BY-4.0 openGym starter/curated routine structures.
  */
 
-import rawExerciseDb from "@/data/exercisedb-catalog.json";
+import rawOpenGymFull from "@/data/opengym-full-catalog.json";
 import rawOpengymRoutines from "@/data/opengym-routines.json";
 import { EXERCISES, type SeedExercise } from "@/db/exercise-data";
 
 export interface CatalogExercise {
   id: string;
+  openGymId?: string;
   slug: string;
   name: string;
   primaryMuscle: string;
+  targetName?: string;
   secondaryMuscles: string[];
+  secondaryMuscleNames?: string[];
   bodyPart: string;
   equipment: string;
   category: string;
   pattern: string;
+  description?: string;
+  hold?: boolean;
+  track?: "distance";
+  machineKind?: string;
   unilateral: boolean;
   difficulty: string;
   instructions: string[];
@@ -27,10 +34,10 @@ export interface CatalogExercise {
   tempo: string;
   popularity: number;
   muscleWeights: Record<string, number>;
-  source: "forge" | "exercisedb" | "custom";
+  source: "forge" | "opengym" | "exercisedb" | "custom";
 }
 
-type RawEdbItem = {
+type RawCatalogItem = {
   id: string;
   n: string;
   bp: string;
@@ -38,12 +45,17 @@ type RawEdbItem = {
   tg: string;
   sm: string[];
   cat: string;
+  desc?: string;
   inst: string[];
+  hold?: boolean;
+  track?: "distance";
+  mk?: string;
   mm?: {
     primaries?: string[];
     secondaries?: string[];
     weights?: Record<string, number>;
   } | null;
+  src?: string;
 };
 
 type RawRoutineFile = {
@@ -217,8 +229,9 @@ export function toBodyMapSlug(m: string): string[] {
 
 function inferPattern(name: string, bodyPart: string, cat: string): string {
   const low = name.toLowerCase();
-  if (cat === "cardio" || bodyPart === "cardio" || low.includes("bike") || low.includes("row") && low.includes("machine") || low.includes("treadmill") || low.includes("burpee") || low.includes("jump")) return "conditioning";
-  if (low.includes("bench press") || low.includes("push-up") || low.includes("chest press") || low.includes("dip") && bodyPart === "chest") return "horizontal_push";
+  if (low.includes("jump box") || low.includes("box jump")) return "jump_box";
+  if (cat === "cardio" || cat === "plyometrics" || bodyPart === "cardio" || low.includes("bike") || (low.includes("row") && low.includes("machine")) || low.includes("treadmill") || low.includes("burpee") || low.includes("jump")) return "conditioning";
+  if (low.includes("bench press") || low.includes("push-up") || low.includes("chest press") || (low.includes("dip") && bodyPart === "chest")) return "horizontal_push";
   if (low.includes("overhead") || low.includes("military press") || low.includes("shoulder press") || low.includes("arnold") || low.includes("handstand")) return "vertical_push";
   if (low.includes("pull-up") || low.includes("chin-up") || low.includes("pulldown")) return "vertical_pull";
   if (low.includes("row") || low.includes("face pull")) return "horizontal_pull";
@@ -245,7 +258,7 @@ function buildWeightsForForgeSeed(ex: SeedExercise): Record<string, number> {
   return weights;
 }
 
-function buildWeightsForEdb(item: RawEdbItem): Record<string, number> {
+function buildWeightsForEdb(item: RawCatalogItem): Record<string, number> {
   if (item.mm?.weights && Object.keys(item.mm.weights).length > 0) {
     const mapped: Record<string, number> = {};
     for (const [k, v] of Object.entries(item.mm.weights)) {
@@ -270,47 +283,62 @@ for (const ex of EXERCISES) {
   FORGE_BY_LOWER_NAME.set(ex.name.toLowerCase().trim(), ex);
 }
 
-const forgeCatalog: CatalogExercise[] = EXERCISES.map((ex) => ({
-  id: `ex-${ex.slug}`,
-  slug: ex.slug,
-  name: ex.name,
-  primaryMuscle: ex.primary,
-  secondaryMuscles: ex.secondary,
-  bodyPart:
-    ex.primary === "chest"
-      ? "chest"
-      : ex.primary === "back" || ex.primary === "lats"
-        ? "back"
-        : ex.primary === "shoulders"
-          ? "shoulders"
-          : ex.primary === "biceps" || ex.primary === "triceps"
-            ? "upper arms"
-            : ex.primary === "forearms"
-              ? "lower arms"
-              : ex.primary === "quads" || ex.primary === "hamstrings" || ex.primary === "glutes"
-                ? "upper legs"
-                : ex.primary === "calves"
-                  ? "lower legs"
-                  : ex.primary === "core"
-                    ? "waist"
-                    : "cardio",
-  equipment: ex.equipment,
-  category: ex.category,
-  pattern: ex.pattern,
-  unilateral: Boolean(ex.unilateral),
-  difficulty: ex.difficulty ?? "intermediate",
-  instructions: ex.instructions,
-  cues: ex.cues,
-  tempo: ex.category === "compound" ? "3-1-1" : "2-0-1",
-  popularity: ex.popularity,
-  muscleWeights: buildWeightsForForgeSeed(ex),
-  source: "forge",
-}));
+const rawByLowerName = new Map<string, RawCatalogItem>();
+for (const item of rawOpenGymFull as RawCatalogItem[]) {
+  rawByLowerName.set(item.n.toLowerCase().trim(), item);
+}
+
+const forgeCatalog: CatalogExercise[] = EXERCISES.map((ex) => {
+  const matchRaw = rawByLowerName.get(ex.name.toLowerCase().trim());
+  return {
+    id: `ex-${ex.slug}`,
+    openGymId: matchRaw?.id,
+    slug: ex.slug,
+    name: ex.name,
+    primaryMuscle: ex.primary,
+    targetName: matchRaw ? TITLE_CASE(matchRaw.tg) : TITLE_CASE(ex.primary),
+    secondaryMuscles: ex.secondary,
+    secondaryMuscleNames: matchRaw ? matchRaw.sm.map(TITLE_CASE) : ex.secondary.map(TITLE_CASE),
+    bodyPart:
+      ex.primary === "chest"
+        ? "chest"
+        : ex.primary === "back" || ex.primary === "lats"
+          ? "back"
+          : ex.primary === "shoulders"
+            ? "shoulders"
+            : ex.primary === "biceps" || ex.primary === "triceps"
+              ? "upper arms"
+              : ex.primary === "forearms"
+                ? "lower arms"
+                : ex.primary === "quads" || ex.primary === "hamstrings" || ex.primary === "glutes"
+                  ? "upper legs"
+                  : ex.primary === "calves"
+                    ? "lower legs"
+                    : ex.primary === "core"
+                      ? "waist"
+                      : "cardio",
+    equipment: ex.equipment,
+    category: matchRaw?.cat ?? ex.category,
+    pattern: ex.pattern,
+    description: matchRaw?.desc ?? `${ex.name}: focused ${ex.primary} development with controlled resistance.`,
+    hold: matchRaw?.hold,
+    track: matchRaw?.track,
+    machineKind: matchRaw?.mk,
+    unilateral: Boolean(ex.unilateral),
+    difficulty: ex.difficulty ?? "intermediate",
+    instructions: matchRaw?.inst?.length ? matchRaw.inst : ex.instructions,
+    cues: ex.cues,
+    tempo: ex.category === "compound" ? "3-1-1" : "2-0-1",
+    popularity: ex.popularity,
+    muscleWeights: matchRaw ? buildWeightsForEdb(matchRaw) : buildWeightsForForgeSeed(ex),
+    source: "forge",
+  };
+});
 
 const seenNames = new Set(forgeCatalog.map((e) => e.name.toLowerCase()));
 const edbIdToCatalogId = new Map<string, string>();
 
-// Direct aliases from common ExerciseDB IDs to our canonical SQLite-seeded IDs
+// Direct aliases from common ExerciseDB/openGym IDs to canonical SQLite-seeded IDs
 const KNOWN_ID_ALIASES: Record<string, string> = {
   "0025": "ex-bench-press",
   "0032": "ex-deadlift",
@@ -332,54 +360,19 @@ const KNOWN_ID_ALIASES: Record<string, string> = {
   "0313": "ex-hammer-curl",
   "1323": "ex-seated-cable-row",
   "2330": "ex-lat-pulldown",
-  // Fallback mappings for IDs outside ExerciseDB v1 MIT subset
-  "0463": "ex-plank",
-  "0472": "ex-hanging-leg-raise",
-  "0612": "ex-walking-lunge",
-  "0703": "ex-plank",
-  "0715": "ex-plank",
-  "0781": "ex-bulgarian-split-squat",
-  "1053": "ex-walking-lunge",
-  "1060": "ex-hip-thrust",
-  "1061": "ex-hip-thrust",
-  "1162": "ex-overhead-press",
-  "1197": "ex-goblet-squat",
-  "1241": "ex-plank",
-  "1246": "ex-plank",
-  "1568": "ex-kettlebell-swing",
-  "1762": "ex-bulgarian-split-squat",
-  "2071": "ex-glute-bridge",
-  "2072": "ex-hip-thrust",
-  "2290": "ex-bulgarian-split-squat",
-  "2471": "ex-glute-bridge",
-  "2475": "ex-glute-bridge",
-  "2831": "ex-overhead-press",
-  "2921": "ex-push-up",
-  "2984": "ex-goblet-squat",
-  "3094": "ex-burpee",
-  "3322": "ex-deadlift",
-  "3366": "ex-bulgarian-split-squat",
-  "3381": "ex-barbell-row",
-  "3387": "ex-dips",
-  "3732": "ex-walking-lunge",
-  "3743": "ex-bulgarian-split-squat",
-  "4057": "ex-kettlebell-swing",
-  "4058": "ex-hanging-leg-raise",
-  "4553": "ex-glute-bridge",
-  "4725": "ex-pull-up",
-  "5234": "ex-overhead-press",
-  "5609": "ex-face-pull",
-  "7746": "ex-leg-curl",
-  "9819": "ex-hanging-leg-raise",
-  "10182": "ex-burpee",
 };
 
-const edbCatalog: CatalogExercise[] = [];
-for (const item of rawExerciseDb as RawEdbItem[]) {
+const openGymCatalogItems: CatalogExercise[] = [];
+for (const item of rawOpenGymFull as RawCatalogItem[]) {
   const formattedName = TITLE_CASE(item.n);
   const lowName = formattedName.toLowerCase();
   if (KNOWN_ID_ALIASES[item.id]) {
     edbIdToCatalogId.set(item.id, KNOWN_ID_ALIASES[item.id]);
+    const existing = forgeCatalog.find((f) => f.id === KNOWN_ID_ALIASES[item.id]);
+    if (existing && !existing.openGymId) {
+      existing.openGymId = item.id;
+      if (item.desc) existing.description = item.desc;
+    }
     continue;
   }
   const existingForge = FORGE_BY_LOWER_NAME.get(lowName);
@@ -390,7 +383,7 @@ for (const item of rawExerciseDb as RawEdbItem[]) {
   if (seenNames.has(lowName)) continue;
   seenNames.add(lowName);
 
-  const id = `edb-${item.id}`;
+  const id = `og-${item.id}`;
   edbIdToCatalogId.set(item.id, id);
 
   const equip = normalizeEquipment(item.eq);
@@ -400,17 +393,24 @@ for (const item of rawExerciseDb as RawEdbItem[]) {
   );
   const pattern = inferPattern(formattedName, item.bp, item.cat);
 
-  edbCatalog.push({
+  openGymCatalogItems.push({
     id,
+    openGymId: item.id,
     slug: `${SLUGIFY(item.n)}-${item.id}`,
     name: formattedName,
     primaryMuscle: primary,
+    targetName: TITLE_CASE(item.tg),
     secondaryMuscles: secondaries,
+    secondaryMuscleNames: item.sm.map(TITLE_CASE),
     bodyPart: item.bp,
     equipment: equip,
     category: item.cat || "strength",
     pattern,
-    unilateral: /single|one arm|one leg|unilateral|alternat/i.test(formattedName),
+    description: item.desc || undefined,
+    hold: item.hold,
+    track: item.track,
+    machineKind: item.mk,
+    unilateral: /single|one arm|one leg|unilateral|alternat|1 to 2|2 to 1/i.test(formattedName),
     difficulty: /assisted|chair|wall|kneeling/i.test(formattedName)
       ? "beginner"
       : /one arm|pistol|dragon|handstand|muscle-up|olympic/i.test(formattedName)
@@ -421,14 +421,14 @@ for (const item of rawExerciseDb as RawEdbItem[]) {
       `Focus tension cleanly on ${TITLE_CASE(item.tg)}.`,
       "Control the eccentric lowering phase.",
     ],
-    tempo: item.cat === "stretching" || item.cat === "mobility" ? "Hold 30s" : "2-0-1",
+    tempo: item.hold ? "Hold" : item.cat === "stretching" || item.cat === "mobility" ? "Hold 30s" : "2-0-1",
     popularity: 42,
     muscleWeights: buildWeightsForEdb(item),
-    source: "exercisedb",
+    source: item.src === "exercisedb" ? "exercisedb" : "opengym",
   });
 }
 
-export const FULL_EXERCISE_CATALOG: CatalogExercise[] = [...forgeCatalog, ...edbCatalog];
+export const FULL_EXERCISE_CATALOG: CatalogExercise[] = [...forgeCatalog, ...openGymCatalogItems];
 
 export const CATALOG_BY_ID = new Map<string, CatalogExercise>(
   FULL_EXERCISE_CATALOG.map((e) => [e.id, e]),
@@ -439,9 +439,41 @@ export function resolveCatalogId(rawId: string): string {
   if (KNOWN_ID_ALIASES[rawId] && CATALOG_BY_ID.has(KNOWN_ID_ALIASES[rawId])) {
     return KNOWN_ID_ALIASES[rawId];
   }
+  if (CATALOG_BY_ID.has(`og-${rawId}`)) return `og-${rawId}`;
   const mapped = edbIdToCatalogId.get(rawId);
   if (mapped && CATALOG_BY_ID.has(mapped)) return mapped;
   return "ex-bench-press";
+}
+
+export function computeMusclePercentages(ex: CatalogExercise): Array<{ label: string; pct: number; isPrimary: boolean }> {
+  const secCount = ex.secondaryMuscleNames?.length ?? ex.secondaryMuscles.length;
+  const primaryLabel = ex.targetName || TITLE_CASE(ex.primaryMuscle);
+  if (secCount === 0) return [{ label: primaryLabel, pct: 100, isPrimary: true }];
+
+  const weights: Array<{ label: string; w: number; isPrimary: boolean }> = [
+    { label: primaryLabel, w: 1.0, isPrimary: true },
+  ];
+  const secNames = ex.secondaryMuscleNames?.length ? ex.secondaryMuscleNames : ex.secondaryMuscles.map(TITLE_CASE);
+  secNames.forEach((sec, idx) => {
+    weights.push({ label: sec, w: idx === 0 ? 0.4 : 0.35, isPrimary: false });
+  });
+  const total = weights.reduce((s, x) => s + x.w, 0);
+  const firstTwo = weights.slice(0, 2).map((x) => ({
+    label: x.label,
+    pct: Math.round((x.w / total) * 100),
+    isPrimary: x.isPrimary,
+  }));
+  const restPct = Math.max(0, 100 - firstTwo.reduce((s, x) => s + x.pct, 0));
+  if (secCount === 1 || restPct < 5) {
+    return weights.map((x) => ({ label: x.label, pct: Math.round((x.w / total) * 100), isPrimary: x.isPrimary }));
+  }
+  return [...firstTwo, { label: "Other", pct: restPct, isPrimary: false }];
+}
+
+export function computeEpley1RM(weightKg: number, reps: number): number {
+  if (weightKg <= 0 || reps <= 0) return 0;
+  if (reps === 1) return Math.round(weightKg * 10) / 10;
+  return Math.round(weightKg * (1 + reps / 30) * 10) / 10;
 }
 
 export const SKILL_LADDERS: SkillLadderDef[] = [

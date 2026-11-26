@@ -340,6 +340,51 @@ When triggered, returns 3 concrete interventions:
 
 ---
 
+## 22. Cardio Engine, MET Equations & Tanaka HR Zones (A12, A13)
+
+### Tanaka Max Heart Rate Formula
+$$HR_{\max} = 208 - (0.7 \times \text{age})$$
+Zones:
+1. Active Recovery: $50\% - 60\% \times HR_{\max}$
+2. Aerobic Base: $60\% - 70\% \times HR_{\max}$
+3. Tempo / Aerobic Power: $70\% - 80\% \times HR_{\max}$
+4. Lactate Threshold: $80\% - 90\% \times HR_{\max}$
+5. Anaerobic Max: $90\% - 100\% \times HR_{\max}$
+
+### ACSM Calorie Burn Equation
+$$\text{Calories} = \frac{\text{MET} \times 3.5 \times \text{Weight (kg)}}{200} \times \text{Duration (min)}$$
+
+### Unilateral Limb Asymmetry
+$$\text{Asymmetry \%} = \frac{|V_{\text{left}} - V_{\text{right}}|}{\max(V_{\text{left}}, V_{\text{right}})} \times 100$$
+Flags compensatory risk when asymmetry $> 10\%$.
+
+---
+
+## 23. B2B Facility Occupancy & Athlete Fatigue Engine (F3, F4, H1-H4)
+
+### Athlete Adherence
+$$\text{Adherence \%} = \min\left(100, \max\left(0, \text{round}\left(\frac{\text{Completed Sessions}}{\text{Scheduled Sessions}} \times 100\right)\right)\right)$$
+
+### Fatigue Risk Classification
+- `high`: $\text{Readiness} < 55$ OR $\ge 3$ consecutive high-RPE sessions ($\ge 8.5$).
+- `medium`: $\text{Readiness} < 75$ OR $\ge 2$ consecutive high-RPE sessions.
+- `low`: Full recovery.
+
+### Facility Occupancy Status
+- `optimal`: $< 50\%$
+- `busy`: $50\% - 79\%$
+- `crowded`: $80\% - 94\%$
+- `at_capacity`: $\ge 95\%$
+
+---
+
+## 24. Wearable CNS Readiness Model (C3-C6, I5)
+
+$$\text{Readiness} = \text{round}\left(40 \times \frac{HRV}{65} + 35 \times \frac{\text{Sleep}}{8.0} + 25 \times \frac{85 - \text{Resting HR}}{35}\right)$$
+Clamped strictly to $[20, 100]$.
+
+---
+
 ## Contract for UI code
 
 1. Never compute level, e1RM, readiness, or target weights inline in a component.

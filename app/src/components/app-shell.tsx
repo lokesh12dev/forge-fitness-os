@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
-  BarChart3, Bell, BookOpen, ChevronRight, Dumbbell, Flame, LayoutDashboard,
-  Layers, LogOut, Menu, Search, Settings, Sparkles, Users, Utensils, X, ScanFace, Zap,
+  BarChart3, Bell, BookOpen, Building2, ChevronRight, Dumbbell, Flame, LayoutDashboard,
+  Layers, LogOut, Menu, Search, Settings, Sparkles, UserCheck, Users, Utensils, X, ScanFace, Zap,
 } from "lucide-react";
 import { Avatar, Logo } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -48,6 +48,13 @@ const NAV = [
       { href: "/app/coach", label: "AI Coach", icon: Sparkles, badge: "AI" },
     ],
   },
+  {
+    group: "B2B & Gym Ops",
+    items: [
+      { href: "/app/trainer", label: "Trainer portal", icon: UserCheck, badge: "B2B" },
+      { href: "/app/gym", label: "Gym owner", icon: Building2, badge: "B2B" },
+    ],
+  },
 ];
 
 const TITLES: Record<string, string> = {
@@ -60,6 +67,8 @@ const TITLES: Record<string, string> = {
   "/app/social": "Community",
   "/app/coach": "AI Coach",
   "/app/form-check": "Form check",
+  "/app/trainer": "Trainer portal",
+  "/app/gym": "Gym floor ops",
   "/app/settings": "Settings",
 };
 

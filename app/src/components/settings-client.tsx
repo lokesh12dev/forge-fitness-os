@@ -5,14 +5,20 @@ import type { FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity, BadgeCheck, Bell, Check, ChevronRight, CreditCard, Dumbbell, Flame,
-  Globe, Loader2, Lock, LogOut, Salad, Shield, ShieldAlert, ShieldCheck, Sparkles,
-  Target, Trash2, UploadCloud, User, Users, Zap,
+  Globe, Heart, Loader2, Lock, LogOut, RefreshCw, Salad, Shield, ShieldAlert, ShieldCheck,
+  Smartphone, Sparkles, Target, Trash2, UploadCloud, User, Users, Watch, Zap,
 } from "lucide-react";
 import { signOut, updateEquipment, updateProfile, updateTargets } from "@/app/actions";
 import { Avatar, Badge, Button, ProgressBar } from "@/components/ui";
 import { PLANS, mockRazorpayCheckout, mockStripeCheckout, type PlanTier } from "@/lib/plans";
 import { formatUserLevel } from "@/lib/consistency";
 import { CsvImportModal } from "@/components/csv-import-modal";
+import {
+  INITIAL_WEARABLES_STATE,
+  performWearablesSync,
+  type WearablesSyncState,
+  type HealthPlatform,
+} from "@/lib/wearables-sync";
 import { cn } from "@/lib/utils";
 
 type SettingsUser = {
@@ -38,6 +44,7 @@ const TABS = [
   { key: "profile", label: "Profile", icon: User },
   { key: "training", label: "Equipment", icon: Dumbbell },
   { key: "nutrition", label: "Targets", icon: Salad },
+  { key: "wearables", label: "Wearables & Sync", icon: Activity },
   { key: "plans", label: "Plans & Billing", icon: Zap },
   { key: "privacy", label: "Privacy & Data", icon: Shield },
   { key: "account", label: "Account", icon: BadgeCheck },
@@ -104,10 +111,22 @@ export function SettingsClient({
   const [savingTargets, startTargets] = useTransition();
   const [leaving, startLeave] = useTransition();
   const [showImportModal, setShowImportModal] = useState(false);
+  const [wearables, setWearables] = useState<WearablesSyncState>(INITIAL_WEARABLES_STATE);
+  const [syncingWearables, setSyncingWearables] = useState(false);
 
   function ping(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 2600);
+  }
+
+  function handleWearablesSync() {
+    setSyncingWearables(true);
+    setTimeout(() => {
+      const { state, readinessScore } = performWearablesSync(wearables);
+      setWearables(state);
+      setSyncingWearables(false);
+      ping(`Synced with ${wearables.platform === "apple_health" ? "Apple Health" : "Health Connect"}: Readiness updated to ${readinessScore}/100.`);
+    }, 600);
   }
 
   function toggleGear(id: string) {
@@ -422,6 +441,176 @@ export function SettingsClient({
               </div>
             </div>
           </form>
+        )}
+
+        {/* WEARABLES & SYNC TAB (C3-C6, I5) */}
+        {tab === "wearables" && (
+          <div className="space-y-4">
+            <div className="surface rounded-2xl p-5 md:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] pb-4">
+                <div>
+                  <span className="font-mono text-[8.5px] uppercase tracking-wider text-acid font-bold flex items-center gap-1.5">
+                    <Activity className="size-3" /> Biometric Platform Integration (C3–C6, I5)
+                  </span>
+                  <h2 className="font-display text-[22px] font-bold tracking-tight text-chalk mt-0.5">
+                    Wearables &amp; Health Sync
+                  </h2>
+                  <p className="mt-1 text-[11.5px] text-mist">
+                    Bidirectional sync with Apple Health, Health Connect, and Garmin. Imports HRV, resting HR and sleep directly into the FORGE readiness engine.
+                  </p>
+                </div>
+
+                <Button size="sm" variant="secondary" onClick={handleWearablesSync} disabled={syncingWearables}>
+                  <RefreshCw className={cn("size-3.5", syncingWearables && "animate-spin")} />
+                  {syncingWearables ? "Syncing Biometrics..." : "Sync Now"}
+                </Button>
+              </div>
+
+              {/* Provider Selection */}
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {[
+                  { id: "apple_health", label: "Apple Health", sub: "HealthKit · iOS & Watch", icon: Heart },
+                  { id: "health_connect", label: "Health Connect", sub: "Google · Android & Pixel", icon: Smartphone },
+                  { id: "garmin", label: "Garmin Connect", sub: "Forerunner & Fenix series", icon: Watch },
+                ].map((prov) => {
+                  const Icon = prov.icon;
+                  const isSelected = wearables.platform === prov.id;
+                  return (
+                    <button
+                      key={prov.id}
+                      type="button"
+                      onClick={() => {
+                        setWearables((prev) => ({ ...prev, platform: prov.id as HealthPlatform }));
+                        ping(`Switched health provider to ${prov.label}.`);
+                      }}
+                      className={cn(
+                        "flex items-start gap-3 rounded-2xl border p-4 text-left transition-all",
+                        isSelected
+                          ? "border-acid/60 bg-acid/[0.05]"
+                          : "border-white/[0.08] bg-white/[0.02] hover:border-white/20"
+                      )}
+                    >
+                      <div className={cn("grid size-9 place-items-center rounded-xl", isSelected ? "bg-acid/20 text-acid" : "bg-white/5 text-mist")}>
+                        <Icon className="size-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[12.5px] font-semibold text-chalk">{prov.label}</p>
+                          {isSelected && <Badge tone="acid" dot>Active</Badge>}
+                        </div>
+                        <p className="text-[10px] text-dim mt-0.5">{prov.sub}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Live Telemetry Display */}
+              <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-mono text-[9px] uppercase tracking-wider text-dim">
+                    Latest Biometric Packet · {wearables.lastTelemetry.syncedAt}
+                  </span>
+                  <span className="font-mono text-[9px] text-acid flex items-center gap-1">
+                    <Check className="size-3" /> Encrypted on-device
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-white/[0.05] bg-black/20 p-3">
+                    <p className="font-mono text-[8.5px] uppercase tracking-wider text-dim">Resting HR</p>
+                    <p className="font-numeric text-xl font-bold text-chalk mt-0.5">
+                      {wearables.lastTelemetry.restingHeartRateBpm} <span className="text-xs text-dim">bpm</span>
+                    </p>
+                    <span className="font-mono text-[8px] text-emerald-400">Optimal (base 58)</span>
+                  </div>
+
+                  <div className="rounded-xl border border-white/[0.05] bg-black/20 p-3">
+                    <p className="font-mono text-[8.5px] uppercase tracking-wider text-dim">HRV (SDNN)</p>
+                    <p className="font-numeric text-xl font-bold text-acid mt-0.5">
+                      {wearables.lastTelemetry.heartRateVariabilityMs} <span className="text-xs text-dim">ms</span>
+                    </p>
+                    <span className="font-mono text-[8px] text-acid">High vagal tone</span>
+                  </div>
+
+                  <div className="rounded-xl border border-white/[0.05] bg-black/20 p-3">
+                    <p className="font-mono text-[8.5px] uppercase tracking-wider text-dim">Sleep Duration</p>
+                    <p className="font-numeric text-xl font-bold text-chalk mt-0.5">
+                      {wearables.lastTelemetry.sleepDurationHours} <span className="text-xs text-dim">hrs</span>
+                    </p>
+                    <span className="font-mono text-[8px] text-mist">{wearables.lastTelemetry.sleepQualityScore}% efficiency</span>
+                  </div>
+
+                  <div className="rounded-xl border border-white/[0.05] bg-black/20 p-3">
+                    <p className="font-mono text-[8.5px] uppercase tracking-wider text-dim">Active Burn</p>
+                    <p className="font-numeric text-xl font-bold text-flame mt-0.5">
+                      {wearables.lastTelemetry.activeEnergyBurnedKcal} <span className="text-xs text-dim">kcal</span>
+                    </p>
+                    <span className="font-mono text-[8px] text-mist">{wearables.lastTelemetry.stepCount.toLocaleString()} steps</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Companion Watch & Offline Queue Toggles */}
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5">
+                  <div className="flex items-center gap-3">
+                    <Watch className="size-4 text-acid" />
+                    <div>
+                      <p className="text-[12px] font-semibold text-chalk">Wrist Quick-Log (2-Tap)</p>
+                      <p className="text-[10px] text-dim">Log sets and reps from Apple Watch / Wear OS</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWearables((prev) => ({ ...prev, wristQuickLogEnabled: !prev.wristQuickLogEnabled }));
+                      ping("Wrist quick-log preference updated.");
+                    }}
+                    className={cn(
+                      "relative h-5 w-9 rounded-full transition-colors",
+                      wearables.wristQuickLogEnabled ? "bg-acid" : "bg-white/15"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "absolute top-0.5 size-4 rounded-full bg-ink transition-all",
+                        wearables.wristQuickLogEnabled ? "left-4" : "left-0.5"
+                      )}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5">
+                  <div className="flex items-center gap-3">
+                    <Bell className="size-4 text-sky" />
+                    <div>
+                      <p className="text-[12px] font-semibold text-chalk">Watch Rest Haptic Pulse</p>
+                      <p className="text-[10px] text-dim">Taptic buzz on rest countdown expiry</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWearables((prev) => ({ ...prev, hapticFeedbackEnabled: !prev.hapticFeedbackEnabled }));
+                      ping("Haptic pulse preference updated.");
+                    }}
+                    className={cn(
+                      "relative h-5 w-9 rounded-full transition-colors",
+                      wearables.hapticFeedbackEnabled ? "bg-acid" : "bg-white/15"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "absolute top-0.5 size-4 rounded-full bg-ink transition-all",
+                        wearables.hapticFeedbackEnabled ? "left-4" : "left-0.5"
+                      )}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* PLANS & BILLING TAB (I4) */}

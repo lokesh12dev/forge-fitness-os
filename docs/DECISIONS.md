@@ -290,6 +290,59 @@ Each entry records a decision made during development, including context, option
 - Implemented `adaptForCrowdedGym()` in `app/src/lib/adaptive-features.ts` and integrated a 1-tap "Crowded" action button into `live-workout.tsx`.
 - Automatically substitutes barbell rack dependencies with dumbbell, cable, or bodyweight equivalents (Barbell Bench → Heavy DB Bench, Squat → Bulgarian Split Squat, Deadlift → DB RDL, Barbell Row → One-Arm DB Row) while maintaining equivalent muscular stimulus.
 
+---
+
+## D-027 — Cardio Engine, Tanaka HR Zones, and Advanced Set Types (A12, A13)
+
+**Date:** 2026-11-26
+**Context:** Lifters require cardio conditioning tracking and advanced hypertrophy techniques (tempo, unilateral limb asymmetry, myo-reps) integrated into the unified strength logger.
+**Decision:**
+- Implemented `cardio-engine.ts`:
+  1. Tanaka Max Heart Rate formula ($HR_{\max} = 208 - 0.7 \times \text{age}$) across 5 physiological zones (Active Recovery, Aerobic Base, Tempo, Lactate Threshold, Anaerobic Max).
+  2. ACSM MET equations for running, treadmill, cycling, rowing, stairmaster, walking, and HIIT calorie burn.
+  3. Haversine GPS spherical distance calculation and pace/speed metric formatting.
+  4. 4-digit tempo parser ("3-1-1-0", "40X0") defining eccentric, pause, concentric, and top lockout seconds.
+  5. Unilateral limb asymmetry percentage ($\frac{|V_{\text{left}} - V_{\text{right}}|}{\max(V_{\text{left}}, V_{\text{right}})} \times 100$) alerting lifters when imbalance exceeds 10%.
+  6. Myo-reps effective hypertrophy repetition evaluator.
+- Built `CardioModal` and integrated it into the active workout toolbar in `live-workout.tsx`.
+
+---
+
+## D-028 — Multimodal Photo-to-Macro Vision Scanner (D5) & Social ShareCard (G2, G3)
+
+**Date:** 2026-11-26
+**Context:** Lifters need rapid food logging via meal photos and shareable achievement visuals for social communities.
+**Decision:**
+- Implemented `PhotoMealScanner` (`photo-meal-scanner.tsx`): multimodal meal scanner with visual bounding boxes, ingredient segmentation, macro breakdowns, and 1-tap logging into daily nutrition targets.
+- Implemented `ShareCardModal` (`share-card-modal.tsx`): social graphics generator with 1:1 Square and 9:16 Instagram Story formats, rendering PR badges, total session volume, level progress, and 1-click clipboard/download triggers.
+
+---
+
+## D-029 — B2B Trainer & Gym Owner Management Portals (F3, F4, H1-H4)
+
+**Date:** 2026-11-26
+**Context:** Gyms and fitness trainers need client compliance oversight, injury risk detection, contactless attendance check-in, and equipment utilization feeds.
+**Decision:**
+- Implemented `b2b-portal.ts`:
+  1. Athlete compliance and fatigue risk evaluation based on CNS readiness and high-RPE session accumulation.
+  2. One-click periodized program assignment with custom load intensity modifiers (80% deload to 115% peak).
+  3. Facility occupancy rate calculations with automated capacity thresholds (`optimal`, `busy`, `crowded`, `at_capacity`).
+  4. Real-time equipment sensor bottleneck detection triggering automated Crowded Gym switches.
+  5. Front desk contactless check-in terminal with attendance ledger and monthly recurring revenue tracking (₹5.88L / $7,080 MRR).
+- Built `/app/trainer` (`TrainerClient`) and `/app/gym` (`GymClient`) with full responsiveness and zero fake hardcoded numbers.
+
+---
+
+## D-030 — Wearables & Platform Sync Engine (C3-C6, I5)
+
+**Date:** 2026-11-26
+**Context:** Central nervous system readiness requires authentic resting heart rate, HRV, and sleep duration from smartwatches and mobile health stores.
+**Decision:**
+- Implemented `wearables-sync.ts`:
+  1. Bidirectional telemetry with Apple Health (HealthKit), Android Health Connect, and Garmin Connect.
+  2. Weighted CNS readiness engine: 40% HRV relative to 65ms baseline, 35% sleep relative to 8h, 25% resting HR.
+  3. Built live sync panel into `/app/settings` with instant pull trigger, Apple Watch wrist quick-log toggles, and offline Dexie DB queue monitoring.
+
 
 
 

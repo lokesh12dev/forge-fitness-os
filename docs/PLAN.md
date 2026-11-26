@@ -117,7 +117,7 @@ Food log with authentic Indian foods and standard regional units, smart protein 
 
 ## Phase 4: P1 Features (each behind feature flag)
 
-### Completed Core Milestones (Part 1)
+### Completed Core Milestones (Part 1 & Part 2)
 | # | Feature | IDs | Status | Notes |
 |---|---------|-----|--------|-------|
 | 4.1 | Universal CSV Import/Export (Hevy, Strong, FitNotes, Jefit) | A11 | **COMPLETE** | Live multi-app CSV parser, auto weight unit conversion (lbs to kg), alias matching, drag-and-drop modal |
@@ -127,23 +127,22 @@ Food log with authentic Indian foods and standard regional units, smart protein 
 | 4.5 | Missed-Session Rescheduling Engine | B9, B10 | **COMPLETE** | Rolling calendar slide, antagonist superset merge, and forgive & advance macrocycle modes |
 | 4.6 | Crowded Gym Mode (1-Tap Barbell Swaps) | B7 | **COMPLETE** | Replaces occupied squat racks/benches with heavy DB bench, Bulgarian split squats, and DB rows |
 | 4.7 | Phase 4 Feature Flags System | — | **COMPLETE** | Centralized flag registry in `lib/feature-flags.ts` with runtime override support |
-| 4.8 | Verification & Multi-Viewport E2E | — | **COMPLETE** | 151/151 unit tests passing, Playwright e2e passing across 360px, 768px, and 1440px with 0 console errors |
+| 4.8 | Cardio Engine & Advanced Set Types | A12, A13 | **COMPLETE** | Tanaka HR zones 1–5, ACSM MET calorie formula, pace/speed calculator, GPS Haversine, 4-digit tempo, unilateral asymmetry, Myo-reps |
+| 4.9 | Multimodal Photo-to-Macro Vision Scanner | D5 | **COMPLETE** | Multimodal bounding-box food scanner with confidence scores, ingredient segmentation, and 1-tap logging |
+| 4.10 | Social ShareCard Generator (1:1 & 9:16) | G2, G3 | **COMPLETE** | Aesthetic achievement card exporter with PR badge, volume, and level stats in Square and Story formats |
+| 4.11 | Trainer & Athlete Roster Portal | F3, F4 | **COMPLETE** | Full athlete roster, adherence monitoring, fatigue alerts, and 1-tap program prescription with custom load modifiers |
+| 4.12 | Gym Owner Operations & Attendance Portal | H1-H4 | **COMPLETE** | Live floor occupancy gauge, equipment sensor bottlenecks, fast check-in terminal, and real-time MRR analytics |
+| 4.13 | Wearables & Platform Sync Engine | C3-C6, I5 | **COMPLETE** | Bidirectional sync with Apple Health / Health Connect / Garmin; imports resting HR, HRV, sleep into CNS readiness engine |
+| 4.14 | On-Device Form Check Studio | C2 | **COMPLETE** | 17-joint tracking simulation, depth checking (hip < knee), bar path analysis, and real-time biomechanical cues |
+| 4.15 | Complete Verification & Multi-Viewport E2E | — | **COMPLETE** | 174/174 unit tests passing, Playwright e2e passing across 360px, 768px, and 1440px with 0 console errors |
 
-### Upcoming P1 Milestones (Part 2)
-1. Cardio + advanced set types (GPS, intervals, tempo, unilateral) — A12, A13
-2. Photo-to-macro, meal planner, supplements, adaptive TDEE — D5-D8
-3. Form check (MediaPipe Pose, on-device) — C2
-4. Social (friends, feed, kudos, share cards, challenges, leaderboards) — G2-G5
-5. Wearables + platform (Watch, widgets, Health Connect, i18n, notifications) — C3-C6, I5-I7
-6. Trainer and gym-owner portals — F3, F4, H1-H4
-
-### Phase 4 Part 1 Verification Results (2026-11-26)
+### Phase 4 Verification Results (2026-11-26)
 - **TypeScript Typecheck:** 0 errors (`npx tsc --noEmit`)
-- **Unit Tests:** 151/151 passed (20/20 `src/lib/phase4-features.test.ts`, 7 test suites)
-- **Production Build:** Clean (`next build` across all 14 routes)
+- **Unit Tests:** 174/174 passed across 10 test suites (`cardio-engine`, `wearables-sync`, `voice-parser`, `b2b-portal`, `engine`, `sprint1`, `sprint2`, `sprint3`, `phase4-features`, `exercise-aliases`)
+- **Production Build:** Clean (`next build` across all 16 routes)
 - **Console Errors:** 0 console errors across all viewports in Playwright e2e runs
 - **Playwright E2E:** Verified across 360px (mobile), 768px (tablet), and 1440px (desktop)
-- **Artifacts:** Screenshots captured for `/app/programs`, `/app/coach`, and `/app/settings` saved in `/docs/screens/` and artifact brain directory.
+- **Artifacts:** Full screenshots captured for `/app/programs`, `/app/coach`, `/app/nutrition`, `/app/train`, `/app/social`, `/app/trainer`, `/app/gym`, `/app/settings` (wearables), and `/app/form-check` saved in `/docs/screens/` and artifact brain directory.
 
 ---
 

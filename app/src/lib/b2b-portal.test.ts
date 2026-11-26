@@ -10,11 +10,20 @@ import {
   verifyQrBadgeScan,
   renewMemberPlan,
   batchPrescribeProgram,
+  createNewGymMember,
+  computeLiveGymFinancials,
+  createAthleteClient,
+  appendCoachNoteToAthlete,
+  updateAthleteReadiness,
   INITIAL_ATHLETES,
   INITIAL_GYM_FACILITY,
   INITIAL_CHECK_INS,
+  INITIAL_GYM_FINANCIALS,
   INITIAL_GYM_MEMBERS,
+  INITIAL_ROUTINE_FOLDERS,
+  MEMBERSHIP_TIER_REVENUE,
 } from "./b2b-portal";
+import { BUILTIN_PROGRAMS } from "./programs-db";
 
 describe("FORGE B2B Portal Engine", () => {
   describe("calculateAthleteAdherence", () => {
@@ -174,6 +183,72 @@ describe("FORGE B2B Portal Engine", () => {
       expect(updated.find((a) => a.id === "ath-2")?.currentProgramId).toBe("full-body-3x");
       expect(updated.find((a) => a.id === "ath-5")?.currentProgramId).toBe("full-body-3x");
       expect(updated.find((a) => a.id === "ath-1")?.currentProgramId).toBe("ppl-hypertrophy-6x");
+    });
+  });
+
+  describe("Onboarding, Dynamic Financials & Routine Folder Integrity", () => {
+    const refDate = new Date("2026-11-26T12:00:00Z");
+
+    it("registers new gym members with auto-generated QR codes and updates live revenue breakdown", () => {
+      const created = createNewGymMember(
+        {
+          name: "Siddharth Rao",
+          phone: "+91 99001 11223",
+          planName: "Gold All-Access",
+          monthlyFeeINR: 1799,
+          months: 3,
+          existingCount: INITIAL_GYM_MEMBERS.length,
+        },
+        refDate
+      );
+
+      expect(created.qrBadgeCode).toBe("FRG-1007");
+      expect(created.expiryDate).toBe("2027-02-26");
+
+      const nextMembers = [created, ...INITIAL_GYM_MEMBERS];
+      const live = computeLiveGymFinancials(
+        INITIAL_GYM_FINANCIALS,
+        MEMBERSHIP_TIER_REVENUE,
+        nextMembers,
+        INITIAL_GYM_MEMBERS,
+        refDate
+      );
+
+      expect(live.financials.totalMembers).toBe(INITIAL_GYM_FINANCIALS.totalMembers + 1);
+      expect(live.financials.activeMembers).toBe(INITIAL_GYM_FINANCIALS.activeMembers + 1);
+      expect(live.financials.monthlyRecurringRevenueINR).toBe(
+        INITIAL_GYM_FINANCIALS.monthlyRecurringRevenueINR + 1799
+      );
+      const goldRow = live.tierRows.find((r) => r.tierName === "Gold All-Access");
+      expect(goldRow?.mrrINR).toBe(214200 + 1799);
+    });
+
+    it("creates athlete clients, prepends coach notes, and recalculates readiness risk", () => {
+      const created = createAthleteClient({
+        name: "Kiran Deshmukh",
+        email: "kiran@forge.fit",
+        readinessScore: 86,
+      });
+      expect(created.initials).toBe("KD");
+      expect(created.fatigueRisk).toBe("low");
+
+      const noted = appendCoachNoteToAthlete(created, "Increase squat top set by 2.5kg.");
+      expect(noted.notes[0]).toBe("Increase squat top set by 2.5kg.");
+      expect(created.notes[0]).not.toBe("Increase squat top set by 2.5kg.");
+
+      const fatigued = updateAthleteReadiness(noted, 48, 1);
+      expect(fatigued.readinessScore).toBe(48);
+      expect(fatigued.fatigueRisk).toBe("high");
+    });
+
+    it("aligns every INITIAL_ROUTINE_FOLDERS programId cleanly with BUILTIN_PROGRAMS", () => {
+      const builtinIds = new Set(BUILTIN_PROGRAMS.map((p) => p.id));
+      for (const folder of INITIAL_ROUTINE_FOLDERS) {
+        expect(folder.programIds.length).toBeGreaterThan(0);
+        for (const pid of folder.programIds) {
+          expect(builtinIds.has(pid)).toBe(true);
+        }
+      }
     });
   });
 });

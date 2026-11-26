@@ -550,6 +550,7 @@ export async function checkIn(formData: FormData) {
     });
   }
   revalidatePath("/app/social");
+  revalidatePath("/app/gym");
   revalidatePath("/app");
 }
 
@@ -805,4 +806,71 @@ export async function enrollProgram(formData: FormData) {
   revalidatePath("/app/programs");
   revalidatePath("/app");
   redirect("/app");
+}
+
+export async function recordGymFloorCheckIn(data: {
+  gymId?: string;
+  memberName: string;
+  planName: string;
+  note?: string;
+  occupancyPct?: number;
+}) {
+  const user = await requireUser();
+  const gyms = await db.select().from(schema.gyms).limit(5);
+  const targetGym = (data.gymId ? gyms.find((g) => g.id === data.gymId) : undefined) ?? gyms[0];
+  if (!targetGym) {
+    return { ok: false as const, error: "No facility registered" };
+  }
+
+  const now = new Date();
+  const noteText = (data.note?.trim() || `${data.memberName} · ${data.planName}`).slice(0, 240);
+  await db.insert(schema.checkins).values({
+    id: rid("ci"),
+    userId: user.id,
+    gymId: targetGym.id,
+    note: noteText,
+    createdAt: now,
+  });
+
+  if (typeof data.occupancyPct === "number" && Number.isFinite(data.occupancyPct)) {
+    const busyness = Math.max(0, Math.min(100, Math.round(data.occupancyPct)));
+    await db.update(schema.gyms).set({ busyness }).where(eq(schema.gyms.id, targetGym.id));
+  }
+
+  revalidatePath("/app/gym");
+  revalidatePath("/app/social");
+  revalidatePath("/app");
+
+  return {
+    ok: true as const,
+    gymId: targetGym.id,
+    gymName: targetGym.name,
+    checkedInAt: now.toISOString(),
+  };
+}
+
+export async function syncGymFacilityMetrics(data: {
+  gymId?: string;
+  occupancyPct: number;
+  memberCount?: number;
+}) {
+  await requireUser();
+  const gyms = await db.select().from(schema.gyms).limit(5);
+  const targetGym = (data.gymId ? gyms.find((g) => g.id === data.gymId) : undefined) ?? gyms[0];
+  if (!targetGym) return { ok: false as const };
+
+  const busyness = Math.max(0, Math.min(100, Math.round(data.occupancyPct)));
+  await db
+    .update(schema.gyms)
+    .set({
+      busyness,
+      ...(typeof data.memberCount === "number" && Number.isFinite(data.memberCount)
+        ? { memberCount: Math.max(0, Math.round(data.memberCount)) }
+        : {}),
+    })
+    .where(eq(schema.gyms.id, targetGym.id));
+
+  revalidatePath("/app/gym");
+  revalidatePath("/app/social");
+  return { ok: true as const, busyness };
 }

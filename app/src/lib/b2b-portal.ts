@@ -396,6 +396,191 @@ export function batchPrescribeProgram(
   });
 }
 
+const ATHLETE_ACCENTS = ["#C9F73A", "#9E86FF", "#00E5FF", "#FF5E5B", "#FFB020", "#2ED573"] as const;
+
+/**
+ * Registers a new gym member with an auto-generated QR badge code and computed expiry date.
+ */
+export function createNewGymMember(
+  input: {
+    id?: string;
+    name: string;
+    phone: string;
+    planName: string;
+    monthlyFeeINR: number;
+    months?: number;
+    existingCount: number;
+  },
+  referenceDate: Date = new Date("2026-11-26T12:00:00Z")
+): GymMemberRecord {
+  const cleanName = input.name.trim() || "New Member";
+  const nextNumber = 1001 + Math.max(0, input.existingCount);
+  const exp = new Date(referenceDate);
+  exp.setUTCMonth(exp.getUTCMonth() + Math.max(1, input.months ?? 1));
+
+  return {
+    id: input.id ?? `mem-${Date.now()}-${nextNumber}`,
+    qrBadgeCode: `FRG-${nextNumber}`,
+    name: cleanName,
+    phone: input.phone.trim() || "+91 98000 00000",
+    planName: input.planName,
+    monthlyFeeINR: Math.max(499, Math.round(input.monthlyFeeINR)),
+    expiryDate: exp.toISOString().slice(0, 10),
+    sessionsThisMonth: 1,
+    streakDays: 1,
+    lastWorkoutName: "Floor Induction",
+    lastCheckIn: "Just now",
+  };
+}
+
+/**
+ * Recomputes tier breakdown rows and financial KPIs dynamically when members are renewed or onboarded.
+ */
+export function computeLiveGymFinancials(
+  baseFinancials: GymFinancialMetrics,
+  baseTierRows: TierRevenueRow[],
+  members: GymMemberRecord[],
+  baselineMembers: GymMemberRecord[],
+  referenceDate: Date = new Date("2026-11-26T12:00:00Z")
+): {
+  financials: GymFinancialMetrics;
+  tierRows: TierRevenueRow[];
+} {
+  const tierMap = new Map(baseTierRows.map((row) => [row.tierName, { ...row }]));
+  const baselineById = new Map(baselineMembers.map((m) => [m.id, m]));
+
+  let activeDelta = 0;
+  let totalDelta = 0;
+  let revenueDeltaINR = 0;
+
+  for (const m of members) {
+    const base = baselineById.get(m.id);
+    const currentStatus = evaluateMembershipRenewal(m.expiryDate, referenceDate).status;
+    const isNowActive = currentStatus !== "expired";
+
+    const resolveTierKey = (planName: string): string => {
+      if (tierMap.has(planName)) return planName;
+      if (/annual|black/i.test(planName)) return "Annual Black Tier";
+      if (/gold/i.test(planName)) return "Gold All-Access";
+      if (/student|day/i.test(planName)) return "Student & Day Passes";
+      return "Monthly Standard";
+    };
+
+    if (!base) {
+      totalDelta += 1;
+      if (isNowActive) {
+        activeDelta += 1;
+        revenueDeltaINR += m.monthlyFeeINR;
+        const row = tierMap.get(resolveTierKey(m.planName));
+        if (row) {
+          row.members += 1;
+          row.mrrINR += m.monthlyFeeINR;
+          row.mrrUSD += Math.round(m.monthlyFeeINR / 83);
+        }
+      }
+      continue;
+    }
+
+    const baseStatus = evaluateMembershipRenewal(base.expiryDate, referenceDate).status;
+    const wasActive = baseStatus !== "expired";
+    if (!wasActive && isNowActive) {
+      activeDelta += 1;
+      revenueDeltaINR += m.monthlyFeeINR;
+      const row = tierMap.get(resolveTierKey(m.planName));
+      if (row) {
+        row.members += 1;
+        row.mrrINR += m.monthlyFeeINR;
+        row.mrrUSD += Math.round(m.monthlyFeeINR / 83);
+      }
+    }
+  }
+
+  const nextMrrINR = Math.max(0, baseFinancials.monthlyRecurringRevenueINR + revenueDeltaINR);
+  const nextMrrUSD = Math.max(0, baseFinancials.monthlyRecurringRevenueUSD + Math.round(revenueDeltaINR / 83));
+
+  return {
+    financials: {
+      ...baseFinancials,
+      totalMembers: baseFinancials.totalMembers + totalDelta,
+      activeMembers: Math.max(0, baseFinancials.activeMembers + activeDelta),
+      monthlyRecurringRevenueINR: nextMrrINR,
+      monthlyRecurringRevenueUSD: nextMrrUSD,
+    },
+    tierRows: baseTierRows.map((r) => tierMap.get(r.tierName) ?? r),
+  };
+}
+
+/**
+ * Onboards a new athlete onto the trainer roster with deterministic initials and fatigue evaluation.
+ */
+export function createAthleteClient(input: {
+  id?: string;
+  name: string;
+  email: string;
+  tier?: "pro" | "elite_coached";
+  currentProgramId?: string;
+  currentProgramName?: string;
+  readinessScore?: number;
+  existingCount?: number;
+  note?: string;
+}): AthleteClient {
+  const cleanName = input.name.trim() || "New Athlete";
+  const parts = cleanName.split(/\s+/).filter(Boolean);
+  const initials =
+    parts.length >= 2
+      ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+      : cleanName.slice(0, 2).toUpperCase();
+  const readiness = Math.max(10, Math.min(100, Math.round(input.readinessScore ?? 84)));
+  const idx = Math.max(0, input.existingCount ?? 0);
+
+  return {
+    id: input.id ?? `ath-${Date.now()}-${idx + 1}`,
+    name: cleanName,
+    initials,
+    avatarAccent: ATHLETE_ACCENTS[idx % ATHLETE_ACCENTS.length],
+    email: input.email.trim() || `${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, ".")}@forge.fit`,
+    tier: input.tier ?? "elite_coached",
+    currentProgramId: input.currentProgramId ?? "ppl-hypertrophy",
+    currentProgramName: input.currentProgramName ?? "Push Pull Legs (PPL)",
+    adherenceRate: 92,
+    streakDays: 1,
+    lastSessionDate: "Just added",
+    readinessScore: readiness,
+    fatigueRisk: evaluateAthleteFatigueRisk(readiness, 0),
+    notes: input.note?.trim()
+      ? [input.note.trim()]
+      : ["Joined FORGE B2B roster. Baseline movement screen scheduled."],
+  };
+}
+
+/**
+ * Prepends a dated coach note to an athlete profile immutably.
+ */
+export function appendCoachNoteToAthlete(athlete: AthleteClient, note: string): AthleteClient {
+  const clean = note.trim();
+  if (!clean) return athlete;
+  return {
+    ...athlete,
+    notes: [clean, ...athlete.notes],
+  };
+}
+
+/**
+ * Updates athlete readiness score and recalculates central fatigue risk immutably.
+ */
+export function updateAthleteReadiness(
+  athlete: AthleteClient,
+  readinessScore: number,
+  consecutiveHighRpeSessions: number = 0
+): AthleteClient {
+  const clamped = Math.max(10, Math.min(100, Math.round(readinessScore)));
+  return {
+    ...athlete,
+    readinessScore: clamped,
+    fatigueRisk: evaluateAthleteFatigueRisk(clamped, consecutiveHighRpeSessions),
+  };
+}
+
 /* ───────────────────────────── AUTHENTIC MOCK SEED DATA ───────────────────────────── */
 
 export const INITIAL_ATHLETES: AthleteClient[] = [
@@ -639,7 +824,7 @@ export const INITIAL_ROUTINE_FOLDERS: RoutineFolder[] = [
     name: "Hypertrophy & Aesthetics",
     description: "PPL, Upper/Lower, PHUL, and specialization splits tuned for mechanical tension.",
     accent: "#C9F73A",
-    programIds: ["ppl-hypertrophy", "upper-lower-4day", "phul-power-hypertrophy", "arnold-split-6day", "glute-core-sculpt"],
+    programIds: ["ppl-hypertrophy", "upper-lower-4day", "phul-power-hypertrophy", "arnold-golden-split", "female-glute-hypertrophy"],
   },
   {
     id: "folder-strength",
@@ -653,6 +838,6 @@ export const INITIAL_ROUTINE_FOLDERS: RoutineFolder[] = [
     name: "Athletic & Bodyweight",
     description: "Explosive power, work capacity, and minimal-kit calisthenics.",
     accent: "#38BDF8",
-    programIds: ["athletic-conditioning", "calisthenics-bodyweight"],
+    programIds: ["athletic-power-speed", "calisthenics-mastery"],
   },
 ];

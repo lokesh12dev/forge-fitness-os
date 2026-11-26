@@ -445,9 +445,11 @@ export async function logFood(formData: FormData) {
   const fat = Math.max(0, Number(formData.get("fat")) || 0);
   const meal = String(formData.get("meal") ?? "snack");
   const source = String(formData.get("source") ?? "manual");
+  const rawDate = String(formData.get("date") ?? "").trim();
+  const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : dateKey();
   if (!name) return;
   await db.insert(schema.nutritionLogs).values({
-    id: rid("nl"), userId: user.id, date: dateKey(), meal,
+    id: rid("nl"), userId: user.id, date: targetDate, meal,
     name, serving: String(formData.get("serving") ?? "1 serving"),
     calories, protein, carbs, fat, source, createdAt: new Date(),
   });
@@ -466,9 +468,22 @@ export async function deleteFood(formData: FormData) {
   revalidatePath("/app");
 }
 
-export async function addWater(ml: number) {
+export async function addWater(ml: number, date?: string) {
   const user = await requireUser();
-  await db.insert(schema.waterLogs).values({ id: rid("wl"), userId: user.id, date: dateKey(), ml, createdAt: new Date() });
+  const targetDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : dateKey();
+  const rounded = Math.round(ml);
+  if (!rounded) return;
+  let delta = rounded;
+  if (delta < 0) {
+    const existing = await db
+      .select()
+      .from(schema.waterLogs)
+      .where(and(eq(schema.waterLogs.userId, user.id), eq(schema.waterLogs.date, targetDate)));
+    const current = existing.reduce((sum, r) => sum + r.ml, 0);
+    delta = -Math.min(current, Math.abs(delta));
+    if (delta === 0) return;
+  }
+  await db.insert(schema.waterLogs).values({ id: rid("wl"), userId: user.id, date: targetDate, ml: delta, createdAt: new Date() });
   revalidatePath("/app/nutrition");
   revalidatePath("/app");
 }
@@ -778,6 +793,7 @@ export async function quickLogWeight(weightKg: number) {
   await db.update(schema.users).set({ weightKg: weight }).where(eq(schema.users.id, user.id));
   revalidatePath("/app");
   revalidatePath("/app/progress");
+  revalidatePath("/app/nutrition");
   return { ok: true as const, weightKg: weight, date: today };
 }
 

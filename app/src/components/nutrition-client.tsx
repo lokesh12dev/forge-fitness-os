@@ -1,216 +1,165 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useMemo, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowUpRight, Camera, Check, ChevronRight, Coffee, Cookie, Droplets, Flame,
-  Info, Loader2, Moon, Plus, ScanLine, Share2, Sparkles, Sun, Target, Trash2, Utensils, X, Zap,
+  Activity, CalendarDays, Camera, Check, ChefHat, Coffee, Cookie, Droplets,
+  Flame, Info, Loader2, Moon, Plus, RotateCcw, Scale, ScanLine, Share2, Sparkles,
+  Sun, Target, Timer, Trash2, TrendingUp, User, Utensils, Zap,
 } from "lucide-react";
-import { addWater, deleteFood, logFood, updateTargets } from "@/app/actions";
-import { Badge, Button, IconButton, ProgressBar } from "@/components/ui";
+import { addWater, deleteFood, logFood, quickLogWeight, updateTargets } from "@/app/actions";
+import { Ring } from "@/components/charts";
 import { Card, CardHeader, PageHeader } from "@/components/page-header";
-import { MacroBar, Ring } from "@/components/charts";
-import { MacroRings } from "@/components/macro-rings";
 import { BarcodeScannerModal } from "@/components/barcode-scanner-modal";
 import { PhotoMealScanner } from "@/components/photo-meal-scanner";
-import { FOOD_DATABASE, searchFoods, type FoodItem as IndianFoodItem } from "@/lib/food-db";
-import { calculateTDEE, hitRemainingProtein, type ActivityLevel, type NutritionGoal } from "@/lib/nutrition-engine";
+import { Badge, Button, ProgressBar } from "@/components/ui";
+import { FOOD_DATABASE } from "@/lib/food-db";
+import { hitRemainingProtein } from "@/lib/nutrition-engine";
+import {
+  MEAL_PATTERNS,
+  ONT_COMPENDIUM_ACTIVITIES,
+  ONT_CORE_FOODS,
+  calculateMetBurnedKcal,
+  convertEnergy,
+  resolveFoodPhoto,
+  scaleNutrients,
+  type NutriCatalogItem,
+  type OntGender,
+} from "@/lib/opennutri-core";
 import { cn } from "@/lib/utils";
+import {
+  FASTING_PROTOCOLS,
+  MEAL_SLOTS,
+  formatDateKeyNice,
+  ifctToCatalogItem,
+  logEntryToCatalogItem,
+  type CustomActivityLog,
+  type CustomRecipeRecord,
+  type EnergyUnit,
+  type FastingSession,
+  type NutritionLogEntry,
+} from "./nutrition/nutrition-helpers";
+import {
+  AddFoodSheet,
+  CitationsSheet,
+  FoodDetailSheet,
+  TargetsSheet,
+} from "./nutrition/nutrition-sheets";
+import {
+  DiaryTabView,
+  TrendsTabView,
+  YouRecipesTabView,
+} from "./nutrition/nutrition-tabs";
 
-/* ───────────────────────────── TYPES ───────────────────────────── */
-
-export type NutritionLogView = {
-  id: string;
-  meal: string;
-  name: string;
-  serving: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  source: string;
-  createdAt: number;
-};
-
-type Totals = { calories: number; protein: number; carbs: number; fat: number };
+export type NutritionLogView = NutritionLogEntry;
 
 type Props = {
   firstName: string;
   dateLabel: string;
+  todayKey: string;
   targets: { calories: number; protein: number; carbs: number; fat: number; waterMl: number };
-  totals: Totals;
-  logs: NutritionLogView[];
+  totals: { calories: number; protein: number; carbs: number; fat: number };
+  logs: NutritionLogEntry[];
+  allLogs: NutritionLogEntry[];
   waterMl: number;
+  waterByDate: Record<string, number>;
   burned: number;
+  burnedByDate: Record<string, number>;
   streak: number;
-  week: { key: string; label: string; calories: number; protein: number; carbs: number; fat: number }[];
+  week: Array<{ key: string; label: string; calories: number; protein: number; carbs: number; fat: number }>;
+  dailyHistory: Array<{
+    key: string;
+    label: string;
+    shortDate: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    waterMl: number;
+    burned: number;
+  }>;
+  weightHistory: Array<{ date: string; weightKg: number }>;
   userProfile?: { weightKg: number; heightCm: number; sex: "male" | "female"; age: number };
 };
 
-type Sheet = null | { type: "manual"; meal: string } | { type: "scan" } | { type: "targets" };
+type MainTab = "home" | "diary" | "trends" | "you";
 
-type FoodItem = { name: string; serving: string; calories: number; protein: number; carbs: number; fat: number };
+const MEAL_ICONS = {
+  breakfast: Coffee,
+  lunch: Sun,
+  snack: Cookie,
+  dinner: Moon,
+} as const;
 
-/* ───────────────────────────── DATA ───────────────────────────── */
+const SOURCE_BADGE: Record<string, { label: string; tone: "acid" | "sky" | "mint" | "grape" | "neutral" }> = {
+  photo: { label: "Photo", tone: "grape" },
+  barcode: { label: "Barcode", tone: "sky" },
+  voice: { label: "Voice", tone: "mint" },
+  recipe: { label: "Recipe", tone: "acid" },
+  manual: { label: "Logged", tone: "neutral" },
+};
 
-const MEALS = [
-  { key: "breakfast", label: "Breakfast", window: "6–10 AM", icon: Coffee, color: "#FFD166" },
-  { key: "lunch", label: "Lunch", window: "12–3 PM", icon: Sun, color: "#C9F73A" },
-  { key: "snack", label: "Snacks", window: "anytime", icon: Cookie, color: "#B49CFF" },
-  { key: "dinner", label: "Dinner", window: "6–9 PM", icon: Moon, color: "#6EA8FF" },
-] as const;
-
-const QUICK_FOODS: FoodItem[] = [
-  { name: "Paneer bhurji + 2 roti", serving: "1 plate", calories: 520, protein: 28, carbs: 42, fat: 26 },
-  { name: "Dal tadka + jeera rice bowl", serving: "1 bowl", calories: 380, protein: 16, carbs: 58, fat: 8 },
-  { name: "Soya chunks curry + rice", serving: "1 plate", calories: 420, protein: 39, carbs: 54, fat: 6 },
-  { name: "Egg bhurji (3 eggs + 2 roti)", serving: "1 plate", calories: 440, protein: 26, carbs: 36, fat: 20 },
-  { name: "Chicken biryani (lean)", serving: "1 plate", calories: 690, protein: 38, carbs: 84, fat: 22 },
-  { name: "Grilled chicken breast", serving: "150 g", calories: 248, protein: 35, carbs: 0, fat: 5 },
-  { name: "Greek yogurt & berries", serving: "250 g", calories: 240, protein: 20, carbs: 26, fat: 5 },
-  { name: "Whey isolate in toned milk", serving: "1 scoop + 250ml", calories: 240, protein: 36, carbs: 14, fat: 4 },
-  { name: "2 idli + sambar + chutney", serving: "1 plate", calories: 310, protein: 12, carbs: 56, fat: 5 },
-  { name: "Curd bowl + almonds & chia", serving: "1 bowl", calories: 210, protein: 14, carbs: 16, fat: 10 },
-  { name: "Banana + peanut butter", serving: "1 medium + 20g", calories: 220, protein: 6, carbs: 34, fat: 8 },
-];
-
-const PROTEIN_PICKS = [
-  { name: "Whey isolate", serving: "1 scoop", protein: 30, calories: 160, tags: ["fast", "supplement"] },
-  { name: "Grilled chicken breast", serving: "150 g", protein: 35, calories: 248, tags: ["high-protein"] },
-  { name: "Paneer tikka", serving: "150 g", protein: 27, calories: 340, tags: ["vegetarian", "home"] },
-  { name: "Greek yogurt", serving: "250 g", protein: 20, calories: 240, tags: ["vegetarian", "snack"] },
-  { name: "Tofu bhurji", serving: "200 g", protein: 22, calories: 280, tags: ["vegan", "home"] },
-  { name: "Chicken tikka", serving: "150 g", protein: 33, calories: 290, tags: ["high-protein", "home"] },
-  { name: "Egg white omelette", serving: "4 whites + 1 egg", protein: 22, calories: 190, tags: ["breakfast", "home"] },
-  { name: "Soya chunks curry", serving: "150 g dry", protein: 39, calories: 420, tags: ["vegan", "home"] },
-  { name: "Cottage cheese", serving: "200 g", protein: 24, calories: 220, tags: ["vegetarian", "snack"] },
-  { name: "Protein oats", serving: "60 g oats + whey", protein: 32, calories: 380, tags: ["breakfast"] },
-  { name: "Canned tuna", serving: "1 can", protein: 25, calories: 120, tags: ["fast"] },
-  { name: "Dal + curd bowl", serving: "1 bowl", protein: 18, calories: 320, tags: ["vegetarian", "home"] },
-];
-
-/**
- * Food recognition requires a vision model. No key is configured in this build,
- * so the photo flow attaches the image to a manual entry instead of inventing
- * macros. Set FOOD_VISION_API_KEY to enable automatic detection.
- */
-const VISION_ENABLED = false;
-
-const SOURCE_META: Record<string, { label: string; tone: "acid" | "sky" | "mint" | "grape" | "neutral"; icon: typeof Camera }> = {
-  photo: { label: "Photo", tone: "grape", icon: Camera },
-  barcode: { label: "Barcode", tone: "sky", icon: ScanLine },
-  voice: { label: "Voice", tone: "mint", icon: Zap },
-  manual: { label: "Manual", tone: "neutral", icon: Utensils },
+const STORAGE_KEYS = {
+  unit: "forge_nutri_energy_unit",
+  fasting: "forge_nutri_fasting",
+  recipes: "forge_nutri_custom_recipes",
+  activities: "forge_nutri_activities",
+  pattern: "forge_nutri_meal_pattern",
 };
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
-function defaultMealForHour(hour: number) {
-  if (hour < 10) return "breakfast";
-  if (hour < 15) return "lunch";
-  if (hour < 20) return "snack";
-  return "dinner";
-}
-
-/* ───────────────────────────── SHEET ───────────────────────────── */
-
-function Sheet({
-  open,
-  onClose,
-  eyebrow,
-  title,
-  children,
-  wide,
-}: {
-  open: boolean;
-  onClose: () => void;
-  eyebrow: React.ReactNode;
-  title: React.ReactNode;
-  children: React.ReactNode;
-  wide?: boolean;
-}) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center">
-      <button className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose} aria-label="Close" />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className={cn(
-          "animate-scale-in relative z-10 max-h-[93vh] w-full overflow-y-auto rounded-t-3xl border border-white/10 bg-panel p-5 shadow-2xl sm:rounded-3xl sm:p-6",
-          wide ? "sm:max-w-2xl" : "sm:max-w-lg",
-        )}
-      >
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <p className="label-mono mb-2">{eyebrow}</p>
-            <h2 className="font-display text-[26px] font-bold leading-none tracking-[-0.04em]">{title}</h2>
-          </div>
-          <IconButton onClick={onClose} aria-label="Close sheet">
-            <X className="size-4" />
-          </IconButton>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-/* ───────────────────────────── MAIN ───────────────────────────── */
-
-export function NutritionClient({ firstName, dateLabel, targets, totals, logs, waterMl, burned, streak, week, userProfile }: Props) {
+export function NutritionClient({
+  firstName,
+  dateLabel,
+  todayKey,
+  targets,
+  totals,
+  logs,
+  allLogs,
+  waterMl,
+  waterByDate,
+  burned,
+  burnedByDate,
+  streak,
+  dailyHistory,
+  weightHistory,
+  userProfile = { weightKg: 72, heightCm: 175, sex: "male", age: 26 },
+}: Props) {
   const router = useRouter();
-  const [sheet, setSheet] = useState<Sheet>(null);
+  const [activeTab, setActiveTab] = useState<MainTab>("home");
+  const [selectedDate, setSelectedDate] = useState<string>(todayKey);
+  const [energyUnit, setEnergyUnit] = useState<EnergyUnit>("kcal");
+  const [mealPatternId, setMealPatternId] = useState<string>("standard");
+
+  // Modals & sheets
+  const [addFoodMeal, setAddFoodMeal] = useState<string | null>(null);
+  const [addFoodDate, setAddFoodDate] = useState<string>(todayKey);
+  const [inspectedItem, setInspectedItem] = useState<{ item: NutriCatalogItem; meal: string; targetDate: string } | null>(null);
+  const [showTargetsSheet, setShowTargetsSheet] = useState(false);
+  const [showCitations, setShowCitations] = useState(false);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   const [showPhotoScanner, setShowPhotoScanner] = useState(false);
-  const [indianFoodSearch, setIndianFoodSearch] = useState("");
-  const [indianFoodFilter, setIndianFoodFilter] = useState<"all" | "high_protein" | "vegetarian" | "vegan" | "staples">("all");
-  const [manualMeal, setManualMeal] = useState("lunch");
-  const [form, setForm] = useState({
-    name: "",
-    meal: "lunch",
-    serving: "1 serving",
-    calories: "",
-    protein: "",
-    carbs: "",
-    fat: "",
-  });
 
-  useEffect(() => {
-    const m = defaultMealForHour(new Date().getHours());
-    setManualMeal(m);
-    setForm((prev) => ({ ...prev, meal: m }));
-  }, []);
+  // Interactive widgets state
   const [busy, setBusy] = useState(false);
-  const [quickAdding, setQuickAdding] = useState<string | null>(null);
-  const [proteinFilter, setProteinFilter] = useState("all");
   const [waterPending, startWater] = useTransition();
+  const [proteinFilter, setProteinFilter] = useState<"all" | "veg" | "vegan">("all");
+  const [weightInput, setWeightInput] = useState(String(userProfile.weightKg));
+  const [editingWeight, setEditingWeight] = useState(false);
+  const [weightSaving, setWeightSaving] = useState(false);
 
-  // TDEE Calculator state (D3)
-  const [tdeeGoal, setTdeeGoal] = useState<NutritionGoal>("maintenance");
-  const [tdeeActivity, setTdeeActivity] = useState<ActivityLevel>("moderate");
+  // Fasting timer (hydrated cleanly in useEffect)
+  const [fasting, setFasting] = useState<FastingSession>({ protocol: "16:8", startedAt: null });
+  const [nowMs, setNowMs] = useState<number>(0);
+  const [showFastingNote, setShowFastingNote] = useState(false);
 
-  // Photo state. Recognition is disabled until a vision key exists; the photo is
-  // attached to a manual entry so no macro is invented.
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [formSource, setFormSource] = useState<"manual" | "photo">("manual");
-  const fileRef = useRef<HTMLInputElement>(null);
+  // Custom recipes & 2024 Compendium MET activity logs (hydrated cleanly in useEffect)
+  const [customRecipes, setCustomRecipes] = useState<CustomRecipeRecord[]>([]);
+  const [activities, setActivities] = useState<CustomActivityLog[]>([]);
+  const [selectedActivityCode, setSelectedActivityCode] = useState(ONT_COMPENDIUM_ACTIVITIES[0].code);
+  const [activityDurationMin, setActivityDurationMin] = useState(45);
 
-  // Targets state
   const [targetForm, setTargetForm] = useState({
     calories: String(targets.calories),
     protein: String(targets.protein),
@@ -219,189 +168,425 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
     waterMl: String(targets.waterMl),
   });
 
-  const remainingCal = targets.calories - totals.calories;
-  const remainingProtein = Math.max(0, targets.protein - totals.protein);
-  const calPct = Math.min(100, Math.round((totals.calories / Math.max(1, targets.calories)) * 100));
-
-  const grouped = useMemo(() => {
-    const map: Record<string, NutritionLogView[]> = { breakfast: [], lunch: [], snack: [], dinner: [] };
-    for (const log of logs) {
-      const key = map[log.meal] ? log.meal : "snack";
-      map[key].push(log);
+  // Hydrate persisted client preferences safely post-mount
+  useEffect(() => {
+    try {
+      const savedUnit = localStorage.getItem(STORAGE_KEYS.unit);
+      if (savedUnit === "kJ" || savedUnit === "kcal") setEnergyUnit(savedUnit);
+      const savedFast = localStorage.getItem(STORAGE_KEYS.fasting);
+      if (savedFast) setFasting(JSON.parse(savedFast) as FastingSession);
+      const savedRec = localStorage.getItem(STORAGE_KEYS.recipes);
+      if (savedRec) setCustomRecipes(JSON.parse(savedRec) as CustomRecipeRecord[]);
+      const savedAct = localStorage.getItem(STORAGE_KEYS.activities);
+      if (savedAct) setActivities(JSON.parse(savedAct) as CustomActivityLog[]);
+      const savedPat = localStorage.getItem(STORAGE_KEYS.pattern);
+      if (savedPat) setMealPatternId(savedPat);
+    } catch {
+      // Ignore storage read errors in constrained contexts
     }
-    for (const key of Object.keys(map)) map[key].sort((a, b) => a.createdAt - b.createdAt);
-    return map;
-  }, [logs]);
+    setNowMs(Date.now());
+  }, []);
 
-  const mealProtein = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const key of Object.keys(grouped)) {
-      out[key] = grouped[key].reduce((a, l) => a + l.protein, 0);
-    }
-    return out;
-  }, [grouped]);
+  useEffect(() => {
+    if (!fasting.startedAt) return;
+    setNowMs(Date.now());
+    const id = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [fasting.startedAt]);
 
-  const smartProteinSuggestions = useMemo(() => {
-    return hitRemainingProtein(remainingProtein, remainingCal, {
-      vegetarianOnly: proteinFilter === "veg",
-      veganOnly: proteinFilter === "vegan",
-      maxResults: 4,
+  function saveEnergyUnit(u: EnergyUnit) {
+    setEnergyUnit(u);
+    try {
+      localStorage.setItem(STORAGE_KEYS.unit, u);
+    } catch {}
+  }
+
+  function saveMealPattern(id: string) {
+    setMealPatternId(id);
+    try {
+      localStorage.setItem(STORAGE_KEYS.pattern, id);
+    } catch {}
+  }
+
+  function toggleFast() {
+    const next: FastingSession = fasting.startedAt
+      ? { ...fasting, startedAt: null }
+      : { ...fasting, startedAt: Date.now() };
+    setFasting(next);
+    setNowMs(Date.now());
+    try {
+      localStorage.setItem(STORAGE_KEYS.fasting, JSON.stringify(next));
+    } catch {}
+  }
+
+  function setFastProtocol(protocol: FastingSession["protocol"]) {
+    const next = { ...fasting, protocol };
+    setFasting(next);
+    try {
+      localStorage.setItem(STORAGE_KEYS.fasting, JSON.stringify(next));
+    } catch {}
+  }
+
+  function addCustomRecipe(rec: CustomRecipeRecord) {
+    setCustomRecipes((prev) => {
+      const next = [rec, ...prev];
+      try {
+        localStorage.setItem(STORAGE_KEYS.recipes, JSON.stringify(next));
+      } catch {}
+      return next;
     });
-  }, [remainingProtein, remainingCal, proteinFilter]);
-
-  const filteredIndianFoods = useMemo(() => {
-    return searchFoods(indianFoodSearch, indianFoodFilter).slice(0, 10);
-  }, [indianFoodSearch, indianFoodFilter]);
-
-  const avgCalories = week.filter((d) => d.calories > 0).length
-    ? Math.round(week.reduce((a, d) => a + d.calories, 0) / week.filter((d) => d.calories > 0).length)
-    : 0;
-  const avgProtein = week.filter((d) => d.calories > 0).length
-    ? Math.round(week.reduce((a, d) => a + d.protein, 0) / week.filter((d) => d.calories > 0).length)
-    : 0;
-  const loggedDays = week.filter((d) => d.calories > 0).length;
-  const daysOnTarget = week.filter((d) => Math.abs(d.calories - targets.calories) <= targets.calories * 0.12).length;
-  const paceTarget = targets.protein / 4;
-
-  /* ── actions ── */
-
-  function openManual(meal: string, source: "manual" | "photo" = "manual") {
-    setManualMeal(meal);
-    setFormSource(source);
-    setForm({ name: "", meal, serving: "1 serving", calories: "", protein: "", carbs: "", fat: "" });
-    setSheet({ type: "manual", meal });
   }
 
-  function openScan() {
-    setShowPhotoScanner(true);
-  }
-
-  function openTargets() {
-    setTargetForm({
-      calories: String(targets.calories),
-      protein: String(targets.protein),
-      carbs: String(targets.carbs),
-      fat: String(targets.fat),
-      waterMl: String(targets.waterMl),
+  function deleteCustomRecipe(id: string) {
+    setCustomRecipes((prev) => {
+      const next = prev.filter((r) => r.id !== id);
+      try {
+        localStorage.setItem(STORAGE_KEYS.recipes, JSON.stringify(next));
+      } catch {}
+      return next;
     });
-    setSheet({ type: "targets" });
   }
 
-  async function submitManual(e: FormEvent) {
-    e.preventDefault();
-    if (!form.name.trim() || busy) return;
+  function handleAddMetActivity() {
+    const act = ONT_COMPENDIUM_ACTIVITIES.find((a) => a.code === selectedActivityCode);
+    if (!act) return;
+    const kcal = calculateMetBurnedKcal(act.mets, userProfile.weightKg, activityDurationMin);
+    const entry: CustomActivityLog = {
+      id: `act-${Date.now()}`,
+      date: todayKey,
+      code: act.code,
+      name: act.name,
+      mets: act.mets,
+      durationMin: activityDurationMin,
+      calories: kcal,
+    };
+    setActivities((prev) => {
+      const next = [entry, ...prev];
+      try {
+        localStorage.setItem(STORAGE_KEYS.activities, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }
+
+  function removeMetActivity(id: string) {
+    setActivities((prev) => {
+      const next = prev.filter((a) => a.id !== id);
+      try {
+        localStorage.setItem(STORAGE_KEYS.activities, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }
+
+  // Server action wrappers
+  async function persistFoodLog(data: {
+    name: string;
+    meal: string;
+    serving: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    source: string;
+    date: string;
+  }) {
     setBusy(true);
     try {
       const fd = new FormData();
-      fd.set("name", form.name.trim());
-      fd.set("meal", form.meal);
-      fd.set("serving", form.serving || "1 serving");
-      fd.set("calories", form.calories || "0");
-      fd.set("protein", form.protein || "0");
-      fd.set("carbs", form.carbs || "0");
-      fd.set("fat", form.fat || "0");
-      fd.set("source", formSource);
+      fd.set("name", data.name);
+      fd.set("meal", data.meal);
+      fd.set("serving", data.serving);
+      fd.set("calories", String(Math.round(data.calories)));
+      fd.set("protein", String(Math.round(data.protein * 10) / 10));
+      fd.set("carbs", String(Math.round(data.carbs * 10) / 10));
+      fd.set("fat", String(Math.round(data.fat * 10) / 10));
+      fd.set("source", data.source);
+      fd.set("date", data.date);
       await logFood(fd);
-      setSheet(null);
       router.refresh();
     } finally {
       setBusy(false);
     }
   }
 
-  async function quickAdd(food: { name: string; serving: string; protein: number; calories: number; tags?: string[] }) {
-    if (quickAdding) return;
-    setQuickAdding(food.name);
-    try {
-      const fd = new FormData();
-      fd.set("name", food.name);
-      fd.set("meal", defaultMealForHour(new Date().getHours()));
-      fd.set("serving", food.serving);
-      fd.set("calories", String(food.calories));
-      fd.set("protein", String(food.protein));
-      fd.set("carbs", "0");
-      fd.set("fat", "0");
-      fd.set("source", "manual");
-      await logFood(fd);
-      router.refresh();
-    } finally {
-      setQuickAdding(null);
-    }
+  async function logCatalogItem(item: NutriCatalogItem, grams: number, meal: string, label?: string, date = addFoodDate) {
+    const scaled = scaleNutrients(item.per100g, grams);
+    await persistFoodLog({
+      name: item.name,
+      meal,
+      serving: label || `${grams}g`,
+      calories: scaled.kcal,
+      protein: scaled.protein,
+      carbs: scaled.carbs,
+      fat: scaled.fat,
+      source: item.source === "product" ? "barcode" : item.source === "recipe" ? "recipe" : "manual",
+      date,
+    });
+    setInspectedItem(null);
+    setAddFoodMeal(null);
   }
 
-  function drink(ml: number) {
+  function handleWaterAction(ml: number, targetDate = todayKey) {
     startWater(async () => {
-      await addWater(ml);
+      await addWater(ml, targetDate);
       router.refresh();
     });
   }
 
-  async function submitTargets(e: FormEvent) {
+  async function handleWeightSave() {
+    const val = Number(weightInput);
+    if (!val || val < 30 || val > 300 || weightSaving) return;
+    setWeightSaving(true);
+    try {
+      await quickLogWeight(val);
+      setEditingWeight(false);
+      router.refresh();
+    } finally {
+      setWeightSaving(false);
+    }
+  }
+
+  async function handleSaveTargetForm(vals: { calories: number; protein: number; carbs: number; fat: number; waterMl: number }) {
+    const fd = new FormData();
+    fd.set("calories", String(vals.calories));
+    fd.set("protein", String(vals.protein));
+    fd.set("carbs", String(vals.carbs));
+    fd.set("fat", String(vals.fat));
+    fd.set("waterMl", String(vals.waterMl));
+    await updateTargets(fd);
+    router.refresh();
+  }
+
+  async function submitTargetsForm(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
     setBusy(true);
     try {
-      const fd = new FormData();
-      for (const [key, value] of Object.entries(targetForm)) fd.set(key, value);
-      await updateTargets(fd);
-      setSheet(null);
-      router.refresh();
+      await handleSaveTargetForm({
+        calories: Number(targetForm.calories) || 2800,
+        protein: Number(targetForm.protein) || 180,
+        carbs: Number(targetForm.carbs) || 300,
+        fat: Number(targetForm.fat) || 80,
+        waterMl: Number(targetForm.waterMl) || 3500,
+      });
+      setShowTargetsSheet(false);
     } finally {
       setBusy(false);
     }
   }
 
-  function handleFile(file: File | null) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPhoto(String(reader.result));
-    };
-    reader.readAsDataURL(file);
+  // Computed metrics for Home
+  const todayActivities = useMemo(() => activities.filter((a) => a.date === todayKey), [activities, todayKey]);
+  const extraBurned = useMemo(() => todayActivities.reduce((s, a) => s + a.calories, 0), [todayActivities]);
+  const totalBurnedToday = burned + extraBurned;
+  const effectiveGoalKcal = targets.calories + extraBurned;
+  const remainingCal = effectiveGoalKcal - totals.calories;
+  const remainingProtein = Math.max(0, targets.protein - totals.protein);
+  const calPct = Math.min(100, Math.round((totals.calories / Math.max(1, effectiveGoalKcal)) * 100));
+
+  const mergedBurnedByDate = useMemo(() => {
+    const map: Record<string, number> = { ...burnedByDate };
+    for (const a of activities) {
+      map[a.date] = (map[a.date] ?? 0) + a.calories;
+    }
+    return map;
+  }, [burnedByDate, activities]);
+
+  const activePattern = useMemo(
+    () => MEAL_PATTERNS.find((p) => p.id === mealPatternId) ?? MEAL_PATTERNS[0],
+    [mealPatternId],
+  );
+
+  const smartProteinSuggestions = useMemo(
+    () =>
+      hitRemainingProtein(remainingProtein, Math.max(250, remainingCal), {
+        vegetarianOnly: proteinFilter === "veg",
+        veganOnly: proteinFilter === "vegan",
+        maxResults: 4,
+      }),
+    [remainingProtein, remainingCal, proteinFilter],
+  );
+
+  const featuredFoods = useMemo(() => {
+    const indianPicks = FOOD_DATABASE.filter((f) => f.isHighProtein).slice(0, 5).map(ifctToCatalogItem);
+    return [...ONT_CORE_FOODS.slice(0, 6), ...indianPicks];
+  }, []);
+
+  const fastingElapsedText = useMemo(() => {
+    if (!fasting.startedAt || nowMs <= fasting.startedAt) return "Not fasting";
+    const diffMin = Math.floor((nowMs - fasting.startedAt) / 60_000);
+    const hrs = Math.floor(diffMin / 60);
+    const mins = diffMin % 60;
+    return `${hrs}h ${mins}m elapsed`;
+  }, [fasting.startedAt, nowMs]);
+
+  const activeDateDayTotals = useMemo(() => {
+    if (addFoodDate === todayKey) return totals;
+    return allLogs
+      .filter((l) => l.date === addFoodDate)
+      .reduce(
+        (acc, l) => ({
+          calories: acc.calories + l.calories,
+          protein: acc.protein + l.protein,
+          carbs: acc.carbs + l.carbs,
+          fat: acc.fat + l.fat,
+        }),
+        { calories: 0, protein: 0, carbs: 0, fat: 0 },
+      );
+  }, [addFoodDate, todayKey, totals, allLogs]);
+
+  // Shared Meal Sections Renderer (used by both Home and Diary Calendar!)
+  function renderMealSections(forDateKey: string, dayLogs: NutritionLogEntry[]) {
+    const grouped: Record<string, NutritionLogEntry[]> = { breakfast: [], lunch: [], snack: [], dinner: [] };
+    for (const log of dayLogs) {
+      const k = grouped[log.meal] ? log.meal : "snack";
+      grouped[k].push(log);
+    }
+
+    return (
+      <div className="space-y-3.5">
+        {MEAL_SLOTS.map((slot) => {
+          const items = grouped[slot.key] ?? [];
+          const slotCals = items.reduce((s, i) => s + i.calories, 0);
+          const slotProt = items.reduce((s, i) => s + i.protein, 0);
+          const share = activePattern.shares[slot.key];
+          const slotBudget = Math.round(targets.calories * share);
+          const Icon = MEAL_ICONS[slot.key];
+          const quickPicks =
+            slot.key === "breakfast"
+              ? [ONT_CORE_FOODS[0], ONT_CORE_FOODS[4], ONT_CORE_FOODS[8]]
+              : slot.key === "lunch"
+                ? [ONT_CORE_FOODS[3], ONT_CORE_FOODS[1], ONT_CORE_FOODS[2]]
+                : slot.key === "dinner"
+                  ? [ONT_CORE_FOODS[5], ONT_CORE_FOODS[10], ONT_CORE_FOODS[1]]
+                  : [ONT_CORE_FOODS[7], ONT_CORE_FOODS[9], ONT_CORE_FOODS[4]];
+
+          return (
+            <Card key={slot.key} className="p-4 sm:p-5">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="grid size-9 place-items-center rounded-xl border border-white/10"
+                    style={{ background: `${slot.color}18`, color: slot.color }}
+                  >
+                    <Icon className="size-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-display text-lg font-bold text-chalk">{slot.label}</h3>
+                      <span className="font-mono text-[9.5px] uppercase tracking-wider text-dim">{slot.window}</span>
+                    </div>
+                    <p className="font-mono text-[10px] text-mist">
+                      {convertEnergy(slotCals, energyUnit)} / {convertEnergy(slotBudget, energyUnit)} {energyUnit} · {Math.round(slotProt)}g protein
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setAddFoodDate(forDateKey);
+                    setAddFoodMeal(slot.key);
+                  }}
+                >
+                  <Plus className="size-3.5" /> Add
+                </Button>
+              </div>
+
+              {items.length > 0 ? (
+                <div className="space-y-2">
+                  {items.map((log) => {
+                    const photo = resolveFoodPhoto(log.name);
+                    const badge = SOURCE_BADGE[log.source] ?? SOURCE_BADGE.manual;
+                    return (
+                      <div
+                        key={log.id}
+                        className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-2.5 transition hover:border-white/15"
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setInspectedItem({
+                              item: logEntryToCatalogItem(log),
+                              meal: slot.key,
+                              targetDate: forDateKey,
+                            })
+                          }
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        >
+                          <img
+                            src={photo.imageUrl}
+                            alt={log.name}
+                            className="size-12 shrink-0 rounded-xl border border-white/10 object-cover"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate text-[13px] font-semibold text-chalk">{log.name}</span>
+                              <Badge tone={badge.tone} className="px-1.5 py-0.5 text-[8px]">{badge.label}</Badge>
+                            </div>
+                            <p className="mt-0.5 truncate font-mono text-[10px] text-dim">
+                              {log.serving} · {Math.round(log.protein)}g P · {Math.round(log.carbs)}g C · {Math.round(log.fat)}g F
+                            </p>
+                          </div>
+                        </button>
+                        <span className="shrink-0 font-numeric text-xs font-semibold text-chalk">
+                          {convertEnergy(log.calories, energyUnit)} <span className="text-[10px] text-dim">{energyUnit}</span>
+                        </span>
+                        <form action={deleteFood} className="shrink-0">
+                          <input type="hidden" name="id" value={log.id} />
+                          <button
+                            type="submit"
+                            aria-label={`Delete ${log.name}`}
+                            className="grid size-8 place-items-center rounded-xl border border-white/[0.07] text-dim hover:border-flame/40 hover:bg-flame/10 hover:text-flame"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </form>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-[10px] text-dim mr-1">Quick add:</span>
+                  {quickPicks.map((q) => {
+                    const scaled = scaleNutrients(q.per100g, q.defaultServingGrams);
+                    return (
+                      <button
+                        key={q.id}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => logCatalogItem(q, q.defaultServingGrams, slot.key, q.defaultServingLabel, forDateKey)}
+                        className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.02] py-1 pl-1 pr-3 text-xs text-mist transition hover:border-acid/45 hover:text-chalk"
+                      >
+                        <img src={q.imageUrl} alt={q.name} className="size-6 rounded-full object-cover" />
+                        <span>{q.name}</span>
+                        <span className="font-mono text-[10px] text-acid">+{convertEnergy(scaled.kcal, energyUnit)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    );
   }
-
-  const coachNote = useMemo(() => {
-    if (remainingProtein > 45) {
-      return {
-        title: `${remainingProtein}g protein to close`,
-        body: `${firstName}, two focused feedings will do it. ${smartProteinSuggestions.slice(0, 2).map((p) => p.title).join(" + ") || "High protein sources"} locks the gap without blowing your calories.`,
-        tone: "acid" as const,
-      };
-    }
-    if (remainingProtein > 0) {
-      return {
-        title: `${remainingProtein}g left — one bite away`,
-        body: "A whey shake or 200g Greek yogurt finishes the day exactly on target. Keep fat moderate so digestion stays easy tonight.",
-        tone: "mint" as const,
-      };
-    }
-    if (remainingCal < -250) {
-      return {
-        title: `${Math.abs(remainingCal)} kcal over target`,
-        body: "Not a failure — a data point. Keep tomorrow's first meal protein-led and let your weekly average do the work.",
-        tone: "amber" as const,
-      };
-    }
-    return {
-      title: "Protein target cleared",
-      body: `${firstName}, you've hit ${fmt(totals.protein)}g of protein with ${Math.max(0, remainingCal)} kcal of room. Hydrate, sleep, grow.`,
-      tone: "acid" as const,
-    };
-  }, [remainingProtein, remainingCal, smartProteinSuggestions, totals.protein, firstName]);
-
-  /* ── render ── */
 
   return (
     <>
       <PageHeader
         eyebrow={
           <>
-            <Badge tone="acid" dot>Fuel engine on</Badge>
+            <Badge tone="acid" dot>OpenNutriTracker + FORGE</Badge>
             <span className="label-mono text-dim">{dateLabel}</span>
           </>
         }
         title="Nutrition."
-        subtitle={`${firstName}, food is the other half of the workout. Scan a plate, close your protein gap, and let the week average — not one meal — decide the result.`}
+        subtitle={`${firstName}, evidence-backed fuel tracking powered by IOM 2005 EER & DRI, WHO BMI, 2024 Compendium MET activities, IFCT Indian foods, and curated meal photography.`}
         actions={
           <>
             <Button
@@ -413,761 +598,654 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
                   window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
                 }
               }}
-              title="Share diet card to WhatsApp (gymsmart.in)"
+              title="Share diet card to WhatsApp"
             >
               <Share2 className="size-3.5 text-mint" /> WhatsApp Diet
             </Button>
             <Button variant="secondary" size="md" onClick={() => setShowBarcodeScanner(true)}>
               <ScanLine className="size-3.5 text-sky" /> Barcode
             </Button>
-            <Button variant="secondary" size="md" onClick={openScan}>
-              <Camera className="size-3.5" /> Scan meal
+            <Button variant="secondary" size="md" onClick={() => setShowPhotoScanner(true)}>
+              <Camera className="size-3.5 text-grape" /> Scan meal
             </Button>
-            <Button variant="outline" size="md" onClick={openTargets}>
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => {
+                setTargetForm({
+                  calories: String(targets.calories),
+                  protein: String(targets.protein),
+                  carbs: String(targets.carbs),
+                  fat: String(targets.fat),
+                  waterMl: String(targets.waterMl),
+                });
+                setShowTargetsSheet(true);
+              }}
+            >
               <Target className="size-3.5" /> Targets
             </Button>
-            <Button size="md" onClick={() => openManual(defaultMealForHour(new Date().getHours()))}>
+            <Button
+              size="md"
+              onClick={() => {
+                setAddFoodDate(activeTab === "diary" ? selectedDate : todayKey);
+                setAddFoodMeal("lunch");
+              }}
+            >
               <Plus className="size-4" /> Log food
             </Button>
           </>
         }
       />
 
-      {/* HERO */}
-      <Card className="relative p-5 md:p-7">
-        <div className="pointer-events-none absolute -right-24 -top-32 size-[460px] rounded-full bg-[radial-gradient(circle,rgba(201,247,58,0.12),transparent_65%)]" />
-        <div className="pointer-events-none absolute inset-0 grid-lines opacity-25 [mask-image:radial-gradient(circle_at_85%_0%,black,transparent_60%)]" />
-        <div className="relative grid items-center gap-7 lg:grid-cols-[auto_1fr]">
-          <div className="flex items-center gap-5 sm:gap-7">
-            <MacroRings
-              calories={{ current: totals.calories, target: targets.calories }}
-              protein={{ current: totals.protein, target: targets.protein }}
-              carbs={{ current: totals.carbs, target: targets.carbs }}
-              fat={{ current: totals.fat, target: targets.fat }}
-              size={186}
-            />
-            <div className="space-y-4">
-              <div>
-                <p className="label-mono mb-1">Consumed</p>
-                <p className="font-numeric text-[28px] font-semibold leading-none">
-                  {fmt(totals.calories)}<span className="ml-1 text-[11px] font-normal text-dim">/ {fmt(targets.calories)}</span>
-                </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <div>
-                  <p className="label-mono mb-1">Burned</p>
-                  <p className="font-numeric text-lg font-medium text-flame">{fmt(burned)}</p>
-                </div>
-                <span className="h-8 w-px bg-white/10" />
-                <div>
-                  <p className="label-mono mb-1">Net</p>
-                  <p className="font-numeric text-lg font-medium text-mist">{fmt(totals.calories - burned)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Flame className="size-3.5 text-flame" />
-                <span className="text-[10.5px] text-mist">{streak}-day streak · {logs.length} feeds logged</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="min-w-0">
-            <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
-              <div className="rounded-2xl border border-acid/20 bg-acid/[0.05] p-4 sm:col-span-2">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div>
-                    <p className="label-mono mb-1.5 text-acid/80">Protein gap</p>
-                    <p className="font-numeric text-[34px] font-bold leading-none tracking-[-0.05em] text-acid">
-                      {remainingProtein > 0 ? `${fmt(remainingProtein)}g` : "Closed"}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[11px] text-mist">{fmt(totals.protein)}g of {targets.protein}g</p>
-                    <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-dim">≈ {Math.round(targets.protein / 4)}g per meal pace</p>
-                  </div>
-                </div>
-                <ProgressBar value={(totals.protein / Math.max(1, targets.protein)) * 100} color="#C9F73A" height={5} className="mt-3" />
-                {remainingProtein > 0 && (
-                  <button
-                    onClick={() => document.getElementById("protein-gap")?.scrollIntoView({ behavior: "smooth", block: "center" })}
-                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-acid/25 bg-acid/10 py-2 text-[11px] font-semibold text-acid transition-colors hover:bg-acid/15"
-                  >
-                    Build my {remainingProtein}g fix <ArrowUpRight className="size-3.5" />
-                  </button>
+      {/* 4-Destination OpenNutriTracker Tab Bar + Global kcal/kJ toggle */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="grid w-full grid-cols-4 gap-1 rounded-2xl border border-white/[0.08] bg-panel p-1.5 sm:flex sm:w-auto sm:items-center sm:gap-1.5">
+          {(
+            [
+              { id: "home", label: "Home", mobileLabel: "Home", icon: Utensils },
+              { id: "diary", label: "Diary", mobileLabel: "Diary", icon: CalendarDays },
+              { id: "trends", label: "Trends", mobileLabel: "Trends", icon: TrendingUp },
+              { id: "you", label: "You & Recipes", mobileLabel: "You", icon: ChefHat },
+            ] as const
+          ).map((t) => {
+            const Icon = t.icon;
+            const active = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-2 py-2 text-[11px] font-semibold transition sm:px-3.5 sm:text-xs sm:gap-2",
+                  active
+                    ? "bg-acid text-ink shadow-[0_6px_22px_-8px_rgba(201,247,58,0.65)]"
+                    : "text-mist hover:bg-white/[0.04] hover:text-chalk",
                 )}
-              </div>
-              <MacroBar label="Protein" value={totals.protein} target={targets.protein} color="#C9F73A" />
-              <MacroBar label="Carbs" value={totals.carbs} target={targets.carbs} color="#6EA8FF" />
-              <MacroBar label="Fat" value={totals.fat} target={targets.fat} color="#FFD166" />
-              <div>
-                <div className="mb-1.5 flex items-baseline justify-between">
-                  <span className="label-mono">Water</span>
-                  <span className="font-numeric text-[11px] text-mist"><span className="text-chalk">{fmt(waterMl)}</span> / {fmt(targets.waterMl)} ml</span>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
-                  <div className="h-full rounded-full bg-sky" style={{ width: `${Math.min(100, Math.round((waterMl / Math.max(1, targets.waterMl)) * 100))}%` }} />
-                </div>
-              </div>
-            </div>
-          </div>
+              >
+                <Icon className="size-3.5 shrink-0" />
+                <span className="sm:hidden">{t.mobileLabel}</span>
+                <span className="hidden sm:inline">{t.label}</span>
+              </button>
+            );
+          })}
         </div>
-      </Card>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-12">
-        {/* MEAL LOG */}
-        <Card className="p-5 md:p-6 xl:col-span-8">
-          <CardHeader
-            label="Today's log"
-            title="Every meal, accounted for"
-            action={
-              <Button variant="secondary" size="sm" onClick={() => openManual(defaultMealForHour(new Date().getHours()))}>
-                <Plus className="size-3.5" /> Add
-              </Button>
-            }
-          />
-          <div className="mt-5 space-y-5">
-            {MEALS.map((meal) => {
-              const rows = grouped[meal.key] ?? [];
-              const kcal = rows.reduce((a, r) => a + r.calories, 0);
-              const pro = rows.reduce((a, r) => a + r.protein, 0);
-              const Icon = meal.icon;
-              return (
-                <div key={meal.key}>
-                  <div className="mb-2.5 flex items-center gap-3">
-                    <span className="grid size-8 place-items-center rounded-lg border border-white/[0.07] bg-white/[0.03]" style={{ color: meal.color }}>
-                      <Icon className="size-3.5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[12.5px] font-semibold text-chalk">{meal.label}</p>
-                      <p className="font-mono text-[8.5px] uppercase tracking-[0.12em] text-dim">
-                        {rows.length ? `${fmt(kcal)} kcal · ${Math.round(pro)}g protein` : meal.window}
+        <div className="flex items-center gap-1 rounded-full border border-white/10 bg-panel p-1">
+          {(["kcal", "kJ"] as const).map((u) => (
+            <button
+              key={u}
+              type="button"
+              onClick={() => saveEnergyUnit(u)}
+              className={cn(
+                "rounded-full px-3 py-1 font-mono text-[10px] font-semibold transition",
+                energyUnit === u ? "bg-acid text-ink" : "text-mist hover:text-chalk",
+              )}
+            >
+              {u}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ──────────────── TAB 1: HOME (OpenNutriTracker Screen 1) ──────────────── */}
+      {activeTab === "home" && (
+        <div className="space-y-5">
+          {/* Calorie Balance + Weight + Water + Fasting Hero */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+            <Card className="p-5 sm:p-6 lg:col-span-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <Ring
+                    value={calPct}
+                    size={122}
+                    stroke={10}
+                    color={remainingCal < -200 ? "#FFD166" : "#C9F73A"}
+                  >
+                    <div className="text-center">
+                      <p className="font-display text-2xl font-bold leading-none text-chalk">
+                        {convertEnergy(Math.abs(remainingCal), energyUnit)}
+                      </p>
+                      <p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-dim">
+                        {remainingCal < 0 ? "Over" : "Left"} ({energyUnit})
                       </p>
                     </div>
-                    <button
-                      onClick={() => openManual(meal.key)}
-                      className="grid size-6 place-items-center rounded-full border border-white/10 text-dim transition-colors hover:border-acid/40 hover:text-acid"
-                      aria-label={`Add ${meal.label}`}
-                    >
-                      <Plus className="size-3" />
-                    </button>
-                  </div>
-                  <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015]">
-                    {rows.map((row) => {
-                      const meta = SOURCE_META[row.source] ?? SOURCE_META.manual;
-                      const SIcon = meta.icon;
-                      return (
-                        <div key={row.id} className="group flex items-center gap-3 border-b border-white/[0.05] px-3.5 py-2.5 last:border-0">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[12px] font-medium text-chalk/90">{row.name}</p>
-                            <p suppressHydrationWarning className="mt-0.5 flex items-center gap-1.5 font-mono text-[8.5px] uppercase tracking-[0.08em] text-dim">
-                              {row.serving} · {new Date(row.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                            </p>
-                          </div>
-                          <div className="hidden items-center gap-1 rounded-full border border-white/[0.07] px-2 py-0.5 font-mono text-[8px] uppercase tracking-[0.08em] text-dim sm:flex" style={{ color: undefined }}>
-                            <SIcon className="size-2.5" /> {meta.label}
-                          </div>
-                          <div className="w-24 text-right">
-                            <p className="font-numeric text-[11.5px] text-chalk">{fmt(row.calories)}<span className="ml-0.5 text-[8.5px] text-dim">kcal</span></p>
-                            <p className="font-numeric text-[9px] text-mist">{Math.round(row.protein)}g P · {Math.round(row.carbs)}g C · {Math.round(row.fat)}g F</p>
-                          </div>
-                          <form action={deleteFood} className="shrink-0">
-                            <input type="hidden" name="id" value={row.id} />
-                            <button
-                              type="submit"
-                              className="grid size-7 place-items-center rounded-full text-dim opacity-0 transition-all hover:bg-flame/10 hover:text-flame group-hover:opacity-100 focus-visible:opacity-100"
-                              aria-label={`Delete ${row.name}`}
-                            >
-                              <Trash2 className="size-3.5" />
-                            </button>
-                          </form>
-                        </div>
-                      );
-                    })}
-                    {!rows.length && (
-                      <button onClick={() => openManual(meal.key)} className="flex w-full items-center justify-center gap-2 py-4 text-[11px] text-dim transition-colors hover:text-mist">
-                        <Plus className="size-3" /> Nothing logged — add {meal.label.toLowerCase()}
-                      </button>
-                    )}
+                  </Ring>
+
+                  <div className="space-y-2">
+                    <div>
+                      <p className="font-mono text-[9.5px] uppercase tracking-wider text-dim">Supplied</p>
+                      <p className="font-display text-lg font-bold text-chalk">
+                        {fmt(convertEnergy(totals.calories, energyUnit))} <span className="text-xs font-normal text-dim">{energyUnit}</span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-mono text-[9.5px] uppercase tracking-wider text-dim">Burned (workout + MET)</p>
+                      <p className="font-display text-lg font-bold text-mint">
+                        +{fmt(convertEnergy(totalBurnedToday, energyUnit))} <span className="text-xs font-normal text-dim">{energyUnit}</span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-mono text-[9.5px] uppercase tracking-wider text-dim">Net Target</p>
+                      <p className="font-numeric text-xs text-mist">
+                        {fmt(convertEnergy(effectiveGoalKcal, energyUnit))} {energyUnit}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-          <div className="mt-5 flex items-center gap-2 rounded-xl border border-white/[0.06] bg-black/15 p-3 text-[10.5px] leading-relaxed text-dim">
-            <Sparkles className="size-3.5 shrink-0 text-acid" />
-            Photo scanning recognizes mixed regional plates, then you confirm portions. Nothing logs without your tap.
-          </div>
-        </Card>
+              </div>
 
-        {/* RIGHT RAIL */}
-        <div className="space-y-4 xl:col-span-4">
-          {/* PROTEIN GAP GENERATOR */}
-          <Card id="protein-gap" className="relative scroll-mt-24 p-5">
-            <div className="pointer-events-none absolute -right-10 -top-14 size-40 rounded-full bg-[radial-gradient(circle,rgba(201,247,58,0.14),transparent_70%)]" />
-            <CardHeader
-              label="Protein gap generator"
-              title={remainingProtein > 0 ? `Close ${remainingProtein}g` : "Target cleared"}
-              action={<Badge tone={remainingProtein > 0 ? "acid" : "mint"}><Zap className="size-2.5" /> {remainingProtein > 0 ? "auto" : "done"}</Badge>}
-            />
-            {remainingProtein > 0 ? (
-              <>
-                <p suppressHydrationWarning className="mt-2 text-[11.5px] leading-relaxed text-mist">
-                  A stack that fits your remaining macros. One tap logs it to {new Date().getHours() < 11 ? "breakfast" : new Date().getHours() < 16 ? "lunch" : "today"}.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {[
-                    { key: "all", label: "All" },
-                    { key: "veg", label: "Vegetarian" },
-                    { key: "vegan", label: "Vegan" },
-                  ].map((f) => (
+              {/* Weight + Water + Fasting Pills */}
+              <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {/* Weight Chip */}
+                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-mist">
+                      <Scale className="size-3.5 text-acid" /> Weight
+                    </span>
                     <button
-                      key={f.key}
-                      onClick={() => setProteinFilter(f.key)}
+                      type="button"
+                      onClick={() => setEditingWeight((v) => !v)}
+                      className="font-mono text-[10px] text-acid hover:underline"
+                    >
+                      {editingWeight ? "Close" : "Update"}
+                    </button>
+                  </div>
+                  {editingWeight ? (
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="30"
+                        max="300"
+                        value={weightInput}
+                        onChange={(e) => setWeightInput(e.target.value)}
+                        className="h-8 w-24 rounded-lg border border-white/15 bg-panel px-2.5 font-numeric text-xs text-chalk"
+                      />
+                      <Button type="button" size="sm" disabled={weightSaving} onClick={handleWeightSave}>
+                        {weightSaving ? "..." : <Check className="size-3.5" />}
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="mt-1 font-display text-xl font-bold text-chalk">
+                      {userProfile.weightKg.toFixed(1)} <span className="text-xs font-normal text-dim">kg</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Fasting Timer Pill + NEDA/BEAT Disclaimer */}
+                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-mist">
+                      <Timer className="size-3.5 text-amber" /> Fasting ({fasting.protocol})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowFastingNote((v) => !v)}
+                      aria-label="Fasting wellness information"
+                      className="text-dim hover:text-chalk"
+                    >
+                      <Info className="size-3.5" />
+                    </button>
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <span className="font-numeric text-xs font-semibold text-chalk">{fastingElapsedText}</span>
+                    <button
+                      type="button"
+                      onClick={toggleFast}
                       className={cn(
-                        "rounded-full border px-2.5 py-1 font-mono text-[8.5px] uppercase tracking-[0.1em] transition-colors",
-                        proteinFilter === f.key ? "border-acid/30 bg-acid/10 text-acid" : "border-white/[0.08] text-dim hover:text-mist",
+                        "rounded-full px-2.5 py-1 font-mono text-[9.5px] font-semibold transition",
+                        fasting.startedAt ? "bg-amber/20 text-amber" : "bg-white/10 text-chalk hover:bg-acid hover:text-ink",
                       )}
                     >
-                      {f.label}
+                      {fasting.startedAt ? "End" : "Start"}
                     </button>
-                  ))}
-                </div>
-                <div className="mt-3 space-y-2">
-                  {smartProteinSuggestions.map((food) => (
-                    <div key={food.id} className="group flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5 hover:border-acid/20 transition-colors">
-                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-acid/10 text-acid">
-                        <Utensils className="size-3.5" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-[11.5px] font-medium text-chalk/90">{food.title}</p>
-                          <span className="rounded bg-acid/15 px-1 font-mono text-[7.5px] font-semibold text-acid">
-                            {food.efficiency}g / 100 kcal
-                          </span>
-                        </div>
-                        <p className="font-mono text-[8.5px] text-dim mt-0.5">
-                          {food.serving} · {food.calories} kcal
-                        </p>
-                        <p className="text-[10px] text-acid/80 truncate mt-0.5">{food.reason}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-numeric text-[12px] font-semibold text-acid">+{food.proteinGrams}g</p>
-                      </div>
+                  </div>
+                  <div className="mt-2 flex gap-1">
+                    {FASTING_PROTOCOLS.map((p) => (
                       <button
-                        onClick={() =>
-                          quickAdd({
-                            name: food.title,
-                            serving: food.serving,
-                            protein: food.proteinGrams,
-                            calories: food.calories,
-                          })
-                        }
-                        disabled={Boolean(quickAdding)}
-                        className="grid size-7 shrink-0 place-items-center rounded-full bg-acid text-ink transition-transform hover:scale-105 disabled:opacity-40"
-                        aria-label={`Log ${food.title}`}
+                        key={p.id}
+                        type="button"
+                        onClick={() => setFastProtocol(p.id)}
+                        className={cn(
+                          "flex-1 rounded-md py-0.5 font-mono text-[8.5px]",
+                          fasting.protocol === p.id ? "bg-amber/20 text-amber font-bold" : "text-dim hover:text-mist",
+                        )}
                       >
-                        {quickAdding === food.title ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+                        {p.id}
                       </button>
-                    </div>
-                  ))}
-                  {!smartProteinSuggestions.length && <p className="py-4 text-center text-[11px] text-mist">No suggestions found. Try another dietary filter.</p>}
+                    ))}
+                  </div>
+                  {showFastingNote && (
+                    <p className="mt-2 border-t border-white/[0.06] pt-2 text-[10px] leading-snug text-dim">
+                      Wellness note: Intermittent fasting isn&apos;t suited to everyone. Seek support if needed via NEDA (nationaleatingdisorders.org) or Beat (beateatingdisorders.org.uk).
+                    </p>
+                  )}
                 </div>
-                <div className="mt-3 flex items-center justify-between rounded-xl border border-white/[0.06] bg-black/15 px-3 py-2">
-                  <span className="text-[10px] text-dim">Smart recommendations</span>
-                  <span className="font-mono text-[9px] text-acid">
-                    Ranked by protein density (D4)
+              </div>
+
+              {/* Water Hydration Bar */}
+              <div className="mt-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Droplets className="size-4 text-sky" />
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-mist">
+                      Water Hydration
+                    </span>
+                    <span className="font-numeric text-xs font-semibold text-chalk">
+                      {fmt(waterMl)} / {fmt(targets.waterMl)} ml
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={waterPending || waterMl <= 0}
+                      onClick={() => handleWaterAction(-250)}
+                      className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 font-mono text-[9.5px] text-dim hover:text-chalk disabled:opacity-30"
+                      title="Undo 250 ml"
+                    >
+                      <RotateCcw className="size-2.5" /> Undo
+                    </button>
+                    {[250, 500].map((ml) => (
+                      <button
+                        key={ml}
+                        type="button"
+                        disabled={waterPending}
+                        onClick={() => handleWaterAction(ml)}
+                        className="rounded-full border border-sky/35 bg-sky/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-sky hover:bg-sky hover:text-ink"
+                      >
+                        +{ml}ml
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <ProgressBar value={Math.min(100, Math.round((waterMl / Math.max(1, targets.waterMl)) * 100))} color="#6EA8FF" height={5} />
+              </div>
+            </Card>
+
+            {/* 3 Horizontal Macro Cards + Smart Protein Gap Closer */}
+            <Card className="p-5 sm:p-6 lg:col-span-6">
+              <CardHeader
+                label="Daily Macronutrients"
+                title="Protein · Carbs · Fat"
+                action={
+                  <Badge tone={remainingProtein === 0 ? "mint" : "acid"}>
+                    {remainingProtein === 0 ? "Protein hit" : `${Math.round(remainingProtein)}g protein left`}
+                  </Badge>
+                }
+              />
+
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  { label: "Carbs", actual: totals.carbs, target: targets.carbs, color: "#FFD166" },
+                  { label: "Fat", actual: totals.fat, target: targets.fat, color: "#B49CFF" },
+                  { label: "Protein", actual: totals.protein, target: targets.protein, color: "#6EA8FF" },
+                ].map((m) => {
+                  const pct = Math.min(100, Math.round((m.actual / Math.max(1, m.target)) * 100));
+                  const left = Math.max(0, Math.round(m.target - m.actual));
+                  return (
+                    <div key={m.label} className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-[10px] uppercase tracking-wider text-mist">{m.label}</span>
+                        <span className="font-numeric text-[10px] text-dim">{pct}%</span>
+                      </div>
+                      <p className="mt-1.5 font-display text-xl font-bold leading-none text-chalk">
+                        {Math.round(m.actual)}<span className="text-xs font-normal text-dim">/{m.target}g</span>
+                      </p>
+                      <ProgressBar value={pct} color={m.color} height={4} className="mt-2.5" />
+                      <p className="mt-1.5 font-mono text-[9.5px] text-dim">
+                        {left === 0 ? "Target cleared" : `${left}g remaining`}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Smart Remaining Protein Closer */}
+              <div className="mt-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3.5">
+                <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-acid">
+                    <Sparkles className="size-3.5" /> Hit remaining protein
                   </span>
+                  <div className="flex gap-1">
+                    {(["all", "veg", "vegan"] as const).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setProteinFilter(f)}
+                        className={cn(
+                          "rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase",
+                          proteinFilter === f ? "border-acid/50 bg-acid/12 text-acid" : "border-white/10 text-dim",
+                        )}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </>
-            ) : (
-              <div className="mt-3 rounded-xl border border-mint/20 bg-mint/[0.05] p-4 text-center">
-                <span className="mx-auto grid size-10 place-items-center rounded-full bg-mint/15 text-mint"><Check className="size-5" /></span>
-                <p className="mt-2 font-display text-lg font-bold text-chalk">Protein: handled.</p>
-                <p className="mt-1 text-[11px] leading-relaxed text-mist">You hit {fmt(totals.protein)}g today. Keep the next meal veg-and-protein led and you&apos;ll recover ahead of schedule.</p>
-              </div>
-            )}
-          </Card>
-
-          {/* WATER */}
-          <Card className="p-5">
-            <CardHeader
-              label="Hydration"
-              title={`${(waterMl / 1000).toFixed(2)} L`}
-              action={<Badge tone="sky"><Droplets className="size-2.5" /> {Math.round((waterMl / Math.max(1, targets.waterMl)) * 100)}%</Badge>}
-            />
-            <div className="mt-4 flex items-center gap-5">
-              <Ring value={(waterMl / Math.max(1, targets.waterMl)) * 100} size={92} stroke={7} color="#6EA8FF">
-                <Droplets className="size-6 text-sky" />
-              </Ring>
-              <div className="min-w-0 flex-1">
-                <p className="text-[11.5px] text-mist">Target {(targets.waterMl / 1000).toFixed(1)} L · {Math.max(0, Math.round((targets.waterMl - waterMl) / 250))} glasses left</p>
-                <div className="mt-3 flex gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => drink(250)} disabled={waterPending}>
-                    {waterPending ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />} 250 ml
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => drink(500)} disabled={waterPending}>
-                    + 500 ml
-                  </Button>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {smartProteinSuggestions.length > 0 ? (
+                    smartProteinSuggestions.map((s) => {
+                      const photo = resolveFoodPhoto(s.title);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            persistFoodLog({
+                              name: s.title,
+                              meal: "snack",
+                              serving: s.serving || "1 smart serving",
+                              calories: s.calories,
+                              protein: s.proteinGrams,
+                              carbs: s.carbs,
+                              fat: s.fat,
+                              source: "manual",
+                              date: todayKey,
+                            })
+                          }
+                          className="flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-panel p-2 text-left transition hover:border-acid/40"
+                        >
+                          <img src={photo.imageUrl} alt={s.title} className="size-9 shrink-0 rounded-lg object-cover" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-semibold text-chalk">{s.title}</p>
+                            <p className="font-mono text-[9.5px] text-mint">
+                              +{Math.round(s.proteinGrams)}g P · {convertEnergy(s.calories, energyUnit)} {energyUnit}
+                            </p>
+                          </div>
+                          <Plus className="size-3.5 shrink-0 text-acid" />
+                        </button>
+                      );
+                    })
+                  ) : (
+                    [ONT_CORE_FOODS[4], ONT_CORE_FOODS[3]].map((item) => {
+                      const scaled = scaleNutrients(item.per100g, item.defaultServingGrams);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setInspectedItem({ item, meal: "snack", targetDate: todayKey })}
+                          className="flex items-center gap-2.5 rounded-xl border border-mint/20 bg-mint/[0.04] p-2 text-left transition hover:border-mint/45"
+                        >
+                          <img src={item.imageUrl} alt={item.name} className="size-9 shrink-0 rounded-lg object-cover" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-semibold text-chalk">{item.name}</p>
+                            <p className="font-mono text-[9.5px] text-mint">
+                              Target met · +{Math.round(scaled.protein)}g P bonus
+                            </p>
+                          </div>
+                          <Plus className="size-3.5 shrink-0 text-mint" />
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               </div>
-            </div>
-            <div className="mt-4 grid grid-cols-10 gap-1">
-              {Array.from({ length: 10 }).map((_, i) => {
-                const filled = (i + 1) / 10 <= waterMl / Math.max(1, targets.waterMl);
-                return <span key={i} className={cn("h-5 rounded-sm border", filled ? "border-sky/30 bg-sky/50" : "border-white/[0.07] bg-white/[0.02]")} />;
-              })}
-            </div>
-            <p className="mt-3 flex items-center gap-1.5 text-[10px] text-dim"><Info className="size-3 shrink-0" /> Add 500–750 ml around training. Sodium + potassium if you sweat heavily.</p>
-          </Card>
-        </div>
-
-        {/* WEEK */}
-        <Card className="p-5 md:p-6 xl:col-span-8">
-          <CardHeader
-            label="7-day fuel average"
-            title={loggedDays ? `${fmt(avgCalories)} kcal · ${avgProtein}g protein` : "No days logged yet"}
-            action={<Badge tone={daysOnTarget >= 4 ? "acid" : "amber"}>{daysOnTarget}/{loggedDays || 7} logged days on target</Badge>}
-          />
-          <WeekBars week={week} target={targets.calories} />
-          <div className="mt-4 grid grid-cols-3 gap-3 border-t border-white/[0.07] pt-4">
-            <div>
-              <p className="label-mono mb-1">Avg protein</p>
-              <p className="font-numeric text-lg font-semibold">{avgProtein}g <span className="text-[9px] font-normal text-dim">/ {targets.protein}g</span></p>
-            </div>
-            <div>
-              <p className="label-mono mb-1">Best day</p>
-              <p className="font-numeric text-lg font-semibold text-acid">{loggedDays ? fmt(Math.max(...week.map((d) => d.protein))) : 0}g</p>
-            </div>
-            <div>
-              <p className="label-mono mb-1">Adherence</p>
-              <p className="font-numeric text-lg font-semibold">{week.length ? Math.round((week.filter((d) => d.protein >= targets.protein * 0.85).length / week.length) * 100) : 0}%</p>
-            </div>
+            </Card>
           </div>
-        </Card>
 
-        {/* COACH NOTE + PACING */}
-        <Card className="p-5 md:p-6 xl:col-span-4">
-          <CardHeader label="Coach's read" title={coachNote.title} action={<span className="grid size-8 place-items-center rounded-lg bg-acid/10 text-acid"><Sparkles className="size-4" /></span>} />
-          <p className="mt-2.5 text-[11.5px] leading-relaxed text-mist">{coachNote.body}</p>
-          <div className="mt-5">
-            <div className="mb-2.5 flex items-center justify-between">
-              <p className="label-mono">Protein pacing</p>
-              <span className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-dim">pace {Math.round(paceTarget)}g</span>
+          {/* Curated Core Meal Photo Strip (OpenNutriTracker Unsplash food catalog) */}
+          <Card className="p-4 sm:p-5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="label-mono">Curated Foods &amp; Indian Staples</p>
+                <p className="text-xs text-mist">Tap any meal photo to inspect IOM DRI micronutrients or click + to log immediately.</p>
+              </div>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setAddFoodMeal("lunch")}>
+                Browse full catalog →
+              </Button>
             </div>
-            <div className="space-y-2">
-              {MEALS.map((m) => {
-                const value = mealProtein[m.key] ?? 0;
-                const pct = Math.min(100, Math.round((value / Math.max(1, paceTarget)) * 100));
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {featuredFoods.map((item) => {
+                const scaled = scaleNutrients(item.per100g, item.defaultServingGrams);
                 return (
-                  <div key={m.key}>
-                    <div className="mb-1 flex justify-between text-[10px]">
-                      <span className="text-mist">{m.label}</span>
-                      <span className={cn("font-numeric", value >= paceTarget ? "text-acid" : "text-dim")}>{Math.round(value)}g</span>
-                    </div>
-                    <div className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
-                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: value >= paceTarget ? "#C9F73A" : "#FFD166" }} />
+                  <div
+                    key={item.id}
+                    className="w-40 shrink-0 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] transition hover:border-acid/40"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setInspectedItem({ item, meal: "lunch", targetDate: todayKey })}
+                      className="block w-full text-left"
+                    >
+                      <div className="relative h-24 w-full overflow-hidden">
+                        <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+                        <span className="absolute bottom-1.5 right-1.5 rounded-full bg-black/75 px-2 py-0.5 font-mono text-[9px] font-semibold text-acid">
+                          {convertEnergy(scaled.kcal, energyUnit)} {energyUnit}
+                        </span>
+                      </div>
+                      <div className="p-2.5 pb-1.5">
+                        <p className="truncate text-xs font-semibold text-chalk">{item.name}</p>
+                        <p className="mt-0.5 font-mono text-[9.5px] text-dim">{Math.round(scaled.protein)}g P · {item.defaultServingLabel}</p>
+                      </div>
+                    </button>
+                    <div className="px-2.5 pb-2.5">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-7 w-full text-[11px]"
+                        disabled={busy}
+                        onClick={() => logCatalogItem(item, item.defaultServingGrams, "lunch", item.defaultServingLabel, todayKey)}
+                      >
+                        <Plus className="size-3" /> Quick log
+                      </Button>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
-          <button onClick={openTargets} className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/[0.08] py-2 text-[10.5px] text-mist transition-colors hover:border-white/15 hover:text-chalk">
-            Recalculate targets <ChevronRight className="size-3" />
-          </button>
-        </Card>
-      </div>
+          </Card>
 
-      {/* ───────────── MANUAL LOG SHEET ───────────── */}
-      <Sheet open={sheet?.type === "manual"} onClose={() => setSheet(null)} eyebrow="Manual log" title="Add food">
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="font-mono text-[9px] uppercase tracking-wider text-acid font-bold">
-              Indian & Global Foods (D1, D2)
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setSheet(null);
-                setShowBarcodeScanner(true);
-              }}
-              className="flex items-center gap-1 font-mono text-[9px] text-sky hover:underline"
-            >
-              <ScanLine className="size-3" /> Barcode Scan
-            </button>
-          </div>
+          {/* 4 Meal Sections for Today */}
+          {renderMealSections(todayKey, logs)}
 
-          {/* Search Input */}
-          <div className="relative mb-2">
-            <input
-              type="text"
-              value={indianFoodSearch}
-              onChange={(e) => setIndianFoodSearch(e.target.value)}
-              placeholder="Search dal, paneer, roti, biryani, whey..."
-              className="h-9 w-full rounded-xl border border-white/[0.09] bg-white/[0.03] px-3 text-[11.5px] text-chalk placeholder:text-dim focus:border-acid/50 focus:outline-none"
+          {/* 2024 Compendium MET Activity Logger */}
+          <Card className="p-5">
+            <CardHeader
+              label="2024 Compendium of Physical Activities"
+              title="Log activity expenditure (MET)"
+              action={<Badge tone="mint">+{convertEnergy(extraBurned, energyUnit)} {energyUnit} today</Badge>}
             />
-          </div>
-
-          {/* Category Chips */}
-          <div className="flex gap-1 overflow-x-auto pb-1.5 no-scrollbar mb-2">
-            {[
-              { id: "all", label: "All" },
-              { id: "high_protein", label: "High Protein" },
-              { id: "staples", label: "Indian Staples" },
-              { id: "vegetarian", label: "Veg" },
-              { id: "vegan", label: "Vegan" },
-            ].map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setIndianFoodFilter(cat.id as any)}
-                className={cn(
-                  "shrink-0 rounded-full border px-2.5 py-0.5 font-mono text-[8.5px] uppercase tracking-wider transition-colors",
-                  indianFoodFilter === cat.id
-                    ? "border-acid bg-acid/15 text-acid font-bold"
-                    : "border-white/[0.08] text-dim hover:text-mist",
-                )}
+            <div className="mt-4 flex flex-wrap items-center gap-2.5">
+              <select
+                value={selectedActivityCode}
+                onChange={(e) => setSelectedActivityCode(e.target.value)}
+                className="h-10 min-w-[200px] flex-1 rounded-xl border border-white/10 bg-white/[0.03] px-3 text-xs text-chalk"
               >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Food Picks Carousel */}
-          <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-            {filteredIndianFoods.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() =>
-                  setForm((prev) => ({
-                    ...prev,
-                    name: f.name,
-                    serving: f.servingUnit,
-                    calories: String(f.calories),
-                    protein: String(f.protein),
-                    carbs: String(f.carbs),
-                    fat: String(f.fat),
-                  }))
-                }
-                className="shrink-0 rounded-xl border border-white/[0.08] bg-white/[0.03] p-2 text-left transition-colors hover:border-acid/30 hover:bg-white/[0.05]"
-              >
-                <p className="text-[11px] font-semibold text-chalk truncate max-w-[150px]">{f.name}</p>
-                <p className="font-mono text-[8px] text-dim">{f.servingUnit} · {f.calories} kcal</p>
-                <span className="font-mono text-[8px] text-acid font-bold">+{f.protein}g P</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <form onSubmit={submitManual} className="space-y-3.5">
-          <div>
-            <label className="label-mono mb-1.5 block">Food name</label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="e.g. Paneer bhurji + 2 roti"
-              required
-              className="h-11 w-full rounded-xl border border-white/[0.09] bg-white/[0.03] px-3.5 text-[13px] text-chalk placeholder:text-dim focus:border-acid/50 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="label-mono mb-1.5 block">Meal</label>
-            <div className="grid grid-cols-4 gap-1.5">
-              {MEALS.map((m) => (
-                <button
-                  key={m.key}
-                  type="button"
-                  onClick={() => setForm({ ...form, meal: m.key })}
-                  className={cn(
-                    "rounded-lg border py-2 font-mono text-[8.5px] uppercase tracking-[0.08em] transition-colors",
-                    form.meal === m.key ? "border-acid/40 bg-acid/10 text-acid" : "border-white/[0.08] text-dim hover:text-mist",
-                  )}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="label-mono mb-1.5 block">Serving</label>
-              <input
-                value={form.serving}
-                onChange={(e) => setForm({ ...form, serving: e.target.value })}
-                placeholder="1 plate"
-                className="h-10 w-full rounded-xl border border-white/[0.09] bg-white/[0.03] px-3 text-[12px] text-chalk placeholder:text-dim focus:border-acid/50 focus:outline-none"
-              />
-            </div>
-            {[
-              { key: "calories", label: "Calories", unit: "kcal" },
-              { key: "protein", label: "Protein", unit: "g" },
-              { key: "carbs", label: "Carbs", unit: "g" },
-              { key: "fat", label: "Fat", unit: "g" },
-            ].map((field) => (
-              <div key={field.key}>
-                <label className="label-mono mb-1.5 block">{field.label} <span className="text-dim">({field.unit})</span></label>
+                {ONT_COMPENDIUM_ACTIVITIES.map((a) => (
+                  <option key={a.code} value={a.code}>
+                    {a.name} ({a.mets} MET · {a.detail})
+                  </option>
+                ))}
+              </select>
+              <div className="flex items-center gap-1.5">
                 <input
                   type="number"
-                  min="0"
-                  step={field.key === "calories" ? "1" : "0.1"}
-                  value={form[field.key as keyof typeof form]}
-                  onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
-                  placeholder="0"
-                  className="h-10 w-full rounded-xl border border-white/[0.09] bg-white/[0.03] px-3 font-numeric text-[12px] text-chalk placeholder:text-dim focus:border-acid/50 focus:outline-none"
+                  min="5"
+                  max="360"
+                  value={activityDurationMin}
+                  onChange={(e) => setActivityDurationMin(Math.max(5, Number(e.target.value) || 5))}
+                  className="h-10 w-20 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 font-numeric text-xs text-chalk"
                 />
+                <span className="font-mono text-[10px] text-dim">min</span>
               </div>
-            ))}
-          </div>
-
-          <div className="rounded-xl border border-white/[0.06] bg-black/15 px-3.5 py-2.5 text-[10.5px] text-dim">
-            {form.meal !== manualMeal ? "Meal changed · " : ""}
-            Macros are saved as entered. Photo and voice entries use the same database.
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <Button type="button" variant="ghost" size="md" className="flex-1" onClick={() => setSheet(null)}>Cancel</Button>
-            <Button type="submit" size="md" className="flex-1" disabled={busy || !form.name.trim()}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Log food
-            </Button>
-          </div>
-        </form>
-      </Sheet>
-
-      {/* ───────────── PHOTO SHEET ───────────── */}
-      <Sheet open={sheet?.type === "scan"} onClose={() => setSheet(null)} eyebrow="Meal photo" title="Attach a photo" wide>
-        <div>
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="group relative flex w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/[0.02] py-10 transition-colors hover:border-acid/40"
-          >
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(201,247,58,0.10),transparent_65%)]" />
-            {photo ? (
-              <img src={photo} alt="Selected meal" className="absolute inset-0 size-full object-cover opacity-70" />
-            ) : (
-              <span className="relative grid size-14 place-items-center rounded-full border border-acid/25 bg-acid/10 text-acid">
-                <Camera className="size-6" />
-              </span>
+              <Button type="button" size="md" onClick={handleAddMetActivity}>
+                <Activity className="size-3.5" /> Add{" "}
+                {convertEnergy(
+                  calculateMetBurnedKcal(
+                    ONT_COMPENDIUM_ACTIVITIES.find((a) => a.code === selectedActivityCode)?.mets ?? 6,
+                    userProfile.weightKg,
+                    activityDurationMin,
+                  ),
+                  energyUnit,
+                )}{" "}
+                {energyUnit}
+              </Button>
+            </div>
+            {todayActivities.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {todayActivities.map((a) => (
+                  <div key={a.id} className="inline-flex items-center gap-2 rounded-full border border-mint/25 bg-mint/[0.06] px-3 py-1.5 text-xs">
+                    <Flame className="size-3.5 text-mint" />
+                    <span className="font-semibold text-chalk">{a.name}</span>
+                    <span className="font-mono text-[10px] text-mist">{a.durationMin}m · {convertEnergy(a.calories, energyUnit)} {energyUnit}</span>
+                    <button type="button" onClick={() => removeMetActivity(a.id)} aria-label={`Remove ${a.name}`} className="text-dim hover:text-flame">
+                      <Trash2 className="size-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
-            <p className="relative mt-4 font-display text-lg font-bold">{photo ? "Photo attached" : "Take or choose a photo"}</p>
-            <p className="relative mt-1 max-w-xs text-center text-[11px] leading-relaxed text-mist">
-              {photo ? "Tap to replace. Continue below to enter what you ate." : "The photo is stored with the entry as a reference. Macros are entered and confirmed by you."}
-            </p>
-            <span className="relative mt-4 rounded-full bg-acid px-4 py-2 text-[11px] font-semibold text-ink">
-              {photo ? "Replace photo" : "Open camera"}
-            </span>
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-          />
-
-          <div className="mt-4 rounded-xl border border-amber/20 bg-amber/[0.05] p-3 text-[10.5px] leading-relaxed text-mist">
-            <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-amber">
-              {VISION_ENABLED ? "Recognition on" : "Recognition off"}
-            </p>
-            <p className="mt-1">
-              {VISION_ENABLED
-                ? "The vision model will prefill components; you confirm every item before it logs."
-                : "Automatic food recognition needs a vision API key (FOOD_VISION_API_KEY). Without it Forge will not guess your macros — the photo is kept as a reference and the numbers are yours."}
-            </p>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2">
-            <Button size="md" onClick={() => openManual(defaultMealForHour(new Date().getHours()), "photo")} disabled={!photo}>
-              <Utensils className="size-3.5" /> Enter this meal
-            </Button>
-            <Button variant="ghost" size="md" onClick={() => openManual(defaultMealForHour(new Date().getHours()), "manual")}>
-              Log without a photo
-            </Button>
-          </div>
+          </Card>
         </div>
-      </Sheet>
+      )}
 
-      {/* ───────────── TARGETS SHEET ───────────── */}
-      <Sheet open={sheet?.type === "targets"} onClose={() => setSheet(null)} eyebrow="Daily targets" title="Set the inputs">
-        <form onSubmit={submitTargets} className="space-y-4">
-          {/* TDEE Calculator Module (D3) */}
-          <div className="rounded-2xl border border-acid/20 bg-acid/[0.04] p-3.5 text-[11px]">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-chalk">Mifflin-St Jeor TDEE Calculator</span>
-              <span className="rounded bg-acid/15 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider text-acid font-bold">
-                Auto-Calculate (D3)
-              </span>
-            </div>
-            <p className="mt-1 text-[10.5px] text-mist">
-              Prescribes optimal calories & macro distribution based on your physiological parameters ({userProfile?.weightKg ?? 78}kg, {userProfile?.heightCm ?? 178}cm, {userProfile?.sex ?? "male"}).
-            </p>
+      {/* ──────────────── TAB 2: DIARY CALENDAR ──────────────── */}
+      {activeTab === "diary" && (
+        <DiaryTabView
+          todayKey={todayKey}
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+          allLogs={allLogs}
+          waterByDate={waterByDate}
+          burnedByDate={mergedBurnedByDate}
+          targets={targets}
+          energyUnit={energyUnit}
+          mealPatternId={mealPatternId}
+          onChangeMealPattern={saveMealPattern}
+          gender={userProfile.sex as OntGender}
+          age={userProfile.age}
+          onAddWater={handleWaterAction}
+          onOpenAddFood={(meal) => {
+            setAddFoodDate(selectedDate);
+            setAddFoodMeal(meal);
+          }}
+          renderMealSections={renderMealSections}
+        />
+      )}
 
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <div>
-                <label className="font-mono text-[8px] uppercase tracking-wider text-dim block mb-1">Goal</label>
-                <select
-                  value={tdeeGoal}
-                  onChange={(e) => setTdeeGoal(e.target.value as NutritionGoal)}
-                  className="h-8 w-full rounded-lg border border-white/10 bg-black/40 px-2 font-mono text-[10px] text-chalk focus:outline-none"
-                >
-                  <option value="fat_loss">Fat Loss (-500 kcal)</option>
-                  <option value="maintenance">Maintenance</option>
-                  <option value="lean_bulk">Lean Bulk (+300 kcal)</option>
-                  <option value="aggressive_bulk">Aggressive Bulk (+500 kcal)</option>
-                </select>
-              </div>
-              <div>
-                <label className="font-mono text-[8px] uppercase tracking-wider text-dim block mb-1">Activity</label>
-                <select
-                  value={tdeeActivity}
-                  onChange={(e) => setTdeeActivity(e.target.value as ActivityLevel)}
-                  className="h-8 w-full rounded-lg border border-white/10 bg-black/40 px-2 font-mono text-[10px] text-chalk focus:outline-none"
-                >
-                  <option value="sedentary">Sedentary (1.2x)</option>
-                  <option value="light">Light (1.375x)</option>
-                  <option value="moderate">Moderate (1.55x)</option>
-                  <option value="very_active">Very Active (1.725x)</option>
-                  <option value="athlete">Athlete (1.9x)</option>
-                </select>
-              </div>
-            </div>
+      {/* ──────────────── TAB 3: TRENDS ──────────────── */}
+      {activeTab === "trends" && (
+        <TrendsTabView
+          dailyHistory={dailyHistory}
+          weightHistory={weightHistory}
+          targets={targets}
+          energyUnit={energyUnit}
+          streak={streak}
+        />
+      )}
 
-            <button
-              type="button"
-              onClick={() => {
-                const res = calculateTDEE({
-                  weightKg: userProfile?.weightKg ?? 78,
-                  heightCm: userProfile?.heightCm ?? 178,
-                  age: userProfile?.age ?? 26,
-                  sex: userProfile?.sex ?? "male",
-                  activityLevel: tdeeActivity,
-                  goal: tdeeGoal,
-                });
-                setTargetForm({
-                  calories: String(res.targetCalories),
-                  protein: String(res.targetProtein),
-                  carbs: String(res.targetCarbs),
-                  fat: String(res.targetFat),
-                  waterMl: String(res.targetWaterMl),
-                });
-              }}
-              className="press mt-3 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-acid font-semibold text-ink text-[11px]"
-            >
-              <Zap className="size-3" /> Compute & Apply Mifflin-St Jeor Targets
-            </button>
-          </div>
+      {/* ──────────────── TAB 4: YOU, BMI, IOM 2005 TDEE & RECIPES ──────────────── */}
+      {activeTab === "you" && (
+        <YouRecipesTabView
+          firstName={firstName}
+          userProfile={userProfile}
+          allLogs={allLogs}
+          customRecipes={customRecipes}
+          energyUnit={energyUnit}
+          todayKey={todayKey}
+          onToggleEnergyUnit={saveEnergyUnit}
+          onApplyTargets={handleSaveTargetForm}
+          onAddRecipe={addCustomRecipe}
+          onDeleteRecipe={deleteCustomRecipe}
+          onLogRecipe={(item) => logCatalogItem(item, item.defaultServingGrams, "lunch", item.defaultServingLabel, todayKey)}
+          onInspectRecipe={(item) => setInspectedItem({ item, meal: "lunch", targetDate: todayKey })}
+          onOpenCitations={() => setShowCitations(true)}
+        />
+      )}
 
-          <div className="rounded-xl border border-sky/15 bg-sky/[0.05] p-3 text-[10.5px] leading-relaxed text-mist">
-            Forge uses these targets for the protein generator, pacing, and weekly adherence. Your coach adapts calorie targets to training load.
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { key: "calories", label: "Calories", unit: "kcal", step: "10" },
-              { key: "protein", label: "Protein", unit: "g", step: "5" },
-              { key: "carbs", label: "Carbs", unit: "g", step: "5" },
-              { key: "fat", label: "Fat", unit: "g", step: "5" },
-              { key: "waterMl", label: "Water", unit: "ml", step: "100" },
-            ].map((field) => (
-              <div key={field.key} className={field.key === "waterMl" ? "col-span-2" : ""}>
-                <label className="label-mono mb-1.5 block">{field.label} <span className="text-dim">({field.unit})</span></label>
-                <input
-                  type="number"
-                  min="0"
-                  step={field.step}
-                  value={targetForm[field.key as keyof typeof targetForm]}
-                  onChange={(e) => setTargetForm({ ...targetForm, [field.key]: e.target.value })}
-                  className="h-11 w-full rounded-xl border border-white/[0.09] bg-white/[0.03] px-3.5 font-numeric text-[13px] text-chalk focus:border-acid/50 focus:outline-none"
-                />
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2 pt-1">
-            <Button type="button" variant="ghost" size="md" className="flex-1" onClick={() => setSheet(null)}>Cancel</Button>
-            <Button type="submit" size="md" className="flex-1" disabled={busy}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : <Target className="size-4" />} Save targets
-            </Button>
-          </div>
-        </form>
-      </Sheet>
+      {/* ──────────────── MODALS & SHEETS ──────────────── */}
+      <AddFoodSheet
+        open={Boolean(addFoodMeal)}
+        initialMeal={addFoodMeal ?? "lunch"}
+        activeDateLabel={addFoodDate === todayKey ? "Today" : formatDateKeyNice(addFoodDate)}
+        energyUnit={energyUnit}
+        allLogs={allLogs}
+        customRecipes={customRecipes}
+        busy={busy}
+        onClose={() => setAddFoodMeal(null)}
+        onOpenBarcode={() => {
+          setAddFoodMeal(null);
+          setShowBarcodeScanner(true);
+        }}
+        onOpenPhoto={() => {
+          setAddFoodMeal(null);
+          setShowPhotoScanner(true);
+        }}
+        onInspectItem={(item, meal) => {
+          setAddFoodMeal(null);
+          setInspectedItem({ item, meal, targetDate: addFoodDate });
+        }}
+        onQuickLog={(item, grams, meal, label) => logCatalogItem(item, grams, meal, label, addFoodDate)}
+        onSubmitCustom={async (data) => {
+          await persistFoodLog({ ...data, source: "manual", date: addFoodDate });
+          setAddFoodMeal(null);
+        }}
+      />
 
-      {/* Barcode Scanner Modal (D1) */}
+      <FoodDetailSheet
+        item={inspectedItem?.item ?? null}
+        initialMeal={inspectedItem?.meal ?? "lunch"}
+        activeDateLabel={
+          inspectedItem?.targetDate === todayKey || !inspectedItem
+            ? "Today"
+            : formatDateKeyNice(inspectedItem.targetDate)
+        }
+        dayTotals={activeDateDayTotals}
+        calTarget={effectiveGoalKcal}
+        energyUnit={energyUnit}
+        gender={userProfile.sex as OntGender}
+        age={userProfile.age}
+        busy={busy}
+        onClose={() => setInspectedItem(null)}
+        onAddFood={(item, grams, meal, label) =>
+          logCatalogItem(item, grams, meal, label, inspectedItem?.targetDate ?? todayKey)
+        }
+      />
+
+      <TargetsSheet
+        open={showTargetsSheet}
+        targetForm={targetForm}
+        busy={busy}
+        onChange={setTargetForm}
+        onClose={() => setShowTargetsSheet(false)}
+        onSubmit={submitTargetsForm}
+      />
+
+      <CitationsSheet open={showCitations} onClose={() => setShowCitations(false)} />
+
       {showBarcodeScanner && (
         <BarcodeScannerModal
           onClose={() => setShowBarcodeScanner(false)}
           onSelectFood={(food) => {
-            quickAdd({
-              name: food.name,
-              serving: food.servingUnit,
-              protein: food.protein,
-              calories: food.calories,
-            });
+            const item = ifctToCatalogItem(food);
             setShowBarcodeScanner(false);
+            setInspectedItem({ item, meal: "snack", targetDate: addFoodDate });
           }}
         />
       )}
 
-      {/* Photo-to-Macro Scanner Modal (D5) */}
       {showPhotoScanner && (
         <PhotoMealScanner
           open={showPhotoScanner}
           onClose={() => setShowPhotoScanner(false)}
-          onLogMeal={(m) => {
-            quickAdd({
+          onLogMeal={async (m) => {
+            await persistFoodLog({
               name: m.title,
-              serving: "1 athlete bowl",
-              protein: m.totalProtein,
+              meal: "lunch",
+              serving: "1 scanned plate",
               calories: m.totalCalories,
+              protein: m.totalProtein,
+              carbs: m.totalCarbs,
+              fat: m.totalFat,
+              source: "photo",
+              date: addFoodDate,
             });
             setShowPhotoScanner(false);
           }}
         />
       )}
     </>
-  );
-}
-
-/* ───────────────────────────── WEEK BARS ───────────────────────────── */
-
-function WeekBars({ week, target }: { week: Props["week"]; target: number }) {
-  const max = Math.max(target, ...week.map((d) => d.calories), 1) * 1.08;
-  return (
-    <div className="mt-5">
-      <div className="relative h-40">
-        <div
-          className="pointer-events-none absolute inset-x-0 border-t border-dashed border-acid/30"
-          style={{ bottom: `${(target / max) * 100}%` }}
-        >
-          <span className="absolute -top-4 right-0 font-mono text-[8px] uppercase tracking-[0.1em] text-acid/60">target {fmt(target)}</span>
-        </div>
-        <div className="flex h-full items-end gap-2 md:gap-3">
-          {week.map((d, i) => {
-            const pct = Math.max(4, (d.calories / max) * 100);
-            const onTarget = Math.abs(d.calories - target) <= target * 0.12;
-            const isToday = i === week.length - 1;
-            return (
-              <div key={d.key} className="group relative flex h-full flex-1 flex-col justify-end gap-2">
-                <div
-                  className="relative w-full rounded-t-md transition-all duration-500 group-hover:brightness-125"
-                  style={{
-                    height: `${pct}%`,
-                    background: isToday ? "#C9F73A" : onTarget ? "rgba(201,247,58,0.35)" : "rgba(255,255,255,0.10)",
-                    boxShadow: isToday ? "0 0 24px -6px rgba(201,247,58,0.45)" : undefined,
-                  }}
-                >
-                  {isToday && <div className="absolute inset-0 bg-gradient-to-t from-black/0 to-white/25" />}
-                </div>
-                <span className={cn("text-center font-mono text-[8.5px] uppercase tracking-[0.06em]", isToday ? "text-chalk" : "text-dim")}>{d.label}</span>
-                <span className="pointer-events-none absolute -top-7 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border border-white/10 bg-panel-3 px-2 py-1 font-numeric text-[9px] text-chalk opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
-                  {fmt(d.calories)} kcal · {Math.round(d.protein)}g P
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
   );
 }

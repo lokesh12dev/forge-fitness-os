@@ -9,7 +9,7 @@ import { joinChallenge } from "@/app/actions";
 import { relativeTime } from "@/lib/date";
 import { Avatar, Badge, ButtonLink, ProgressBar } from "@/components/ui";
 import { Card, CardHeader, PageHeader } from "@/components/page-header";
-import { CheckInButton, PostComposer, SocialFeed } from "@/components/social-client";
+import { CheckInButton, PostComposer, ShareCardTrigger, SocialFeed } from "@/components/social-client";
 import type { SocialComment, SocialPost, SocialUser } from "@/components/social-client";
 
 function toSocialUser(u: {
@@ -94,6 +94,12 @@ export default async function SocialPage() {
             <ButtonLink href="#leaderboard" variant="secondary" size="md">
               <Trophy className="size-3.5" /> Leaderboard
             </ButtonLink>
+            <ShareCardTrigger
+              workoutTitle="PPL Push Session Complete"
+              volumeKg={communityVolume}
+              streakDays={user.streak}
+              userName={user.name}
+            />
             <CheckInButton gyms={gyms} />
           </>
         }

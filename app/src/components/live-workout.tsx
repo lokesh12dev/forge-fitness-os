@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
-  ArrowLeft, ArrowRight, Check, ChevronDown, Clock, Dumbbell, Flame, Info,
-  Layers, Mic, Plus, Search, Sparkles, Timer, Trash2, TrendingUp, Trophy,
+  ArrowLeft, ArrowRight, Check, ChevronDown, Clock, Dumbbell, Flame, Footprints,
+  Info, Layers, Mic, Plus, Search, Sparkles, Timer, Trash2, TrendingUp, Trophy,
   Users, Wand2, X, Zap,
 } from "lucide-react";
 import { Badge } from "@/components/ui";
@@ -14,6 +14,7 @@ import { SyncStatusPill } from "@/components/sync-status-pill";
 import { PlateCalculatorModal } from "@/components/plate-calculator";
 import { FloatingRestTimer, type RestTimerState } from "@/components/rest-timer";
 import { SetRow, type SetType } from "@/components/workout-keypad";
+import { CardioModal } from "@/components/cardio-modal";
 import { syncManager } from "@/lib/offline-sync";
 import { matchExercise } from "@/lib/exercise-aliases";
 import { cn, formatClock, formatVolume, titleCase } from "@/lib/utils";
@@ -92,6 +93,7 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
   const [showCues, setShowCues] = useState(false);
   const [showPlateCalc, setShowPlateCalc] = useState(false);
   const [showCompress, setShowCompress] = useState(false);
+  const [showCardioModal, setShowCardioModal] = useState(false);
   const [showWhy, setShowWhy] = useState(false);
   const [activeProfile, setActiveProfile] = useState<EquipmentProfileId>("commercial");
   const [voiceConfirm, setVoiceConfirm] = useState<ParsedLogCommand | null>(null);
@@ -709,18 +711,21 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
       </div>
 
       {/* actions */}
-      <div className="mt-3 grid grid-cols-4 gap-2">
-        <button onClick={() => setShowCompress(true)} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[10px] text-mist hover:border-grape/30 hover:text-grape">
-          <Wand2 className="size-4" /> Compress
+      <div className="mt-3 grid grid-cols-5 gap-1.5">
+        <button onClick={() => setShowCompress(true)} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[9.5px] text-mist hover:border-grape/30 hover:text-grape">
+          <Wand2 className="size-3.5" /> Compress
         </button>
-        <button onClick={toggleCrowdedGym} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[10px] text-mist hover:border-amber/30 hover:text-amber">
-          <Users className="size-4" /> Crowded
+        <button onClick={toggleCrowdedGym} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[9.5px] text-mist hover:border-amber/30 hover:text-amber">
+          <Users className="size-3.5" /> Crowded
         </button>
-        <button onClick={() => setShowSwap(true)} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[10px] text-mist hover:border-sky/30 hover:text-sky">
-          <ArrowRight className="size-4" /> Swap
+        <button onClick={() => setShowCardioModal(true)} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[9.5px] text-mist hover:border-mint/30 hover:text-mint">
+          <Footprints className="size-3.5" /> Cardio
         </button>
-        <button onClick={() => setShowAdd(true)} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[10px] text-mist hover:border-acid/30 hover:text-acid">
-          <Plus className="size-4" /> Add lift
+        <button onClick={() => setShowSwap(true)} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[9.5px] text-mist hover:border-sky/30 hover:text-sky">
+          <ArrowRight className="size-3.5" /> Swap
+        </button>
+        <button onClick={() => setShowAdd(true)} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[9.5px] text-mist hover:border-acid/30 hover:text-acid">
+          <Plus className="size-3.5" /> Add lift
         </button>
       </div>
 
@@ -846,6 +851,15 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
           exercises={items}
           onApply={(targetMin) => doCompressWithTime(targetMin)}
           onClose={() => setShowCompress(false)}
+        />
+      )}
+
+      {/* cardio modal (A12) */}
+      {showCardioModal && (
+        <CardioModal
+          open={showCardioModal}
+          onClose={() => setShowCardioModal(false)}
+          onSave={(entry) => setToast(`Cardio logged: ${entry.durationMinutes}m ${entry.modality} (${entry.calories} kcal)`)}
         />
       )}
 

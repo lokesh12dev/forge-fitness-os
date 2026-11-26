@@ -13,6 +13,7 @@ import { Card, CardHeader, PageHeader } from "@/components/page-header";
 import { MacroBar, Ring } from "@/components/charts";
 import { MacroRings } from "@/components/macro-rings";
 import { BarcodeScannerModal } from "@/components/barcode-scanner-modal";
+import { PhotoMealScanner } from "@/components/photo-meal-scanner";
 import { FOOD_DATABASE, searchFoods, type FoodItem as IndianFoodItem } from "@/lib/food-db";
 import { calculateTDEE, hitRemainingProtein, type ActivityLevel, type NutritionGoal } from "@/lib/nutrition-engine";
 import { cn } from "@/lib/utils";
@@ -172,6 +173,7 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
   const router = useRouter();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [showPhotoScanner, setShowPhotoScanner] = useState(false);
   const [indianFoodSearch, setIndianFoodSearch] = useState("");
   const [indianFoodFilter, setIndianFoodFilter] = useState<"all" | "high_protein" | "vegetarian" | "vegan" | "staples">("all");
   const [manualMeal, setManualMeal] = useState(defaultMealForHour(new Date().getHours()));
@@ -262,8 +264,7 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
   }
 
   function openScan() {
-    setPhoto(null);
-    setSheet({ type: "scan" });
+    setShowPhotoScanner(true);
   }
 
   function openTargets() {
@@ -1082,6 +1083,23 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
               calories: food.calories,
             });
             setShowBarcodeScanner(false);
+          }}
+        />
+      )}
+
+      {/* Photo-to-Macro Scanner Modal (D5) */}
+      {showPhotoScanner && (
+        <PhotoMealScanner
+          open={showPhotoScanner}
+          onClose={() => setShowPhotoScanner(false)}
+          onLogMeal={(m) => {
+            quickAdd({
+              name: m.title,
+              serving: "1 athlete bowl",
+              protein: m.totalProtein,
+              calories: m.totalCalories,
+            });
+            setShowPhotoScanner(false);
           }}
         />
       )}

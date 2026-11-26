@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { addComment, checkIn, createPost, toggleFollow, toggleLike } from "@/app/actions";
 import { Avatar, Badge, Button, IconButton } from "@/components/ui";
+import { ShareCardModal } from "@/components/share-card-modal";
 import { relativeTime } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
@@ -543,6 +544,47 @@ export function CheckInButton({ gyms }: { gyms: GymView[] }) {
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+/* ───────────────────────────── SHARECARD TRIGGER (G2, G3) ───────────────────────────── */
+
+export function ShareCardTrigger({
+  workoutTitle,
+  volumeKg,
+  setsCount,
+  streakDays,
+  prHighlight,
+  userName,
+}: {
+  workoutTitle?: string;
+  volumeKg?: number;
+  setsCount?: number;
+  streakDays?: number;
+  prHighlight?: string;
+  userName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="press inline-flex h-9 items-center gap-1.5 rounded-full border border-acid/30 bg-acid/10 px-3.5 text-[11.5px] font-semibold text-acid hover:bg-acid hover:text-ink transition-colors"
+      >
+        <Share2 className="size-3.5" /> ShareCard
+      </button>
+      <ShareCardModal
+        open={open}
+        onClose={() => setOpen(false)}
+        workoutTitle={workoutTitle}
+        volumeKg={volumeKg}
+        setsCount={setsCount}
+        streakDays={streakDays}
+        prHighlight={prHighlight}
+        userName={userName}
+      />
     </>
   );
 }

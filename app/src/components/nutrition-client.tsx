@@ -81,38 +81,12 @@ const PROTEIN_PICKS = [
   { name: "Dal + curd bowl", serving: "1 bowl", protein: 18, calories: 320, tags: ["vegetarian", "home"] },
 ];
 
-const DETECTIONS: { title: string; subtitle: string; confidence: number; items: FoodItem[] }[] = [
-  {
-    title: "North Indian home plate",
-    subtitle: "Paneer bhurji · whole-wheat roti · kachumber",
-    confidence: 96,
-    items: [
-      { name: "Paneer bhurji", serving: "1 bowl · 180 g", calories: 390, protein: 24, carbs: 12, fat: 27 },
-      { name: "Whole-wheat roti", serving: "2 pieces", calories: 210, protein: 7, carbs: 38, fat: 3 },
-      { name: "Kachumber salad", serving: "1 side", calories: 45, protein: 1, carbs: 8, fat: 1 },
-    ],
-  },
-  {
-    title: "Chicken rice bowl",
-    subtitle: "Grilled chicken · basmati rice · sautéed veg",
-    confidence: 94,
-    items: [
-      { name: "Grilled chicken", serving: "150 g", calories: 248, protein: 35, carbs: 0, fat: 5 },
-      { name: "Basmati rice", serving: "200 g cooked", calories: 260, protein: 5, carbs: 56, fat: 1 },
-      { name: "Sautéed vegetables", serving: "1 cup", calories: 110, protein: 3, carbs: 12, fat: 6 },
-    ],
-  },
-  {
-    title: "South Indian breakfast",
-    subtitle: "Idli · sambar · coconut chutney",
-    confidence: 92,
-    items: [
-      { name: "Idli", serving: "2 pieces", calories: 140, protein: 4, carbs: 28, fat: 1 },
-      { name: "Sambar", serving: "1 bowl", calories: 120, protein: 6, carbs: 18, fat: 3 },
-      { name: "Coconut chutney", serving: "2 tbsp", calories: 90, protein: 1, carbs: 3, fat: 8 },
-    ],
-  },
-];
+/**
+ * Food recognition requires a vision model. No key is configured in this build,
+ * so the photo flow attaches the image to a manual entry instead of inventing
+ * macros. Set FOOD_VISION_API_KEY to enable automatic detection.
+ */
+const VISION_ENABLED = false;
 
 const SOURCE_META: Record<string, { label: string; tone: "acid" | "sky" | "mint" | "grape" | "neutral"; icon: typeof Camera }> = {
   photo: { label: "Photo", tone: "grape", icon: Camera },
@@ -207,15 +181,10 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
   const [proteinFilter, setProteinFilter] = useState("all");
   const [waterPending, startWater] = useTransition();
 
-  // Scanner state
-  const [scanState, setScanState] = useState<"idle" | "scanning" | "result">("idle");
-  const [scanStep, setScanStep] = useState(0);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [detection, setDetection] = useState<(typeof DETECTIONS)[number] | null>(null);
-  const [checkedItems, setCheckedItems] = useState<boolean[]>([]);
-  const [scanMeal, setScanMeal] = useState(defaultMealForHour(new Date().getHours()));
-  const [scanBusy, setScanBusy] = useState(false);
-  const demoIndex = useRef(0);
+  // Photo state. Recognition is disabled until a vision key exists; the photo is
+  // attached to a manual entry so no macro is invented.
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [formSource, setFormSource] = useState<"manual" | "photo">("manual");
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Targets state

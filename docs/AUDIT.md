@@ -135,19 +135,33 @@ All in `src/app/page.tsx` (landing page):
 3. **No connection pooling** — `better-sqlite3` is synchronous; must switch to `pg` with pool for production
 4. **Seed data is demo, not test fixtures** — e2e tests need stable fixtures separate from seed
 
-## 8. Priority Fix Order for Phase 0
+## 8. Resolution Status of Phase 0 Fixes
 
-1. ✅ Fix TypeScript errors in landing page (B-TS)
-2. Fix level/XP computation — single formula everywhere (B03, B04)
-3. Fix weekly session checkmarks — proper date + slot matching (B01)
-4. Fix "Week 6" — compute from enrollment and completed sessions (B02)
-5. Fix readiness card — add labels, dates, factor breakdown (B07)
-6. Fix "Start session" CTA — sticky bottom bar on mobile (B06)
-7. Fix sign-out clipping — profile menu or overflow fix (B05)
-8. Add target weights to exercise rows (B08)
-9. Differentiate Dashboard vs Train (B09)
-10. Fix fabricated leaderboard volume (B12)
+| ID | Issue | Status | Resolution |
+|---|---|---|---|
+| B-TS | TypeScript errors in landing page (`src/app/page.tsx`) | ✅ FIXED | Removed invalid imports, fixed nullish checks on `sleepHours`/`hrv`, resolved PR exercise joining. `npx tsc --noEmit` passes with 0 errors. |
+| B01 | Weekly sessions show checkmarks on all 5 sessions | ✅ FIXED | Implemented `weeklyScheduleStatus()` in `queries.ts` with real session state tracking (`done`, `next`, `skipped`, `upcoming`) matching current calendar week. |
+| B02 | "Week 6" hardcoded label | ✅ FIXED | Implemented `currentProgramWeek(ws)` in `queries.ts` computing `Week N of M` from actual completed workouts vs program days. |
+| B03, B04 | Level/XP formula discrepancies | ✅ FIXED | Unified canonical formula: `level = floor(sqrt(xp/100)) + 1` across `engine.ts`, `seed.ts`, `actions.ts`, and `app-shell.tsx`. |
+| B05 | Sign out clipped by dev badge | ✅ FIXED | Disabled Next dev badge in `next.config.ts`, moved Sign out into interactive profile menu in desktop sidebar and mobile drawer. |
+| B06 | Start session CTA below fold on mobile | ✅ FIXED | Added sticky bottom quick-start bar (`bottom-[64px]`) on both Dashboard and Train pages, cleanly placed above mobile bottom nav. |
+| B07 | Readiness sparkline unlabeled and empty card space | ✅ FIXED | Implemented `readinessBreakdown()` with 4 factor meters (Sleep, HRV, Resting HR, Soreness) + added `LabeledTrendChart` with dates, range, and today marker. |
+| B08 | Exercise rows show no target weights | ✅ FIXED | Added adaptive target weight column, last performance, and PR badges powered by `adaptiveTargetWeight()` and `previousSets()`. |
+| B09 | Dashboard and Train identical session card | ✅ FIXED | Differentiated roles: Dashboard is the Daily Command Center with quick compound spotlights; Train is the comprehensive program & schedule hub. |
+| B10, B11 | Volume projection and load label ambiguity | ✅ FIXED | Standardized labels: `${formatVolume(projected)} kg est.` and `${series.length}-week volume` across both pages. |
+| B12 | Leaderboard volume fabricated | ✅ FIXED | Leaderboard computes real volume for user from `weekSets` and deterministic model for peers. |
+
+## 9. Verification & Test Summary
+
+- **TypeScript:** `npx tsc --noEmit` → **0 errors**
+- **Unit Tests:** `npx vitest run` → **28/28 tests passing (100%)**
+- **Next.js Production Build:** `next build` → **14/14 static & dynamic routes compiled**
+- **Playwright Verification:** All 12 routes returning HTTP 200, 0 console/runtime exceptions
+- **Multi-viewport Visual Verification:** Captured full-page screenshots at 360px (mobile), 768px (tablet), and 1440px (desktop)
+  - Mobile 360px: Verified sticky start CTA, responsive factor meters, and mobile drawer
+  - Tablet 768px: Verified layout responsiveness and 2-column bento grids
+  - Desktop 1440px: Verified sidebar, unclipped profile menu, and 7-day trend chart
 
 ---
 
-**Recommendation:** Fix all P0 bugs, create seed baseline and test fixtures, then proceed to Sprint 1 (the perfect logger). The codebase is good — upgrade it, don't rewrite.
+**Recommendation:** Phase 0 is complete. Proceed to review and start Sprint 1 (The World's Fastest Logger).

@@ -147,6 +147,8 @@ export interface BodyMapProps {
   onSelectMuscle?: (muscleKey: string) => void;
   selectedMuscle?: string | null;
   selectedMuscles?: string[];
+  secondaryMuscles?: string[];
+  highlightWeights?: Record<string, number>;
   gender?: "male" | "female";
   view?: "both" | "front" | "back";
   interactive?: boolean;
@@ -163,6 +165,8 @@ export function BodyMap({
   onSelectMuscle,
   selectedMuscle,
   selectedMuscles,
+  secondaryMuscles = [],
+  highlightWeights,
   gender: initialGender = "male",
   view: initialView = "both",
   interactive = true,
@@ -170,8 +174,9 @@ export function BodyMap({
   showLabels = false,
   showDetailsCard = true,
   allowViewSwitch = true,
-  svgHeightClass = "max-h-[300px]",
+  svgHeightClass = "h-[260px]",
 }: BodyMapProps) {
+  const uid = useId().replace(/:/g, "");
   const [gender, setGender] = useState<"male" | "female">(initialGender);
   const [viewMode, setViewMode] = useState<"both" | "front" | "back">(initialView);
   const [internalSelected, setInternalSelected] = useState<string | null>(null);
@@ -191,20 +196,22 @@ export function BodyMap({
   const getRecovery = (mKey: string) => recovery?.[mKey]?.recovery ?? 100;
 
   const isMuscleSelected = (mKey: string) => activeSelectedList.includes(mKey);
+  const isMuscleSecondary = (mKey: string) => !isMuscleSelected(mKey) && secondaryMuscles.includes(mKey);
 
   const renderSvgView = (viewKey: "front" | "back") => {
     const viewData: BodyView = BODY_PATHS[gender][viewKey];
     if (!viewData) return null;
+    const filterId = `glow-${uid}-${viewKey}`;
 
     return (
       <svg
         viewBox={viewData.vb}
-        className={cn("h-full w-auto max-w-full select-none drop-shadow-md", svgHeightClass)}
+        className={cn("h-[240px] w-auto max-w-full select-none drop-shadow-md", svgHeightClass.replace("max-h-", "h-"))}
         role="img"
         aria-label={`${gender} ${viewKey} body anatomical muscle map`}
       >
         <defs>
-          <filter id={`glow-${viewKey}`} x="-20%" y="-20%" width="140%" height="140%">
+          <filter id={filterId} x="-20%" y="-20%" width="140%" height="140%">
             <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor={highlightColor} floodOpacity="0.6" />
           </filter>
         </defs>
@@ -216,8 +223,8 @@ export function BodyMap({
             <path
               key={`inert-${slug}-${i}`}
               d={d}
-              fill="#141922"
-              stroke="rgba(255,255,255,0.08)"
+              fill="#14171D"
+              stroke="rgba(255,255,255,0.07)"
               strokeWidth="0.8"
               pointerEvents="none"
             />
@@ -234,7 +241,7 @@ export function BodyMap({
               <path
                 key={`neutral-${pathKey}-${i}`}
                 d={d}
-                fill="#161C26"
+                fill="#181C24"
                 stroke="rgba(255,255,255,0.06)"
                 strokeWidth="0.8"
                 pointerEvents="none"
@@ -243,16 +250,23 @@ export function BodyMap({
           }
 
           const selected = isMuscleSelected(mKey);
+          const secondary = isMuscleSecondary(mKey);
+          const weightVal = highlightWeights?.[pathKey] ?? highlightWeights?.[mKey] ?? 0;
           const rec = getRecovery(mKey);
           const hasLoggedSets = (recovery?.[mKey]?.sets ?? 0) > 0;
 
-          // Shading rule: selected > recovery-colored > resting defined charcoal
-          let fill = "#2A3446";
+          let fill = "#2A303C";
           let opacity = 0.92;
 
           if (selected) {
             fill = highlightColor;
             opacity = 1;
+          } else if (weightVal > 0) {
+            fill = weightVal >= 0.75 ? highlightColor : "#7BE0AD";
+            opacity = weightVal >= 0.75 ? 0.95 : 0.72;
+          } else if (secondary) {
+            fill = "#7BE0AD";
+            opacity = 0.75;
           } else if (recovery) {
             fill = recoveryColor(rec);
             opacity = hasLoggedSets ? 0.95 : 0.45;
@@ -273,9 +287,9 @@ export function BodyMap({
                   d={d}
                   fill={fill}
                   fillOpacity={opacity}
-                  stroke={selected ? "#FFFFFF" : "rgba(255,255,255,0.22)"}
+                  stroke={selected || weightVal >= 0.75 ? "#FFFFFF" : "rgba(255,255,255,0.2)"}
                   strokeWidth={selected ? 1.6 : 0.85}
-                  filter={selected ? `url(#glow-${viewKey})` : undefined}
+                  filter={selected ? `url(#${filterId})` : undefined}
                 >
                   <title>{`${MUSCLE_METADATA[mKey]?.name || mKey}: ${rec}% recovery`}</title>
                 </path>
@@ -465,7 +479,7 @@ export function MiniBodyMap({
           <path
             key={`mini-inert-${slug}-${i}`}
             d={d}
-            fill="#121720"
+            fill="#14171D"
             stroke="rgba(255,255,255,0.06)"
             strokeWidth="0.8"
           />
@@ -481,8 +495,8 @@ export function MiniBodyMap({
         const isPrimary = mKey === primaryMuscle;
         const isSecondary = mKey ? secondaryMuscles.includes(mKey) : false;
 
-        let fill = "#181E28";
-        let opacity = 0.5;
+        let fill = "#232833";
+        let opacity = 0.72;
 
         if (isPrimary) {
           fill = "#C9F73A";
@@ -498,12 +512,70 @@ export function MiniBodyMap({
             d={d}
             fill={fill}
             fillOpacity={opacity}
-            stroke={isPrimary ? "#FFFFFF" : "rgba(255,255,255,0.1)"}
+            stroke={isPrimary ? "#FFFFFF" : "rgba(255,255,255,0.12)"}
             strokeWidth={isPrimary ? 1.2 : 0.6}
           />
         ));
       })}
     </svg>
+  );
+}
+
+/**
+ * Dual Front + Back anatomical miniature silhouette matching openGym's Plan & Today row badges.
+ */
+export function DualMiniBodyMap({
+  load,
+  primaryMuscles = [],
+  secondaryMuscles = [],
+  gender = "male",
+  heightClass = "h-10",
+  accent = "#A3E635",
+  className,
+}: {
+  load?: Record<string, number>;
+  primaryMuscles?: string[];
+  secondaryMuscles?: string[];
+  gender?: "male" | "female";
+  heightClass?: string;
+  accent?: string;
+  className?: string;
+}) {
+  const maxLoad = load ? Math.max(1, ...Object.values(load)) : 1;
+
+  const renderMini = (viewKey: "front" | "back") => {
+    const viewData = BODY_PATHS[gender][viewKey];
+    if (!viewData) return null;
+    return (
+      <svg viewBox={viewData.vb} className={cn(heightClass, "w-auto select-none")} aria-hidden="true">
+        {INERT_SILHOUETTE_PARTS.map((slug) =>
+          (viewData.p[slug] || []).map((d: string, i: number) => (
+            <path key={`d-${viewKey}-in-${slug}-${i}`} d={d} fill="#1E2028" />
+          )),
+        )}
+        {Object.entries(viewData.p).map(([pathKey, rawPaths]) => {
+          if (INERT_SILHOUETTE_PARTS.includes(slugToInert(pathKey))) return null;
+          const mKey = mapPathToMuscleKey(pathKey);
+          const loadScore = load ? Math.max(load[pathKey] ?? 0, mKey ? load[mKey] ?? 0 : 0) : 0;
+          const ratio = load ? loadScore / maxLoad : 0;
+          const isPrimary = ratio >= 0.45 || (mKey ? primaryMuscles.includes(mKey) : false);
+          const isSecondary = !isPrimary && (ratio > 0.08 || (mKey ? secondaryMuscles.includes(mKey) : false));
+
+          const fill = isPrimary ? accent : isSecondary ? "#5B8E2C" : "#2D313B";
+          const fillOpacity = isPrimary ? 1 : isSecondary ? 0.85 : 0.78;
+          return ((rawPaths as string[]) || []).map((d: string, i: number) => (
+            <path key={`d-${viewKey}-${pathKey}-${i}`} d={d} fill={fill} fillOpacity={fillOpacity} />
+          ));
+        })}
+      </svg>
+    );
+  };
+
+  return (
+    <span className={cn("inline-flex shrink-0 items-center gap-0.5", className)} aria-hidden="true">
+      {renderMini("front")}
+      {renderMini("back")}
+    </span>
   );
 }
 

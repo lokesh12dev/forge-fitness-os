@@ -10,6 +10,60 @@ import { getCurrentUser, requireUser, SESSION_COOKIE } from "@/lib/auth";
 import { dateKey } from "@/lib/date";
 import { compressSession, computeLevelProgress, e1rm, proteinPlan, readinessScore, recoveryMap } from "@/lib/engine";
 import { coachReply } from "@/lib/coach";
+import { CATALOG_BY_ID, resolveCatalogId } from "@/lib/opengym-catalog";
+
+async function ensureCatalogExerciseInDb(exerciseId: string, customPayload?: {
+  name?: string;
+  primaryMuscle?: string;
+  equipment?: string;
+  category?: string;
+  instructions?: string[];
+}) {
+  const [existing] = await db
+    .select({ id: schema.exercises.id })
+    .from(schema.exercises)
+    .where(eq(schema.exercises.id, exerciseId))
+    .limit(1);
+  if (existing) return exerciseId;
+
+  const catalogEx = CATALOG_BY_ID.get(exerciseId) ?? CATALOG_BY_ID.get(resolveCatalogId(exerciseId));
+  const payload = catalogEx
+    ? {
+        id: exerciseId,
+        slug: `${catalogEx.slug}-${exerciseId}`.slice(0, 80),
+        name: catalogEx.name,
+        primaryMuscle: catalogEx.primaryMuscle,
+        secondaryMuscles: catalogEx.secondaryMuscles,
+        equipment: catalogEx.equipment,
+        category: catalogEx.category,
+        pattern: catalogEx.pattern,
+        unilateral: catalogEx.unilateral,
+        difficulty: catalogEx.difficulty,
+        instructions: catalogEx.instructions,
+        cues: catalogEx.cues,
+        tempo: catalogEx.tempo,
+        popularity: catalogEx.popularity,
+      }
+    : {
+        id: exerciseId,
+        slug: `custom-${exerciseId}`.slice(0, 80),
+        name: customPayload?.name?.trim() || "Custom Exercise",
+        primaryMuscle: customPayload?.primaryMuscle || "chest",
+        secondaryMuscles: [] as string[],
+        equipment: customPayload?.equipment || "bodyweight",
+        category: customPayload?.category || "strength",
+        pattern: "horizontal_push",
+        unilateral: false,
+        difficulty: "intermediate",
+        instructions: customPayload?.instructions ?? ["Perform controlled reps with clean form."],
+        cues: ["Stay under tension cleanly."],
+        tempo: "2-0-1",
+        popularity: 40,
+      };
+
+  await db.insert(schema.exercises).values(payload).onConflictDoNothing();
+  return exerciseId;
+}
 
 const rid = (p: string) => `${p}_${randomUUID().slice(0, 12)}`;
 
@@ -208,6 +262,8 @@ export async function swapExercise(input: { workoutId: string; workoutExerciseId
   const [workout] = await db.select().from(schema.workouts).where(eq(schema.workouts.id, input.workoutId)).limit(1);
   if (!workout || workout.userId !== user.id) return { ok: false as const, error: "Not found" };
 
+  await ensureCatalogExerciseInDb(input.newExerciseId);
+
   const oldSets = await db.select().from(schema.workoutSets)
     .where(and(eq(schema.workoutSets.workoutId, input.workoutId), eq(schema.workoutSets.exerciseId, we.exerciseId)));
   const oldVolume = oldSets.reduce((a, s) => a + s.weightKg * s.reps, 0);
@@ -243,10 +299,15 @@ export async function compressWorkout(workoutId: string) {
   return { ok: true as const, originalMin: result.originalMin, compressedMin: result.compressedMin };
 }
 
-export async function addExerciseToWorkout(input: { workoutId: string; exerciseId: string }) {
+export async function addExerciseToWorkout(input: {
+  workoutId: string;
+  exerciseId: string;
+  customExercise?: { name?: string; primaryMuscle?: string; equipment?: string; category?: string; instructions?: string[] };
+}) {
   const user = await requireUser();
   const [workout] = await db.select().from(schema.workouts).where(eq(schema.workouts.id, input.workoutId)).limit(1);
   if (!workout || workout.userId !== user.id) return { ok: false as const, error: "Not found" };
+  await ensureCatalogExerciseInDb(input.exerciseId, input.customExercise);
   const items = await db.select().from(schema.workoutExercises).where(eq(schema.workoutExercises.workoutId, input.workoutId));
   const newId = rid("we");
   await db.insert(schema.workoutExercises).values({
@@ -254,7 +315,78 @@ export async function addExerciseToWorkout(input: { workoutId: string; exerciseI
     position: items.length, targetSets: 3, repsMin: 8, repsMax: 12, restSec: 90, rpeTarget: 8,
   });
   const [ex] = await db.select().from(schema.exercises).where(eq(schema.exercises.id, input.exerciseId)).limit(1);
+  revalidatePath(`/app/train/${input.workoutId}`);
   return { ok: true as const, id: newId, exercise: ex ?? null };
+}
+
+export async function startRoutineWorkout(input: {
+  name: string;
+  focus?: string;
+  routineId?: string;
+  slots: Array<{
+    exerciseId: string;
+    sets?: number;
+    repsMin?: number;
+    repsMax?: number;
+    restSec?: number;
+    rpeTarget?: number;
+    supersetGroup?: string | null;
+    customExercise?: { name?: string; primaryMuscle?: string; equipment?: string; category?: string; instructions?: string[] };
+  }>;
+}) {
+  const user = await requireUser();
+  const [existing] = await db
+    .select()
+    .from(schema.workouts)
+    .where(and(eq(schema.workouts.userId, user.id), eq(schema.workouts.status, "active")))
+    .limit(1);
+  if (existing) {
+    return { ok: true as const, workoutId: existing.id, reused: true };
+  }
+
+  const safeSlots = input.slots.length > 0
+    ? input.slots
+    : [{ exerciseId: "ex-bench-press", sets: 3, repsMin: 8, repsMax: 10, restSec: 120, rpeTarget: 8, supersetGroup: null }];
+
+  for (const s of safeSlots) {
+    await ensureCatalogExerciseInDb(s.exerciseId, s.customExercise);
+  }
+
+  const [metric] = await db.select().from(schema.bodyMetrics).where(eq(schema.bodyMetrics.userId, user.id)).orderBy(desc(schema.bodyMetrics.date)).limit(1);
+  const workoutId = rid("wk");
+  await db.insert(schema.workouts).values({
+    id: workoutId,
+    userId: user.id,
+    routineId: input.routineId ?? "rt-custom",
+    name: input.name || "Custom Session",
+    focus: input.focus || "Targeted strength",
+    status: "active",
+    readiness: readinessScore(metric ?? {}),
+    startedAt: new Date(),
+    totalVolume: 0,
+    totalSets: 0,
+    notes: null,
+    compressed: false,
+  });
+
+  await db.insert(schema.workoutExercises).values(
+    safeSlots.map((s, i) => ({
+      id: rid("we"),
+      workoutId,
+      exerciseId: s.exerciseId,
+      position: i,
+      targetSets: s.sets ?? 3,
+      repsMin: s.repsMin ?? 8,
+      repsMax: s.repsMax ?? 12,
+      restSec: s.restSec ?? 90,
+      rpeTarget: s.rpeTarget ?? 8,
+      supersetGroup: s.supersetGroup ?? null,
+    })),
+  );
+
+  revalidatePath("/app");
+  revalidatePath("/app/train");
+  return { ok: true as const, workoutId, reused: false };
 }
 
 export async function updateTargetSets(workoutExerciseId: string, targetSets: number) {
@@ -616,6 +748,37 @@ export async function saveDailyCheckIn(data: {
   revalidatePath("/app/progress");
 
   return { ok: true as const, score: newScore, date: today };
+}
+
+export async function quickLogWeight(weightKg: number) {
+  const user = await requireUser();
+  const weight = Math.max(30, Math.min(300, Number(weightKg) || user.weightKg));
+  const today = dateKey();
+  const [existing] = await db
+    .select()
+    .from(schema.bodyMetrics)
+    .where(and(eq(schema.bodyMetrics.userId, user.id), eq(schema.bodyMetrics.date, today)))
+    .limit(1);
+
+  if (existing) {
+    await db.update(schema.bodyMetrics).set({ weightKg: weight }).where(eq(schema.bodyMetrics.id, existing.id));
+  } else {
+    const [latest] = await db.select().from(schema.bodyMetrics).where(eq(schema.bodyMetrics.userId, user.id)).orderBy(desc(schema.bodyMetrics.date)).limit(1);
+    await db.insert(schema.bodyMetrics).values({
+      id: rid("bm"),
+      userId: user.id,
+      date: today,
+      sleepHours: latest?.sleepHours ?? 7.5,
+      hrv: latest?.hrv ?? 64,
+      restingHr: latest?.restingHr ?? 56,
+      soreness: latest?.soreness ?? 2,
+      weightKg: weight,
+    });
+  }
+  await db.update(schema.users).set({ weightKg: weight }).where(eq(schema.users.id, user.id));
+  revalidatePath("/app");
+  revalidatePath("/app/progress");
+  return { ok: true as const, weightKg: weight, date: today };
 }
 
 export async function enrollProgram(formData: FormData) {

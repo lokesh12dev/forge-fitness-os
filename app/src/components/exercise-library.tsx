@@ -1,24 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
-  ArrowRight, ChevronRight, Dumbbell, Filter, Info, Search, SlidersHorizontal,
-  Sparkles, Target, TrendingUp, Trophy, User, X,
+  Check, ChevronRight, Dumbbell, LayoutGrid, List, Play, Plus, Search,
+  SlidersHorizontal, Sparkles, Star, TrendingUp, Trophy, User, X, Layers, ScanFace,
 } from "lucide-react";
-import { Badge } from "@/components/ui";
 import { cn, titleCase } from "@/lib/utils";
-import { alternativesFor, muscleColor, muscleLabel } from "@/lib/engine";
-import { matchExercise } from "@/lib/exercise-aliases";
-import { addExerciseToWorkout } from "@/app/actions";
-import { BodyMap, MiniBodyMap, MUSCLE_METADATA } from "@/components/body-map";
+import {
+  FULL_EXERCISE_CATALOG,
+  SKILL_LADDERS,
+  buildSessionFromMuscles,
+  type CatalogExercise,
+  type SkillLadderDef,
+} from "@/lib/opengym-catalog";
+import { addExerciseToWorkout, startRoutineWorkout } from "@/app/actions";
+import { BodyMap, MUSCLE_METADATA } from "@/components/body-map";
+import { ExerciseMotionDemo } from "@/components/exercise-motion";
 
-type ExerciseLite = {
-  id: string; slug: string; name: string; primaryMuscle: string; secondaryMuscles: string[];
-  equipment: string; category: string; pattern: string; unilateral: boolean; difficulty: string;
-  instructions: string[]; cues: string[]; tempo: string; popularity: number;
-};
-
-type Stat = {
+export type ExerciseStat = {
   pr: number | null;
   lastWeight: number | null;
   lastReps: number | null;
@@ -27,641 +28,1113 @@ type Stat = {
   history: { label: string; value: number }[];
 };
 
-const MUSCLE_TABS = [
-  { key: "all", label: "All" },
+const BODYPART_CHIPS = [
   { key: "chest", label: "Chest" },
-  { key: "back", label: "Upper Back" },
+  { key: "back", label: "Back" },
+  { key: "shoulders", label: "Shoulders" },
+  { key: "upper arms", label: "Upper arms" },
+  { key: "lower arms", label: "Forearms" },
+  { key: "upper legs", label: "Upper legs" },
+  { key: "lower legs", label: "Calves" },
+  { key: "waist", label: "Core" },
+  { key: "cardio", label: "Cardio" },
+];
+
+const EXPLORER_MUSCLES = [
+  { key: "chest", label: "Chest" },
+  { key: "back", label: "Upper back" },
   { key: "lats", label: "Lats" },
   { key: "shoulders", label: "Shoulders" },
   { key: "biceps", label: "Biceps" },
   { key: "triceps", label: "Triceps" },
+  { key: "forearms", label: "Forearms" },
   { key: "quads", label: "Quads" },
   { key: "hamstrings", label: "Hamstrings" },
   { key: "glutes", label: "Glutes" },
   { key: "calves", label: "Calves" },
-  { key: "core", label: "Core" },
-  { key: "forearms", label: "Forearms" },
+  { key: "core", label: "Abs & core" },
 ];
 
-const ARM_MUSCLES = ["biceps", "triceps", "forearms"];
+const CUSTOM_EX_KEY = "forge_custom_exercises_v1";
+const FAV_EX_KEY = "forge_fav_exercises_v1";
+const CUSTOM_LADDERS_KEY = "forge_custom_ladders_v1";
+
+function loadJson<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 export function ExerciseLibrary({
-  exercises,
   stats,
   equipment,
   activeWorkoutId,
   initialQuery = "",
+  initialMode = "library",
+  initialMuscle = null,
+  trainedIds = [],
 }: {
-  exercises: ExerciseLite[];
-  stats: Record<string, Stat>;
+  stats: Record<string, ExerciseStat>;
   equipment: string[];
   activeWorkoutId: string | null;
   initialQuery?: string;
+  initialMode?: "library" | "muscles";
+  initialMuscle?: string | null;
+  trainedIds?: string[];
 }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [mode, setMode] = useState<"library" | "muscles">(initialMode);
   const [q, setQ] = useState(initialQuery);
-  const [muscle, setMuscle] = useState("all");
-  const [equip, setEquip] = useState("all");
-  const [level, setLevel] = useState("all");
-  const [onlyMine, setOnlyMine] = useState(false);
-  const [selected, setSelected] = useState<ExerciseLite | null>(null);
-  const [added, setAdded] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
-  const [showBodyMap, setShowBodyMap] = useState(true);
+  const [bodyPart, setBodyPart] = useState("");
+  const [eqFilter, setEqFilter] = useState("");
+  const [catFilter, setCatFilter] = useState("");
+  const [onlyMyGym, setOnlyMyGym] = useState(false);
+  const [viewLayout, setViewLayout] = useState<"list" | "grid">("list");
+  const [shown, setShown] = useState(40);
+  const [showFiltersModal, setShowFiltersModal] = useState(false);
+  const [showLaddersModal, setShowLaddersModal] = useState(false);
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [selectedEx, setSelectedEx] = useState<CatalogExercise | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // Explorer states
+  const [explorerMuscles, setExplorerMuscles] = useState<string[]>(initialMuscle ? [initialMuscle] : []);
+  const [explorerMatch, setExplorerMatch] = useState<"all" | "any">("all");
+  const [explorerDetailMode, setExplorerDetailMode] = useState<"motion" | "anatomy">("motion");
+
+  // Persistent client customizations
+  const [customExercises, setCustomExercises] = useState<CatalogExercise[]>([]);
+  const [favIds, setFavIds] = useState<string[]>([]);
+  const [customLadders, setCustomLadders] = useState<SkillLadderDef[]>([]);
+
+  // Custom exercise form
+  const [cxName, setCxName] = useState("");
+  const [cxMuscle, setCxMuscle] = useState("chest");
+  const [cxEq, setCxEq] = useState("barbell");
+  const [cxInst, setCxInst] = useState("");
+
+  // Custom ladder form
+  const [creatingLadder, setCreatingLadder] = useState(false);
+  const [ldName, setLdName] = useState("");
+  const [ldSteps, setLdSteps] = useState<string[]>(["ex-push-up", "ex-dips"]);
+
+  useEffect(() => {
+    setCustomExercises(loadJson<CatalogExercise[]>(CUSTOM_EX_KEY, []));
+    setFavIds(loadJson<string[]>(FAV_EX_KEY, []));
+    setCustomLadders(loadJson<SkillLadderDef[]>(CUSTOM_LADDERS_KEY, []));
+  }, []);
+
+  const flashToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg((cur) => (cur === msg ? null : cur)), 2800);
+  };
+
+  const fullCatalog = useMemo(
+    () => [...customExercises, ...FULL_EXERCISE_CATALOG],
+    [customExercises],
+  );
+
+  const catalogById = useMemo(
+    () => new Map(fullCatalog.map((e) => [e.id, e])),
+    [fullCatalog],
+  );
+
+  const toggleFav = (id: string) => {
+    setFavIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [id, ...prev];
+      try {
+        localStorage.setItem(FAV_EX_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const equipmentOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of fullCatalog) {
+      counts.set(e.equipment, (counts.get(e.equipment) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  }, [fullCatalog]);
+
+  const categoryOptions = useMemo(() => {
+    const set = new Set(fullCatalog.map((e) => e.category));
+    return [...set].sort();
+  }, [fullCatalog]);
 
   const filtered = useMemo(() => {
-    const list = exercises.filter((e) => {
-      if (q && !matchExercise(q, e)) return false;
-      if (muscle !== "all") {
-        const matchesPrimary = e.primaryMuscle === muscle;
-        const matchesSecondary = e.secondaryMuscles.includes(muscle);
-        if (muscle === "arms") {
-          if (!ARM_MUSCLES.includes(e.primaryMuscle) && !e.secondaryMuscles.some((m) => ARM_MUSCLES.includes(m))) {
-            return false;
-          }
-        } else if (muscle === "back") {
-          if (
-            e.primaryMuscle !== "back" &&
-            e.primaryMuscle !== "lats" &&
-            !e.secondaryMuscles.includes("back") &&
-            !e.secondaryMuscles.includes("lats")
-          ) {
-            return false;
-          }
-        } else if (!matchesPrimary && !matchesSecondary) {
-          return false;
-        }
+    const ql = q.trim().toLowerCase();
+    const list = fullCatalog.filter((e) => {
+      if (onlyMyGym && equipment.length && !equipment.includes(e.equipment) && e.equipment !== "bodyweight") {
+        return false;
       }
-      if (equip !== "all" && e.equipment !== equip) return false;
-      if (level !== "all" && e.difficulty !== level) return false;
-      if (onlyMine && !equipment.includes(e.equipment)) return false;
+      if (bodyPart && e.bodyPart !== bodyPart) return false;
+      if (eqFilter && e.equipment !== eqFilter) return false;
+      if (catFilter && e.category !== catFilter) return false;
+      if (ql) {
+        const match =
+          e.name.toLowerCase().includes(ql) ||
+          e.primaryMuscle.toLowerCase().includes(ql) ||
+          e.equipment.toLowerCase().includes(ql) ||
+          e.bodyPart.toLowerCase().includes(ql) ||
+          e.secondaryMuscles.some((s) => s.toLowerCase().includes(ql));
+        if (!match) return false;
+      }
       return true;
     });
 
-    if (muscle !== "all") {
-      return [...list].sort((a, b) => {
-        const aPrimary = a.primaryMuscle === muscle ? 1 : 0;
-        const bPrimary = b.primaryMuscle === muscle ? 1 : 0;
-        return bPrimary - aPrimary;
-      });
+    const favSet = new Set(favIds);
+    return list.sort((a, b) => {
+      const af = favSet.has(a.id) ? 1 : 0;
+      const bf = favSet.has(b.id) ? 1 : 0;
+      if (af !== bf) return bf - af;
+      const ap = stats[a.id]?.totalSets ?? 0;
+      const bp = stats[b.id]?.totalSets ?? 0;
+      if ((ap > 0 ? 1 : 0) !== (bp > 0 ? 1 : 0)) return (bp > 0 ? 1 : 0) - (ap > 0 ? 1 : 0);
+      return b.popularity - a.popularity;
+    });
+  }, [fullCatalog, onlyMyGym, equipment, bodyPart, eqFilter, catFilter, q, favIds, stats]);
+
+  const explorerCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const m of EXPLORER_MUSCLES) counts[m.key] = 0;
+    for (const e of fullCatalog) {
+      if (counts[e.primaryMuscle] !== undefined) counts[e.primaryMuscle] += 1;
+      for (const s of e.secondaryMuscles) {
+        if (counts[s] !== undefined) counts[s] += 1;
+      }
     }
+    return counts;
+  }, [fullCatalog]);
 
-    return list;
-  }, [exercises, q, muscle, equip, level, onlyMine, equipment]);
+  const explorerResults = useMemo(() => {
+    if (!explorerMuscles.length) return [];
+    const ql = q.trim().toLowerCase();
+    return fullCatalog
+      .filter((e) => {
+        const hitList = [e.primaryMuscle, ...e.secondaryMuscles];
+        const ok =
+          explorerMatch === "all"
+            ? explorerMuscles.every((m) => hitList.includes(m))
+            : explorerMuscles.some((m) => hitList.includes(m));
+        if (!ok) return false;
+        if (ql && !e.name.toLowerCase().includes(ql) && !e.equipment.toLowerCase().includes(ql)) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const ap = explorerMuscles.includes(a.primaryMuscle) ? 1 : 0;
+        const bp = explorerMuscles.includes(b.primaryMuscle) ? 1 : 0;
+        return bp - ap || b.popularity - a.popularity;
+      });
+  }, [fullCatalog, explorerMuscles, explorerMatch, q]);
 
-  const equipOptions = useMemo(() => [...new Set(exercises.map((e) => e.equipment))].sort(), [exercises]);
+  const activeFilterCount = (eqFilter ? 1 : 0) + (catFilter ? 1 : 0) + (onlyMyGym ? 1 : 0);
+  const narrowed = !!(q.trim() || bodyPart || activeFilterCount);
 
-  const add = (ex: ExerciseLite) => {
-    if (!activeWorkoutId) return;
-    setAdded(ex.id);
-    addExerciseToWorkout({ workoutId: activeWorkoutId, exerciseId: ex.id });
-    setTimeout(() => setAdded(null), 2200);
+  const handleAddToWorkout = (ex: CatalogExercise) => {
+    if (activeWorkoutId) {
+      startTransition(async () => {
+        await addExerciseToWorkout({
+          workoutId: activeWorkoutId,
+          exerciseId: ex.id,
+          customExercise:
+            ex.source === "custom"
+              ? { name: ex.name, primaryMuscle: ex.primaryMuscle, equipment: ex.equipment, category: ex.category, instructions: ex.instructions }
+              : undefined,
+        });
+        flashToast(`Added ${ex.name} to your active workout.`);
+      });
+      return;
+    }
+    startTransition(async () => {
+      const res = await startRoutineWorkout({
+        name: `${ex.name} Session`,
+        focus: titleCase(ex.primaryMuscle),
+        slots: [
+          {
+            exerciseId: ex.id,
+            sets: 3,
+            repsMin: 8,
+            repsMax: 12,
+            restSec: 90,
+            rpeTarget: 8,
+            customExercise:
+              ex.source === "custom"
+                ? { name: ex.name, primaryMuscle: ex.primaryMuscle, equipment: ex.equipment, category: ex.category, instructions: ex.instructions }
+                : undefined,
+          },
+        ],
+      });
+      if (res.ok) router.push(`/app/train/${res.workoutId}`);
+    });
   };
 
-  const activeMeta = muscle !== "all" ? MUSCLE_METADATA[muscle] : null;
+  const handleBuildExplorerSession = () => {
+    const picked = buildSessionFromMuscles(explorerMuscles, fullCatalog, equipment);
+    if (!picked.length) return;
+    startTransition(async () => {
+      const label = explorerMuscles.map((m) => MUSCLE_METADATA[m]?.name ?? titleCase(m)).slice(0, 2).join(" & ");
+      const res = await startRoutineWorkout({
+        name: `${label} Custom Session`,
+        focus: explorerMuscles.map((m) => titleCase(m)).join(" · "),
+        slots: picked.map((ex) => ({
+          exerciseId: ex.id,
+          sets: 3,
+          repsMin: 8,
+          repsMax: 12,
+          restSec: 90,
+          rpeTarget: 8,
+        })),
+      });
+      if (res.ok) router.push(`/app/train/${res.workoutId}`);
+    });
+  };
+
+  const handleSaveCustomExercise = () => {
+    const clean = cxName.trim();
+    if (!clean) return;
+    const newEx: CatalogExercise = {
+      id: `custom-${Date.now().toString(36)}`,
+      slug: `custom-${clean.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      name: clean,
+      primaryMuscle: cxMuscle,
+      secondaryMuscles: [],
+      bodyPart: cxMuscle === "chest" ? "chest" : cxMuscle === "back" || cxMuscle === "lats" ? "back" : "waist",
+      equipment: cxEq,
+      category: "strength",
+      pattern: cxMuscle === "chest" ? "horizontal_push" : cxMuscle === "lats" ? "vertical_pull" : cxMuscle === "quads" ? "squat" : "hinge",
+      unilateral: false,
+      difficulty: "intermediate",
+      instructions: cxInst.trim() ? cxInst.split("\n").filter(Boolean) : [`Perform ${clean} with steady tempo and full control.`],
+      cues: [`Keep tension focused on ${MUSCLE_METADATA[cxMuscle]?.name ?? cxMuscle}.`],
+      tempo: "2-0-1",
+      popularity: 80,
+      muscleWeights: { [cxMuscle]: 1 },
+      source: "custom",
+    };
+    const next = [newEx, ...customExercises];
+    setCustomExercises(next);
+    try {
+      localStorage.setItem(CUSTOM_EX_KEY, JSON.stringify(next));
+    } catch {}
+    setCxName("");
+    setCxInst("");
+    setShowCustomModal(false);
+    setSelectedEx(newEx);
+    flashToast(`Created custom exercise "${clean}".`);
+  };
+
+  const handleSaveCustomLadder = () => {
+    const clean = ldName.trim() || "Custom Skill Ladder";
+    if (ldSteps.length < 2) return;
+    const nextLadder: SkillLadderDef = {
+      id: `own-${Date.now().toString(36)}`,
+      name: clean,
+      description: "Your custom bodyweight progression chain.",
+      steps: ldSteps,
+    };
+    const next = [nextLadder, ...customLadders];
+    setCustomLadders(next);
+    try {
+      localStorage.setItem(CUSTOM_LADDERS_KEY, JSON.stringify(next));
+    } catch {}
+    setCreatingLadder(false);
+    setLdName("");
+    flashToast(`Saved skill ladder "${clean}".`);
+  };
+
+  const displayedList = mode === "muscles" ? explorerResults : filtered;
+  const trainedSet = new Set(trainedIds);
 
   return (
-    <>
-      {/* Sticky Filter Bar */}
-      <div className="sticky top-14 z-20 -mx-4 mb-5 border-b border-white/[0.06] bg-ink/92 px-4 py-3 backdrop-blur-xl md:top-16 md:-mx-8 md:px-8">
-        <div className="mx-auto max-w-[1440px]">
-          <div className="flex items-center gap-2">
-            <div className="flex h-10 flex-1 items-center gap-2.5 rounded-xl border border-white/[0.09] bg-white/[0.03] px-3 focus-within:border-acid/40">
-              <Search className="size-4 shrink-0 text-dim" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search movements, muscles, patterns…"
-                className="min-w-0 flex-1 bg-transparent text-[12.5px] text-chalk placeholder:text-dim focus:outline-none"
-              />
-              {q && (
-                <button onClick={() => setQ("")} className="text-dim hover:text-chalk">
-                  <X className="size-3.5" />
-                </button>
-              )}
-            </div>
+    <div className="space-y-4">
+      {/* Header matching openGym/#/library */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="font-display text-[32px] font-semibold leading-tight tracking-tight text-chalk">
+            {mode === "muscles" ? "Explore muscles" : "Exercises"}
+          </h1>
+          <p className="mt-0.5 text-[13.5px] text-mist">
+            {mode === "muscles"
+              ? "Tap muscles on the body map to isolate exercises or generate a session."
+              : `${FULL_EXERCISE_CATALOG.length.toLocaleString()} exercises with motion guides${customExercises.length ? ` + ${customExercises.length} of your own` : ""}`}
+          </p>
+        </div>
 
-            {/* Anatomical Explorer Toggle Button */}
-            <button
-              onClick={() => setShowBodyMap((v) => !v)}
-              className={cn(
-                "press flex h-10 items-center gap-1.5 rounded-xl border px-3 text-[11.5px] transition-colors",
-                showBodyMap
-                  ? "border-acid/40 bg-acid/10 text-acid font-medium"
-                  : "border-white/[0.09] bg-white/[0.03] text-mist hover:text-chalk"
-              )}
-              title="Toggle Anatomical Muscle Map"
-            >
-              <User className="size-3.5" />
-              <span className="hidden sm:inline">Anatomy Map</span>
-            </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMode(mode === "muscles" ? "library" : "muscles")}
+            className={cn(
+              "press inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-medium transition-colors",
+              mode === "muscles"
+                ? "bg-acid text-ink"
+                : "bg-acid/16 text-acid hover:bg-acid/24",
+            )}
+          >
+            <User className="size-3.5" />
+            {mode === "muscles" ? "All exercises" : "By muscle"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowLaddersModal(true)}
+            className="press inline-flex items-center gap-1.5 rounded-full bg-acid/16 px-3.5 py-2 text-[13px] font-medium text-acid hover:bg-acid/24"
+          >
+            <Layers className="size-3.5" />
+            Ladders
+          </button>
+          <Link
+            href="/app/form-check"
+            className="press inline-flex items-center gap-1.5 rounded-full bg-panel-2 px-3.5 py-2 text-[13px] font-medium text-chalk hover:bg-panel-3"
+          >
+            <ScanFace className="size-3.5 text-mist" />
+            Form check
+          </Link>
+        </div>
+      </div>
 
-            {/* Standard Filters Toggle */}
-            <button
-              onClick={() => setShowFilters((v) => !v)}
-              className={cn(
-                "press flex h-10 items-center gap-1.5 rounded-xl border px-3 text-[11.5px] transition-colors",
-                showFilters
-                  ? "border-acid/40 bg-acid/10 text-acid font-medium"
-                  : "border-white/[0.09] bg-white/[0.03] text-mist hover:text-chalk"
-              )}
-            >
-              <SlidersHorizontal className="size-3.5" />
-              <span className="hidden sm:inline">Filters</span>
-            </button>
-          </div>
+      {/* Interactive Muscle Explorer Mode */}
+      {mode === "muscles" && (
+        <div className="rounded-[22px] border border-white/[0.08] bg-panel p-5">
+          <BodyMap
+            interactive
+            view="both"
+            selectedMuscles={explorerMuscles}
+            onSelectMuscle={(m) => {
+              if (m === "all") setExplorerMuscles([]);
+              else {
+                setExplorerMuscles((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]));
+              }
+            }}
+            showDetailsCard={false}
+            svgHeightClass="max-h-[260px]"
+          />
 
-          {/* Muscle Pills Bar */}
-          <div className="no-scrollbar mt-2.5 flex gap-1.5 overflow-x-auto pb-0.5">
-            {MUSCLE_TABS.map((t) => {
-              const isActive = muscle === t.key;
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {EXPLORER_MUSCLES.map((m) => {
+              const on = explorerMuscles.includes(m.key);
               return (
                 <button
-                  key={t.key}
-                  onClick={() => setMuscle(t.key)}
+                  key={m.key}
+                  type="button"
+                  onClick={() =>
+                    setExplorerMuscles((cur) => (on ? cur.filter((x) => x !== m.key) : [...cur, m.key]))
+                  }
                   className={cn(
-                    "shrink-0 rounded-full border px-3 py-1.5 text-[10.5px] transition-colors",
-                    isActive
-                      ? "border-acid/40 bg-acid/10 text-acid font-semibold"
-                      : "border-white/[0.07] text-dim hover:border-white/15 hover:text-mist"
+                    "press inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+                    on ? "bg-acid text-ink" : "bg-panel-2 text-mist hover:text-chalk",
                   )}
                 >
-                  {t.label}
+                  <span>{m.label}</span>
+                  <span className={cn("text-[11px]", on ? "text-ink/75" : "text-dim")}>{explorerCounts[m.key]}</span>
                 </button>
               );
             })}
           </div>
 
-          {showFilters && (
-            <div className="animate-fade-in mt-3 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3">
-              <select
-                value={equip}
-                onChange={(e) => setEquip(e.target.value)}
-                className="h-8 rounded-lg border border-white/10 bg-panel px-2 font-mono text-[10px] uppercase tracking-[0.08em] text-mist focus:outline-none"
-              >
-                <option value="all">All equipment</option>
-                {equipOptions.map((e) => (
-                  <option key={e} value={e}>
-                    {titleCase(e)}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={level}
-                onChange={(e) => setLevel(e.target.value)}
-                className="h-8 rounded-lg border border-white/10 bg-panel px-2 font-mono text-[10px] uppercase tracking-[0.08em] text-mist focus:outline-none"
-              >
-                <option value="all">Any level</option>
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-              </select>
+          {explorerMuscles.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] pt-3.5">
+              {explorerMuscles.length > 1 ? (
+                <div className="inline-flex rounded-xl bg-panel-2 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setExplorerMatch("all")}
+                    className={cn("rounded-lg px-3 py-1 text-[12px] font-medium", explorerMatch === "all" ? "bg-panel-3 text-chalk" : "text-mist")}
+                  >
+                    All of them
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExplorerMatch("any")}
+                    className={cn("rounded-lg px-3 py-1 text-[12px] font-medium", explorerMatch === "any" ? "bg-panel-3 text-chalk" : "text-mist")}
+                  >
+                    Any of them
+                  </button>
+                </div>
+              ) : (
+                <span className="text-[13px] text-mist">{explorerResults.length} exercises target {MUSCLE_METADATA[explorerMuscles[0]]?.name}</span>
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExplorerMuscles([])}
+                  className="rounded-full px-3 py-1.5 text-[12.5px] text-mist hover:text-chalk"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={handleBuildExplorerSession}
+                  className="press inline-flex items-center gap-1.5 rounded-full bg-acid px-4 py-2 text-[13px] font-semibold text-ink disabled:opacity-60"
+                >
+                  <Sparkles className="size-3.5" />
+                  Build a session
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Search Bar + Layout Toggle matching library.png */}
+      <div className="flex items-center gap-2">
+        <div className="flex h-11 flex-1 items-center gap-2.5 rounded-2xl border border-white/[0.08] bg-panel px-3.5 focus-within:border-white/25">
+          <Search className="size-4 shrink-0 text-dim" />
+          <input
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setShown(40);
+            }}
+            placeholder="Search…"
+            className="min-w-0 flex-1 bg-transparent text-[14.5px] text-chalk placeholder:text-dim focus:outline-none"
+          />
+          {narrowed && (
+            <span className="rounded-full bg-panel-3 px-2.5 py-0.5 font-numeric text-[12px] font-semibold text-mist">
+              {displayedList.length}
+            </span>
+          )}
+          {q && (
+            <button
+              type="button"
+              onClick={() => {
+                setQ("");
+                setShown(40);
+              }}
+              aria-label="Clear search"
+              className="grid size-6 place-items-center rounded-full bg-panel-3 text-mist hover:text-chalk"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setViewLayout((v) => (v === "list" ? "grid" : "list"))}
+          aria-label="Toggle layout"
+          className="press grid size-11 shrink-0 place-items-center rounded-2xl border border-white/[0.08] bg-panel text-mist hover:text-chalk"
+        >
+          {viewLayout === "list" ? <LayoutGrid className="size-4.5" /> : <List className="size-4.5" />}
+        </button>
+      </div>
+
+      {/* Single Filter Row matching library.png */}
+      {mode === "library" && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <button
+            type="button"
+            onClick={() => setShowFiltersModal(true)}
+            className={cn(
+              "press inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors",
+              activeFilterCount ? "bg-panel-3 text-chalk" : "bg-panel text-mist hover:text-chalk",
+            )}
+          >
+            <SlidersHorizontal className="size-3.5" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="grid size-4 place-items-center rounded-full bg-acid text-[10px] font-bold text-ink">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          {eqFilter && (
+            <button
+              type="button"
+              onClick={() => setEqFilter("")}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-panel-3 px-3 py-1.5 text-[13px] font-medium text-chalk"
+            >
+              {titleCase(eqFilter)}
+              <X className="size-3" />
+            </button>
+          )}
+          {catFilter && (
+            <button
+              type="button"
+              onClick={() => setCatFilter("")}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-panel-3 px-3 py-1.5 text-[13px] font-medium text-chalk"
+            >
+              {titleCase(catFilter)}
+              <X className="size-3" />
+            </button>
+          )}
+
+          {BODYPART_CHIPS.map((bp) => {
+            const on = bodyPart === bp.key;
+            return (
               <button
-                onClick={() => setOnlyMine((v) => !v)}
+                key={bp.key}
+                type="button"
+                onClick={() => {
+                  setBodyPart(on ? "" : bp.key);
+                  setShown(40);
+                }}
                 className={cn(
-                  "h-8 rounded-lg border px-2.5 font-mono text-[9.5px] uppercase tracking-[0.08em]",
-                  onlyMine ? "border-acid/40 bg-acid/10 text-acid" : "border-white/10 text-dim"
+                  "press inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors",
+                  on ? "bg-panel-3 text-chalk" : "bg-panel text-mist hover:text-chalk",
                 )}
               >
-                My equipment only
+                {bp.label}
+                {on && <X className="size-3 text-mist" />}
               </button>
-              <span className="ml-auto font-mono text-[9px] text-dim">
-                {filtered.length} of {exercises.length}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {added && (
-        <div className="animate-fade-in fixed left-1/2 top-28 z-50 -translate-x-1/2 rounded-full border border-acid/30 bg-acid px-4 py-2 text-[11.5px] font-semibold text-ink shadow-xl">
-          Added to today&apos;s session
+            );
+          })}
         </div>
       )}
 
-      {/* High-Definition Anatomical Body Map Explorer (openGym Vector Engine) */}
-      {showBodyMap && (
-        <div className="animate-fade-in mb-6 rounded-3xl border border-white/[0.08] bg-panel/75 p-5 shadow-2xl backdrop-blur-md">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-3.5">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex size-2 rounded-full bg-acid animate-pulse" />
-                <h3 className="font-display text-sm font-bold tracking-tight text-chalk">
-                  Anatomical Muscle Map
-                </h3>
-                <Badge tone="acid">openGym Vector Engine</Badge>
-              </div>
-              <p className="mt-0.5 text-[11px] text-mist">
-                Tap any muscle contour on the human figure to filter movements and view targeted biomechanics.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {muscle !== "all" && (
-                <button
-                  onClick={() => setMuscle("all")}
-                  className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 font-mono text-[10px] text-mist hover:border-white/20 hover:text-chalk transition-colors"
-                >
-                  <X className="size-3 text-acid" /> Clear muscle selection
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-col items-center">
-            <BodyMap
-              selectedMuscle={muscle === "all" ? null : muscle}
-              onSelectMuscle={(m) => setMuscle(m)}
-              interactive={true}
-              allowViewSwitch={true}
-              showLabels={true}
-              showDetailsCard={false}
-              className="w-full"
-            />
-          </div>
-
-          {activeMeta && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-acid/20 bg-acid/[0.04] p-3.5">
-              <div className="flex items-center gap-3">
-                <div className="grid size-9 place-items-center rounded-xl bg-acid/15 text-acid">
-                  <Target className="size-4" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-display text-sm font-bold text-chalk">
-                      {activeMeta.name}
-                    </span>
-                    <span className="font-mono text-[10px] text-dim">
-                      ({activeMeta.scientific})
-                    </span>
-                  </div>
-                  <p className="font-mono text-[10px] text-mist">
-                    {activeMeta.role} · <span className="font-semibold text-acid">{filtered.length}</span> movements available
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setMuscle("all")}
-                className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-mist hover:text-chalk"
-              >
-                Reset to All
-              </button>
-            </div>
-          )}
+      {/* Results container */}
+      {mode === "muscles" && !explorerMuscles.length ? (
+        <div className="rounded-2xl border border-white/[0.06] bg-panel p-8 text-center text-[14px] text-mist">
+          Tap any muscle above or directly on the anatomical diagram to browse targeted exercises.
         </div>
-      )}
-
-      {/* Movement Cards Grid */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((e) => {
-          const stat = stats[e.id];
-          return (
+      ) : (
+        <div
+          className={cn(
+            viewLayout === "grid"
+              ? "grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3"
+              : "overflow-hidden rounded-[20px] border border-white/[0.07] bg-panel divide-y divide-white/[0.06]",
+          )}
+        >
+          {/* Create your own exercise row matching library.png */}
+          {mode === "library" && (
             <button
-              key={e.id}
-              onClick={() => setSelected(e)}
-              className="group relative overflow-hidden rounded-2xl border border-white/[0.07] bg-panel/70 p-4 text-left transition-all hover:border-white/15 hover:bg-panel hover:shadow-lg"
+              type="button"
+              onClick={() => setShowCustomModal(true)}
+              className={cn(
+                "press flex w-full items-center gap-3.5 px-4 py-3 text-left transition-colors hover:bg-panel-2",
+                viewLayout === "grid" && "rounded-2xl border border-white/[0.08] bg-panel",
+              )}
             >
-              <div
-                className="pointer-events-none absolute -right-10 -top-10 size-28 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
-                style={{ background: `radial-gradient(circle, ${muscleColor(e.primaryMuscle)}18, transparent 70%)` }}
-              />
-              <div className="relative flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <span
-                      className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em]"
-                      style={{
-                        borderColor: `${muscleColor(e.primaryMuscle)}35`,
-                        color: muscleColor(e.primaryMuscle),
-                        background: `${muscleColor(e.primaryMuscle)}0d`,
-                      }}
-                    >
-                      {muscleLabel(e.primaryMuscle)}
-                    </span>
-                    <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-dim">{e.category}</span>
-                  </div>
-                  <h3 className="mt-2.5 font-display text-[16px] font-bold leading-tight tracking-[-0.02em] text-chalk group-hover:text-white">
-                    {e.name}
-                  </h3>
-                  <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.09em] text-dim">
-                    {titleCase(e.equipment)} · {e.difficulty} · {e.pattern.replace(/_/g, " ")}
-                  </p>
-                </div>
-
-                {/* OpenGym Mini Vector Anatomical Preview */}
-                <div className="shrink-0 rounded-xl border border-white/[0.06] bg-black/35 p-1 transition-transform group-hover:scale-105">
-                  <MiniBodyMap
-                    primaryMuscle={e.primaryMuscle}
-                    secondaryMuscles={e.secondaryMuscles}
-                    className="h-14 w-8"
-                  />
-                </div>
+              <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-panel-2 text-mist">
+                <Plus className="size-5" />
               </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[14.5px] font-medium text-chalk">Create your own exercise</p>
+                <p className="truncate text-[12.5px] text-mist">Name, target muscle, equipment & custom cues</p>
+              </div>
+              <Plus className="size-4 shrink-0 text-dim" />
+            </button>
+          )}
 
-              <div className="mt-3 flex items-end justify-between border-t border-white/[0.05] pt-2.5">
-                <div className="flex gap-4">
-                  <div>
-                    <p className="font-mono text-[7.5px] uppercase tracking-[0.1em] text-dim">PR</p>
-                    <p className="font-numeric text-[12px] font-medium text-amber">{stat?.pr ? `${stat.pr}kg` : "—"}</p>
-                  </div>
-                  <div>
-                    <p className="font-mono text-[7.5px] uppercase tracking-[0.1em] text-dim">Last</p>
-                    <p className="font-numeric text-[12px] text-mist">
-                      {stat?.lastWeight ? `${stat.lastWeight}×${stat.lastReps}` : "—"}
+          {displayedList.slice(0, shown).map((ex) => {
+            const st = stats[ex.id];
+            const isFav = favIds.includes(ex.id);
+            return (
+              <div
+                key={ex.id}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-panel-2",
+                  viewLayout === "grid" && "rounded-2xl border border-white/[0.08] bg-panel",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedEx(ex);
+                    setExplorerDetailMode("motion");
+                  }}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
+                  <ExerciseMotionDemo pattern={ex.pattern} equipment={ex.equipment} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 truncate text-[14.5px] font-medium text-chalk">
+                      {isFav && <Star className="size-3.5 shrink-0 fill-amber text-amber" />}
+                      <span className="truncate">{ex.name}</span>
+                    </p>
+                    <p className="truncate text-[12.5px] text-mist">
+                      {MUSCLE_METADATA[ex.primaryMuscle]?.name ?? titleCase(ex.primaryMuscle)} · {titleCase(ex.equipment)}
                     </p>
                   </div>
-                  <div>
-                    <p className="font-mono text-[7.5px] uppercase tracking-[0.1em] text-dim">Target</p>
-                    <p className="font-numeric text-[12px] text-acid">{stat?.target ? `${stat.target}kg` : "—"}</p>
-                  </div>
-                  <div>
-                    <p className="font-mono text-[7.5px] uppercase tracking-[0.1em] text-dim">Sets</p>
-                    <p className="font-numeric text-[12px] text-mist">{stat?.totalSets ?? 0}</p>
-                  </div>
-                </div>
-                <ChevronRight className="size-3.5 text-dim transition-transform group-hover:translate-x-0.5 group-hover:text-acid" />
-              </div>
-            </button>
-          );
-        })}
-      </div>
+                </button>
 
-      {!filtered.length && (
-        <div className="surface mt-4 flex flex-col items-center rounded-3xl py-16 text-center">
-          <Filter className="size-6 text-dim" />
-          <p className="mt-3 font-display text-lg font-bold">No movements match</p>
-          <p className="mt-1 text-[12px] text-mist">Loosen a filter or search a different muscle.</p>
-          <button
-            onClick={() => {
-              setQ("");
-              setMuscle("all");
-              setEquip("all");
-              setLevel("all");
-              setOnlyMine(false);
-            }}
-            className="mt-4 rounded-full border border-white/10 px-4 py-2 text-[11px] text-mist hover:text-chalk"
-          >
-            Reset filters
-          </button>
+                {st?.pr != null && st.pr > 0 && (
+                  <span className="rounded-lg bg-acid/14 px-2 py-0.5 font-numeric text-[12px] font-semibold text-acid">
+                    {st.pr}
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => handleAddToWorkout(ex)}
+                  aria-label={`Add ${ex.name}`}
+                  title={activeWorkoutId ? "Add to active session" : "Start session with this movement"}
+                  className="press grid size-8 shrink-0 place-items-center rounded-full bg-panel-2 text-mist hover:bg-acid hover:text-ink"
+                >
+                  <Plus className="size-4" />
+                </button>
+              </div>
+            );
+          })}
+
+          {displayedList.length === 0 && (
+            <div className="col-span-full p-10 text-center">
+              <p className="text-[15px] font-medium text-chalk">No matching exercises</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setQ("");
+                  setBodyPart("");
+                  setEqFilter("");
+                  setCatFilter("");
+                  setOnlyMyGym(false);
+                }}
+                className="mt-3 rounded-full bg-panel-2 px-4 py-1.5 text-[13px] font-medium text-acid"
+              >
+                Clear filters
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {selected && (
-        <ExerciseSheet
-          exercise={selected}
-          stat={stats[selected.id]}
-          allExercises={exercises}
-          equipment={equipment}
-          activeWorkoutId={activeWorkoutId}
-          onClose={() => setSelected(null)}
-          onAdd={() => add(selected)}
-          added={added === selected.id}
-        />
+      {displayedList.length > shown && (
+        <button
+          type="button"
+          onClick={() => setShown((s) => s + 40)}
+          className="press w-full rounded-2xl border border-white/[0.08] bg-panel py-3 text-[13.5px] font-medium text-chalk hover:bg-panel-2"
+        >
+          Show more ({displayedList.length - shown} remaining)
+        </button>
       )}
-    </>
-  );
-}
 
-function ExerciseSheet({
-  exercise,
-  stat,
-  allExercises,
-  equipment,
-  activeWorkoutId,
-  onClose,
-  onAdd,
-  added,
-}: {
-  exercise: ExerciseLite;
-  stat?: Stat;
-  allExercises: ExerciseLite[];
-  equipment: string[];
-  activeWorkoutId: string | null;
-  onClose: () => void;
-  onAdd: () => void;
-  added: boolean;
-}) {
-  const [tab, setTab] = useState<"how" | "data" | "swap">("how");
-  const alts = alternativesFor(exercise, allExercises, equipment, 4);
-  const max = Math.max(...(stat?.history.map((h) => h.value) ?? [1]), 1);
+      {/* Toast confirmation */}
+      {toastMsg && (
+        <div className="fixed bottom-24 left-1/2 z-[80] -translate-x-1/2 rounded-full border border-white/15 bg-panel-3 px-4 py-2 text-[13px] font-medium text-chalk shadow-2xl md:bottom-8">
+          {toastMsg}
+        </div>
+      )}
 
-  return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
-      <button className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} aria-label="Close" />
-      <div className="animate-fade-up relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-panel shadow-2xl sm:rounded-3xl">
-        <div className="relative overflow-hidden border-b border-white/[0.07] p-5">
-          <div
-            className="pointer-events-none absolute -right-16 -top-20 size-56 rounded-full"
-            style={{ background: `radial-gradient(circle, ${muscleColor(exercise.primaryMuscle)}22, transparent 70%)` }}
-          />
-          <div className="relative">
-            <div className="flex items-start justify-between">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Badge tone="neutral">{muscleLabel(exercise.primaryMuscle)}</Badge>
-                <Badge tone="neutral">{titleCase(exercise.equipment)}</Badge>
-                <Badge tone="neutral">{exercise.difficulty}</Badge>
-              </div>
-              <button
-                onClick={onClose}
-                className="grid size-8 shrink-0 place-items-center rounded-full border border-white/10 text-mist hover:text-chalk"
-              >
+      {/* Filters Sheet */}
+      {showFiltersModal && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="w-full max-w-lg rounded-t-3xl border border-white/10 bg-panel p-5 sm:rounded-3xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-xl font-semibold text-chalk">Filters</h3>
+              <button type="button" onClick={() => setShowFiltersModal(false)} className="grid size-8 place-items-center rounded-full bg-panel-2 text-mist">
                 <X className="size-4" />
               </button>
             </div>
-            <h2 className="mt-3 font-display text-[26px] font-bold leading-[0.95] tracking-[-0.04em]">
-              {exercise.name}
-            </h2>
-            <p className="mt-1.5 text-[11.5px] text-mist">
-              {exercise.primaryMuscle.charAt(0).toUpperCase() + exercise.primaryMuscle.slice(1)}
-              {exercise.secondaryMuscles.length ? ` · ${exercise.secondaryMuscles.map(muscleLabel).join(", ")}` : ""} · Tempo {exercise.tempo}
-            </p>
 
-            {/* Dual Anatomical Recruitment Visualization */}
-            <div className="mt-3.5 flex items-center gap-3.5 rounded-2xl border border-white/[0.07] bg-black/30 p-3">
-              <div className="flex shrink-0 gap-1.5">
-                <div className="rounded-xl border border-white/[0.06] bg-black/40 p-1 text-center">
-                  <MiniBodyMap
-                    primaryMuscle={exercise.primaryMuscle}
-                    secondaryMuscles={exercise.secondaryMuscles}
-                    view="front"
-                    className="h-16 w-9"
-                  />
-                  <span className="mt-0.5 block font-mono text-[7px] uppercase tracking-wider text-dim">Anterior</span>
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center justify-between rounded-2xl bg-panel-2 px-4 py-3">
+                <div>
+                  <p className="text-[14px] font-medium text-chalk">Only equipment I have</p>
+                  <p className="text-[12px] text-mist">{equipment.length} equipment types enabled in Settings</p>
                 </div>
-                <div className="rounded-xl border border-white/[0.06] bg-black/40 p-1 text-center">
-                  <MiniBodyMap
-                    primaryMuscle={exercise.primaryMuscle}
-                    secondaryMuscles={exercise.secondaryMuscles}
-                    view="back"
-                    className="h-16 w-9"
-                  />
-                  <span className="mt-0.5 block font-mono text-[7px] uppercase tracking-wider text-dim">Posterior</span>
+                <button
+                  type="button"
+                  onClick={() => setOnlyMyGym((v) => !v)}
+                  className={cn("h-7 w-12 rounded-full p-1 transition-colors", onlyMyGym ? "bg-acid" : "bg-panel-3")}
+                >
+                  <span className={cn("block size-5 rounded-full bg-ink transition-transform", onlyMyGym ? "translate-x-5" : "translate-x-0")} />
+                </button>
+              </div>
+
+              <div>
+                <p className="mb-2 text-[12px] font-medium text-mist">Exercise type</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCatFilter("")}
+                    className={cn("rounded-full px-3 py-1.5 text-[12.5px]", !catFilter ? "bg-acid font-semibold text-ink" : "bg-panel-2 text-mist")}
+                  >
+                    Any type
+                  </button>
+                  {categoryOptions.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setCatFilter(catFilter === cat ? "" : cat)}
+                      className={cn("rounded-full px-3 py-1.5 text-[12.5px]", catFilter === cat ? "bg-acid font-semibold text-ink" : "bg-panel-2 text-mist")}
+                    >
+                      {titleCase(cat)}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <div>
-                  <span className="font-mono text-[7.5px] uppercase tracking-wider text-acid">Primary Motor</span>
-                  <p className="text-[12px] font-bold text-chalk">{muscleLabel(exercise.primaryMuscle)}</p>
-                </div>
-                {exercise.secondaryMuscles.length > 0 && (
-                  <div>
-                    <span className="font-mono text-[7.5px] uppercase tracking-wider text-mint">Synergists & Stabilizers</span>
-                    <p className="truncate text-[10.5px] text-mist">{exercise.secondaryMuscles.map(muscleLabel).join(", ")}</p>
-                  </div>
-                )}
-                <div>
-                  <span className="font-mono text-[7.5px] uppercase tracking-wider text-dim">Movement Pattern</span>
-                  <p className="font-mono text-[9px] uppercase tracking-wider text-dim">{exercise.pattern.replace(/_/g, " ")}</p>
+
+              <div>
+                <p className="mb-2 text-[12px] font-medium text-mist">Equipment</p>
+                <div className="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={() => setEqFilter("")}
+                    className={cn("rounded-full px-3 py-1.5 text-[12.5px]", !eqFilter ? "bg-acid font-semibold text-ink" : "bg-panel-2 text-mist")}
+                  >
+                    Any equipment
+                  </button>
+                  {equipmentOptions.map((eq) => (
+                    <button
+                      key={eq}
+                      type="button"
+                      onClick={() => setEqFilter(eqFilter === eq ? "" : eq)}
+                      className={cn("rounded-full px-3 py-1.5 text-[12.5px]", eqFilter === eq ? "bg-acid font-semibold text-ink" : "bg-panel-2 text-mist")}
+                    >
+                      {titleCase(eq)}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
 
-            <div className="mt-3.5 grid grid-cols-3 gap-2">
-              {[
-                { label: "Est. 1RM", value: stat?.pr ? `${stat.pr}kg` : "—", icon: Trophy, tone: "#FFD166" },
-                { label: "Last set", value: stat?.lastWeight ? `${stat.lastWeight}×${stat.lastReps}` : "—", icon: TrendingUp, tone: "#C9F73A" },
-                { label: "Target · 8 reps", value: stat?.target ? `${stat.target}kg` : "—", icon: Target, tone: "#6EA8FF" },
-              ].map((s) => (
-                <div key={s.label} className="rounded-xl border border-white/[0.07] bg-black/20 p-2.5 text-center">
-                  <s.icon className="mx-auto mb-1 size-3" style={{ color: s.tone }} />
-                  <p className="font-numeric text-[12.5px] font-semibold">{s.value}</p>
-                  <p className="font-mono text-[7.5px] uppercase tracking-[0.08em] text-dim">{s.label}</p>
-                </div>
-              ))}
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEqFilter("");
+                  setCatFilter("");
+                  setOnlyMyGym(false);
+                }}
+                className="flex-1 rounded-full bg-panel-2 py-2.5 text-[13.5px] font-medium text-mist hover:text-chalk"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowFiltersModal(false)}
+                className="flex-1 rounded-full bg-acid py-2.5 text-[13.5px] font-semibold text-ink"
+              >
+                Show {filtered.length} exercises
+              </button>
             </div>
           </div>
         </div>
+      )}
 
-        <div className="flex gap-1 border-b border-white/[0.07] px-4 pt-3">
-          {([["how", "Technique"], ["data", "Your data"], ["swap", "Alternatives"]] as const).map(([k, label]) => (
-            <button
-              key={k}
-              onClick={() => setTab(k)}
-              className={cn(
-                "border-b-2 px-3 py-2 text-[11px] font-medium transition-colors",
-                tab === k ? "border-acid text-chalk" : "border-transparent text-dim hover:text-mist"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div className="p-5">
-          {tab === "how" && (
-            <div className="space-y-4">
+      {/* Skill Ladders Modal matching openGym Ladders */}
+      {showLaddersModal && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/75 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-white/10 bg-panel p-5 sm:rounded-3xl">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="label-mono mb-2">Execution</p>
-                <ol className="space-y-2">
-                  {exercise.instructions.map((step, i) => (
-                    <li key={step} className="flex gap-2.5 text-[11.5px] leading-relaxed text-mist">
-                      <span className="grid size-4 shrink-0 place-items-center rounded-full bg-white/[0.06] font-mono text-[8px] text-dim">
-                        {i + 1}
-                      </span>
-                      {step}
-                    </li>
-                  ))}
-                </ol>
+                <h3 className="font-display text-2xl font-semibold text-chalk">Skill ladders</h3>
+                <p className="mt-0.5 text-[13px] text-mist">Bodyweight progression chains from foundational control up to elite mastery.</p>
               </div>
-              <div className="rounded-xl border border-acid/15 bg-acid/[0.04] p-3">
-                <p className="mb-2 flex items-center gap-1.5 font-mono text-[8.5px] uppercase tracking-[0.12em] text-acid">
-                  <Info className="size-3" /> Coach cues
-                </p>
-                <ul className="space-y-1.5">
-                  {exercise.cues.map((c) => (
-                    <li key={c} className="flex gap-2 text-[11px] leading-relaxed text-mist">
-                      <span className="mt-1.5 size-1 shrink-0 rounded-full bg-acid" />
-                      {c}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-                <span className="text-[11px] text-mist">Movement pattern</span>
-                <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-chalk">
-                  {exercise.pattern.replace(/_/g, " ")}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {tab === "data" && (
-            <div>
-              <p className="label-mono mb-2">Load trend · last sessions</p>
-              {stat?.history.length ? (
-                <div className="flex h-32 items-end gap-2 rounded-xl border border-white/[0.06] bg-black/20 p-3">
-                  {stat.history.map((h, i) => (
-                    <div key={i} className="flex flex-1 flex-col items-center gap-1">
-                      <span className="font-numeric text-[8px] text-dim">{h.value}</span>
-                      <div
-                        className="w-full rounded-t-[3px]"
-                        style={{
-                          height: `${Math.max(6, (h.value / max) * 80)}%`,
-                          background: i === stat.history.length - 1 ? "#C9F73A" : "rgba(255,255,255,0.14)",
-                        }}
-                      />
-                      <span className="font-mono text-[7px] text-dim">{h.label}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 text-center text-[11.5px] text-mist">
-                  No history yet. Log this lift and Forge will start auto-regulating load from your RPE.
-                </div>
-              )}
-              <div className="mt-3 rounded-xl border border-sky/15 bg-sky/[0.04] p-3">
-                <p className="flex items-center gap-1.5 text-[11px] font-medium text-sky">
-                  <Sparkles className="size-3" /> Strength standard
-                </p>
-                <p className="mt-1 text-[10.5px] leading-relaxed text-mist">
-                  {stat?.pr
-                    ? `Your best e1RM is ${stat.pr}kg. Add a top set at RPE 8 and Forge projects the next milestone automatically.`
-                    : "Set a baseline with a clean set of 5 at RPE 7. Everything after is progressive overload."}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {tab === "swap" && (
-            <div className="space-y-2">
-              <p className="mb-2 text-[11px] leading-relaxed text-mist">
-                Same-pattern substitutes ranked by muscle overlap and your available equipment.
-              </p>
-              {alts.map((a) => (
-                <div key={a.id} className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
-                  <span className="size-1.5 rounded-full" style={{ background: muscleColor(a.primaryMuscle) }} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] text-chalk">{a.name}</p>
-                    <p className="font-mono text-[8px] uppercase tracking-[0.08em] text-dim">
-                      {a.reasons.join(" · ") || titleCase(a.equipment)}
-                    </p>
-                  </div>
-                  <span className="font-numeric text-[9.5px] text-acid">{a.score}</span>
-                </div>
-              ))}
-              {!alts.length && <p className="py-6 text-center text-[11.5px] text-mist">No close substitutes with your equipment.</p>}
-            </div>
-          )}
-
-          <div className="mt-5">
-            {activeWorkoutId ? (
-              <button
-                onClick={onAdd}
-                className={cn(
-                  "press flex w-full items-center justify-center gap-2 rounded-full py-3 text-[12.5px] font-semibold",
-                  added ? "bg-mint text-ink" : "bg-acid text-ink"
-                )}
-              >
-                {added ? "Added to session" : "Add to today's session"} <ArrowRight className="size-3.5" />
+              <button type="button" onClick={() => setShowLaddersModal(false)} className="grid size-8 place-items-center rounded-full bg-panel-2 text-mist">
+                <X className="size-4" />
               </button>
-            ) : (
-              <div className="flex items-center justify-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.03] py-3 text-[11.5px] text-mist">
-                <Dumbbell className="size-3.5 text-acid" /> Start a session to add this lift
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {[...customLadders, ...SKILL_LADDERS].map((ladder) => {
+                let reached = -1;
+                ladder.steps.forEach((sid, i) => {
+                  if (trainedSet.has(sid)) reached = i;
+                });
+                const nextIdx = Math.min(ladder.steps.length - 1, reached + 1);
+                const nextEx = catalogById.get(ladder.steps[nextIdx]);
+
+                return (
+                  <div key={ladder.id} className="rounded-2xl border border-white/[0.08] bg-panel-2 p-4">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <h4 className="text-[16px] font-semibold text-chalk">{ladder.name}</h4>
+                      <span className="text-[12px] text-mist">
+                        {reached < 0 ? "Not started" : reached >= ladder.steps.length - 1 ? "Top rung reached" : `Rung ${reached + 1} of ${ladder.steps.length}`}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[12.5px] text-mist">{ladder.description}</p>
+
+                    <ol className="mt-3 space-y-1.5">
+                      {ladder.steps.map((stepId, idx) => {
+                        const ex = catalogById.get(stepId);
+                        if (!ex) return null;
+                        const state = idx <= reached ? "done" : idx === nextIdx ? "next" : "todo";
+                        return (
+                          <li key={stepId}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowLaddersModal(false);
+                                setSelectedEx(ex);
+                              }}
+                              className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left hover:bg-white/[0.05]"
+                            >
+                              <span
+                                className={cn(
+                                  "grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold",
+                                  state === "done"
+                                    ? "bg-mint text-ink"
+                                    : state === "next"
+                                      ? "bg-acid text-ink"
+                                      : "bg-panel-3 text-mist",
+                                )}
+                              >
+                                {state === "done" ? <Check className="size-3" /> : idx + 1}
+                              </span>
+                              <span className={cn("flex-1 text-[13.5px]", state === "done" ? "text-mist line-through" : "font-medium text-chalk")}>
+                                {ex.name}
+                              </span>
+                              {state === "next" && (
+                                <span className="rounded-full bg-acid/16 px-2.5 py-0.5 text-[11px] font-semibold text-acid">
+                                  {reached < 0 ? "Start here" : "Next up"}
+                                </span>
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ol>
+
+                    {nextEx && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowLaddersModal(false);
+                          handleAddToWorkout(nextEx);
+                        }}
+                        className="press mt-3 inline-flex items-center gap-1.5 rounded-full bg-acid/16 px-3.5 py-1.5 text-[12.5px] font-semibold text-acid hover:bg-acid/24"
+                      >
+                        <Play className="size-3 fill-current" />
+                        Train {nextEx.name}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {creatingLadder ? (
+              <div className="mt-4 rounded-2xl border border-acid/25 bg-panel-2 p-4">
+                <h4 className="text-[15px] font-semibold text-chalk">Make your own ladder</h4>
+                <input
+                  value={ldName}
+                  onChange={(e) => setLdName(e.target.value)}
+                  placeholder="Ladder name (e.g. Ring Muscle-Up)"
+                  className="mt-2.5 w-full rounded-xl border border-white/10 bg-panel px-3 py-2 text-[13.5px] text-chalk"
+                />
+                <p className="mt-2 text-[12px] text-mist">Selected rungs ({ldSteps.length}): {ldSteps.map((s) => catalogById.get(s)?.name ?? s).join(" -> ")}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {["ex-push-up", "ex-dips", "ex-pull-up", "ex-plank", "ex-goblet-squat", "ex-overhead-press"].map((id) => {
+                    const ex = catalogById.get(id);
+                    if (!ex) return null;
+                    const active = ldSteps.includes(id);
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setLdSteps((cur) => (active ? cur.filter((x) => x !== id) : [...cur, id]))}
+                        className={cn("rounded-full px-2.5 py-1 text-[11.5px]", active ? "bg-acid text-ink font-medium" : "bg-panel text-mist")}
+                      >
+                        {ex.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button type="button" onClick={() => setCreatingLadder(false)} className="rounded-full bg-panel px-4 py-1.5 text-[12.5px] text-mist">Cancel</button>
+                  <button type="button" onClick={handleSaveCustomLadder} className="rounded-full bg-acid px-4 py-1.5 text-[12.5px] font-semibold text-ink">Save ladder</button>
+                </div>
               </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCreatingLadder(true)}
+                className="press mt-4 flex w-full items-center justify-center gap-1.5 rounded-2xl bg-panel-2 py-3 text-[13.5px] font-medium text-acid hover:bg-panel-3"
+              >
+                <Plus className="size-4" />
+                Make your own ladder
+              </button>
             )}
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Create Custom Exercise Modal */}
+      {showCustomModal && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/75 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="w-full max-w-md rounded-t-3xl border border-white/10 bg-panel p-5 sm:rounded-3xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-xl font-semibold text-chalk">New exercise</h3>
+              <button type="button" onClick={() => setShowCustomModal(false)} className="grid size-8 place-items-center rounded-full bg-panel-2 text-mist">
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              <input
+                value={cxName}
+                onChange={(e) => setCxName(e.target.value)}
+                placeholder="Exercise name (e.g. Belt Squat)"
+                className="w-full rounded-xl border border-white/10 bg-panel-2 px-3.5 py-2.5 text-[14px] text-chalk"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <select value={cxMuscle} onChange={(e) => setCxMuscle(e.target.value)} className="rounded-xl border border-white/10 bg-panel-2 px-3 py-2 text-[13px] text-chalk">
+                  {EXPLORER_MUSCLES.map((m) => (
+                    <option key={m.key} value={m.key}>{m.label}</option>
+                  ))}
+                </select>
+                <select value={cxEq} onChange={(e) => setCxEq(e.target.value)} className="rounded-xl border border-white/10 bg-panel-2 px-3 py-2 text-[13px] text-chalk">
+                  {["barbell", "dumbbell", "machine", "cable", "bodyweight", "kettlebell", "bands"].map((eq) => (
+                    <option key={eq} value={eq}>{titleCase(eq)}</option>
+                  ))}
+                </select>
+              </div>
+              <textarea
+                rows={3}
+                value={cxInst}
+                onChange={(e) => setCxInst(e.target.value)}
+                placeholder="Optional step-by-step instructions (one per line)..."
+                className="w-full rounded-xl border border-white/10 bg-panel-2 p-3 text-[13px] text-chalk"
+              />
+              <button
+                type="button"
+                onClick={handleSaveCustomExercise}
+                className="press w-full rounded-full bg-acid py-2.5 text-[14px] font-semibold text-ink"
+              >
+                Save exercise
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rich Exercise Detail Modal */}
+      {selectedEx && (
+        <div className="fixed inset-0 z-[75] flex items-end justify-center bg-black/80 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-white/12 bg-panel p-5 sm:rounded-3xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-2xl font-semibold text-chalk">{selectedEx.name}</h2>
+                <p className="mt-0.5 text-[13px] text-mist">
+                  {MUSCLE_METADATA[selectedEx.primaryMuscle]?.name ?? titleCase(selectedEx.primaryMuscle)} · {titleCase(selectedEx.equipment)} · {titleCase(selectedEx.category)}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => toggleFav(selectedEx.id)}
+                  aria-label="Bookmark favorite"
+                  className="grid size-8 place-items-center rounded-full bg-panel-2 text-mist hover:text-amber"
+                >
+                  <Star className={cn("size-4", favIds.includes(selectedEx.id) && "fill-amber text-amber")} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEx(null)}
+                  className="grid size-8 place-items-center rounded-full bg-panel-2 text-mist hover:text-chalk"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Motion Guide / Anatomy Toggle */}
+            <div className="mt-4 inline-flex rounded-xl bg-panel-2 p-1">
+              <button
+                type="button"
+                onClick={() => setExplorerDetailMode("motion")}
+                className={cn("rounded-lg px-3 py-1 text-[12px] font-medium", explorerDetailMode === "motion" ? "bg-panel-3 text-chalk" : "text-mist")}
+              >
+                Motion guide
+              </button>
+              <button
+                type="button"
+                onClick={() => setExplorerDetailMode("anatomy")}
+                className={cn("rounded-lg px-3 py-1 text-[12px] font-medium", explorerDetailMode === "anatomy" ? "bg-panel-3 text-chalk" : "text-mist")}
+              >
+                Muscle map
+              </button>
+            </div>
+
+            <div className="mt-3 grid gap-4 md:grid-cols-2">
+              {explorerDetailMode === "motion" ? (
+                <ExerciseMotionDemo pattern={selectedEx.pattern} equipment={selectedEx.equipment} size="lg" interactive />
+              ) : (
+                <div className="flex items-center justify-center rounded-2xl border border-white/[0.08] bg-[#141416] p-4">
+                  <BodyMap
+                    selectedMuscle={selectedEx.primaryMuscle}
+                    secondaryMuscles={selectedEx.secondaryMuscles}
+                    highlightWeights={selectedEx.muscleWeights}
+                    interactive={false}
+                    showDetailsCard={false}
+                    svgHeightClass="max-h-[210px]"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {/* PR / Last session summary */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl bg-panel-2 p-3">
+                    <p className="flex items-center gap-1 text-[11px] text-mist">
+                      <Trophy className="size-3 text-acid" /> Best e1RM
+                    </p>
+                    <p className="mt-1 font-numeric text-xl font-semibold text-chalk">
+                      {stats[selectedEx.id]?.pr ? `${stats[selectedEx.id].pr} kg` : "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-panel-2 p-3">
+                    <p className="flex items-center gap-1 text-[11px] text-mist">
+                      <TrendingUp className="size-3 text-mint" /> Suggested next
+                    </p>
+                    <p className="mt-1 font-numeric text-xl font-semibold text-chalk">
+                      {stats[selectedEx.id]?.target ? `${stats[selectedEx.id].target} kg` : "RPE 8"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-panel-2 p-3">
+                  <p className="text-[11px] font-medium text-mist">Muscles trained</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-acid/18 px-2.5 py-0.5 text-[11.5px] font-medium text-acid">
+                      Primary: {MUSCLE_METADATA[selectedEx.primaryMuscle]?.name ?? titleCase(selectedEx.primaryMuscle)}
+                    </span>
+                    {selectedEx.secondaryMuscles.map((sec) => (
+                      <span key={sec} className="rounded-full bg-panel-3 px-2.5 py-0.5 text-[11.5px] text-mist">
+                        {MUSCLE_METADATA[sec]?.name ?? titleCase(sec)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div className="mt-4 rounded-2xl bg-panel-2 p-4">
+              <h4 className="text-[13px] font-semibold text-chalk">How to perform</h4>
+              <ol className="mt-2 space-y-1.5 text-[13px] leading-relaxed text-mist">
+                {selectedEx.instructions.map((step, idx) => (
+                  <li key={idx} className="flex gap-2">
+                    <span className="font-numeric text-acid">{idx + 1}.</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  const target = selectedEx;
+                  setSelectedEx(null);
+                  handleAddToWorkout(target);
+                }}
+                className="press flex flex-1 items-center justify-center gap-2 rounded-full bg-acid py-2.5 text-[14px] font-semibold text-ink"
+              >
+                <Play className="size-4 fill-current" />
+                {activeWorkoutId ? "Add to active session" : "Train this now"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedEx(null)}
+                className="rounded-full bg-panel-2 px-5 py-2.5 text-[14px] font-medium text-chalk"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

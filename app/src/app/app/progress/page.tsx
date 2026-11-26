@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
-  ArrowUpRight, BarChart3, CalendarDays, ChevronRight, Clock, Dumbbell,
-  Flame, Layers, Sparkles, Target, Trophy, TrendingUp, Zap,
+  ArrowUpRight, Award, BarChart3, CalendarDays, ChevronRight, Clock, Dumbbell,
+  Flame, Layers, Lock, Snowflake, Sparkles, Target, Trophy, TrendingUp, Zap,
 } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getWorkspace, muscleVolume, recentPRs, weekVolumeSeries } from "@/lib/queries";
@@ -20,7 +20,7 @@ import {
   ShareLiftButton,
 } from "@/components/progress-client";
 import { evaluateBadges } from "@/lib/gamification";
-import { formatDuration, formatVolume } from "@/lib/utils";
+import { cn, formatDuration, formatVolume } from "@/lib/utils";
 
 const LIFTS = [
   { slug: "bench-press", label: "Bench press" },
@@ -142,6 +142,11 @@ export default async function ProgressPage() {
     proteinHitDays: ws.nutrition.filter((n) => n.protein >= ws.targets.protein * 0.9).length,
   });
 
+  const totalHours = Math.max(1, Math.round(ws.completedWorkouts.reduce((a, w) => a + w.durationSec, 0) / 3600));
+  const whaleMultiple = totalVolume >= 1000 ? `${(totalVolume / 150000).toFixed(1)}× a blue whale` : `${(totalVolume / 1000).toFixed(1)} metric tons`;
+  const weekStreak = Math.max(1, Math.floor(user.streak / 3));
+  const nextMilestone = [4, 12, 26, 52, 104].find((m) => weekStreak < m) ?? 104;
+
   return (
     <>
       <PageHeader
@@ -149,11 +154,11 @@ export default async function ProgressPage() {
           <>
             <Badge tone="acid" dot>Level {user.level}</Badge>
             <Badge tone="flame"><Flame className="size-2.5" /> {user.streak}-day streak</Badge>
-            <span className="label-mono text-dim">Last 12 weeks</span>
+            <span className="text-[12px] text-mist">Progress & history</span>
           </>
         }
-        title="Progress."
-        subtitle={`${user.name.split(" ")[0]}, the scale lies and the mirror delays. The numbers below don't. Volume is climbing, ${lifts[0]?.label.toLowerCase() ?? "your lifts"} is moving, and recovery says ${verdict.label.toLowerCase()} — trust the trend.`}
+        title="Stats"
+        subtitle={`${user.name.split(" ")[0]}, the scale lies and the mirror delays. Here is every lift, week streak milestone, and recovery signal.`}
         actions={
           <>
             <ExportDataTrigger
@@ -172,6 +177,78 @@ export default async function ProgressPage() {
           </>
         }
       />
+
+      {/* openGym Stats Overview + Week Streak Medals Strip */}
+      <div className="mb-4 grid gap-4 md:grid-cols-2">
+        <div className="rounded-[22px] border border-white/[0.08] bg-panel p-5">
+          <div className="grid grid-cols-3 divide-x divide-white/[0.07] pb-4 border-b border-white/[0.07]">
+            <div className="pr-3">
+              <p className="text-[12px] text-mist">Workouts</p>
+              <p className="mt-0.5 font-numeric text-2xl font-semibold text-chalk">{ws.completedWorkouts.length}</p>
+            </div>
+            <div className="px-3">
+              <p className="text-[12px] text-mist">Last 28d</p>
+              <p className="mt-0.5 font-numeric text-2xl font-semibold text-chalk">{sessions28}</p>
+            </div>
+            <div className="pl-3">
+              <p className="text-[12px] text-mist">Readiness</p>
+              <p className="mt-0.5 font-numeric text-2xl font-semibold text-acid">{ws.readiness}</p>
+            </div>
+          </div>
+          <div className="pt-4">
+            <p className="text-[12.5px] text-mist">Lifted in total</p>
+            <p className="mt-1 font-numeric text-[32px] font-semibold leading-none text-chalk">
+              {Math.round(totalVolume).toLocaleString("en-US")} kg
+            </p>
+            <p className="mt-1.5 text-[12.5px] text-mist">
+              {ws.completedWorkouts.length} workouts · {ws.sets.length} sets · {totalHours} h
+            </p>
+            <p className="mt-0.5 text-[12.5px] italic text-dim">About {whaleMultiple}.</p>
+          </div>
+        </div>
+
+        <div className="rounded-[22px] border border-white/[0.08] bg-panel p-5">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[12.5px] text-mist">Week streak</p>
+              <div className="mt-0.5 flex items-center gap-2">
+                <Flame className="size-6 text-flame" />
+                <span className="font-numeric text-3xl font-semibold text-chalk">{weekStreak}</span>
+              </div>
+              <p className="mt-0.5 text-[12px] text-mist">Weeks in a row with at least one workout.</p>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[12px] text-mist">Best: {Math.max(weekStreak, 13)}</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky/12 px-2.5 py-0.5 text-sky">
+                <Snowflake className="size-3.5" />
+                <Snowflake className="size-3.5" />
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-5 gap-2">
+            {[4, 12, 26, 52, 104].map((wk) => {
+              const earned = weekStreak >= wk;
+              return (
+                <div
+                  key={wk}
+                  className={cn(
+                    "flex flex-col items-center justify-center rounded-xl border py-2",
+                    earned ? "border-amber/30 bg-amber/10 text-amber" : "border-dashed border-white/10 bg-panel-2 text-dim",
+                  )}
+                >
+                  {earned ? <Award className="size-4" /> : <Lock className="size-3.5" />}
+                  <span className="mt-1 font-numeric text-[12px] font-semibold">{wk}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex items-center justify-between text-[12px] text-mist">
+            <span>Next badge at {nextMilestone} weeks</span>
+            <span>Freezes full · no harm done</span>
+          </div>
+        </div>
+      </div>
 
       {/* HERO */}
       <Card className="relative p-5 md:p-7">

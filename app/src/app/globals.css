@@ -5,22 +5,22 @@
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
 
-  --color-ink: #060708;
-  --color-ink-2: #090b0e;
-  --color-panel: #0c0e12;
-  --color-panel-2: #11141a;
-  --color-panel-3: #171b22;
-  --color-chalk: #f2f3ee;
-  --color-mist: #8b919c;
-  --color-dim: #5c626d;
+  --color-ink: #000000;
+  --color-ink-2: #0a0a0c;
+  --color-panel: #151518;
+  --color-panel-2: #1c1c1e;
+  --color-panel-3: #2c2c2e;
+  --color-chalk: #f5f5f7;
+  --color-mist: #a1a1aa;
+  --color-dim: #71717a;
   --color-acid: #c9f73a;
-  --color-acid-deep: #a4cc24;
-  --color-flame: #ff6b35;
-  --color-sky: #6ea8ff;
-  --color-mint: #7be0ad;
-  --color-amber: #ffd166;
-  --color-grape: #b49cff;
-  --color-rose: #ff8fa3;
+  --color-acid-deep: #9fd11f;
+  --color-flame: #ff9f0a;
+  --color-sky: #0a84ff;
+  --color-mint: #30d158;
+  --color-amber: #ffd60a;
+  --color-grape: #bf5af2;
+  --color-rose: #ff375f;
 
   --radius-4xl: 2rem;
   --radius-5xl: 2.5rem;
@@ -31,13 +31,13 @@
     border-color: rgba(255, 255, 255, 0.07);
   }
   html {
-    background-color: #060708;
-    color: #f2f3ee;
+    background-color: #000000;
+    color: #f5f5f7;
     -webkit-font-smoothing: antialiased;
     scroll-behavior: smooth;
   }
   body {
-    background-color: #060708;
+    background-color: #000000;
     font-family: var(--font-sans);
     font-feature-settings: "ss01" 1, "cv01" 1;
     overflow-x: hidden;
@@ -105,17 +105,15 @@
     color: #8b919c;
   }
   .hairline {
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
   .surface {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 45%),
-      #0c0e12;
-    border: 1px solid rgba(255, 255, 255, 0.075);
+    background: #151518;
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
   .surface-2 {
-    background: #11141a;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: #1c1c1e;
+    border: 1px solid rgba(255, 255, 255, 0.07);
   }
   .glow-acid {
     box-shadow: 0 0 0 1px rgba(201, 247, 58, 0.2), 0 18px 60px -18px rgba(201, 247, 58, 0.45);

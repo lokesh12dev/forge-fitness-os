@@ -237,27 +237,28 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
     return out;
   }, [remainingProtein, proteinFilter]);
 
-  const avgCalories = week.length ? Math.round(week.reduce((a, d) => a + d.calories, 0) / week.length) : 0;
-  const avgProtein = week.length ? Math.round(week.reduce((a, d) => a + d.protein, 0) / week.length) : 0;
+  const avgCalories = week.filter((d) => d.calories > 0).length
+    ? Math.round(week.reduce((a, d) => a + d.calories, 0) / week.filter((d) => d.calories > 0).length)
+    : 0;
+  const avgProtein = week.filter((d) => d.calories > 0).length
+    ? Math.round(week.reduce((a, d) => a + d.protein, 0) / week.filter((d) => d.calories > 0).length)
+    : 0;
+  const loggedDays = week.filter((d) => d.calories > 0).length;
   const daysOnTarget = week.filter((d) => Math.abs(d.calories - targets.calories) <= targets.calories * 0.12).length;
   const paceTarget = targets.protein / 4;
 
   /* ── actions ── */
 
-  function openManual(meal: string) {
+  function openManual(meal: string, source: "manual" | "photo" = "manual") {
     setManualMeal(meal);
+    setFormSource(source);
     setForm({ name: "", meal, serving: "1 serving", calories: "", protein: "", carbs: "", fat: "" });
     setSheet({ type: "manual", meal });
   }
 
   function openScan() {
+    setPhoto(null);
     setSheet({ type: "scan" });
-    setScanState("idle");
-    setScanStep(0);
-    setPreview(null);
-    setDetection(null);
-    setCheckedItems([]);
-    setScanMeal(defaultMealForHour(new Date().getHours()));
   }
 
   function openTargets() {
@@ -284,7 +285,7 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
       fd.set("protein", form.protein || "0");
       fd.set("carbs", form.carbs || "0");
       fd.set("fat", form.fat || "0");
-      fd.set("source", "manual");
+      fd.set("source", formSource);
       await logFood(fd);
       setSheet(null);
       router.refresh();
@@ -335,76 +336,13 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
     }
   }
 
-  function nextDetection() {
-    const d = DETECTIONS[demoIndex.current % DETECTIONS.length];
-    demoIndex.current += 1;
-    return d;
-  }
-
-  function startScan(withPreview = false) {
-    const d = nextDetection();
-    setDetection(d);
-    setCheckedItems(d.items.map(() => true));
-    setScanStep(0);
-    setScanState("scanning");
-    if (!withPreview) setPreview(null);
-  }
-
-  useEffect(() => {
-    if (scanState !== "scanning") return;
-    const timers = [
-      setTimeout(() => setScanStep(1), 550),
-      setTimeout(() => setScanStep(2), 1200),
-      setTimeout(() => {
-        setScanStep(3);
-        setScanState("result");
-      }, 1950),
-    ];
-    return () => timers.forEach(clearTimeout);
-  }, [scanState]);
-
   function handleFile(file: File | null) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      setPreview(String(reader.result));
-      startScan(true);
+      setPhoto(String(reader.result));
     };
     reader.readAsDataURL(file);
-  }
-
-  const selectedItems = detection?.items.filter((_, i) => checkedItems[i]) ?? [];
-  const scanTotals = selectedItems.reduce(
-    (a, i) => ({
-      calories: a.calories + i.calories,
-      protein: a.protein + i.protein,
-      carbs: a.carbs + i.carbs,
-      fat: a.fat + i.fat,
-    }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0 },
-  );
-
-  async function logScan() {
-    if (!detection || !selectedItems.length || scanBusy) return;
-    setScanBusy(true);
-    try {
-      for (const item of selectedItems) {
-        const fd = new FormData();
-        fd.set("name", item.name);
-        fd.set("meal", scanMeal);
-        fd.set("serving", item.serving);
-        fd.set("calories", String(item.calories));
-        fd.set("protein", String(item.protein));
-        fd.set("carbs", String(item.carbs));
-        fd.set("fat", String(item.fat));
-        fd.set("source", "photo");
-        await logFood(fd);
-      }
-      setSheet(null);
-      router.refresh();
-    } finally {
-      setScanBusy(false);
-    }
   }
 
   const coachNote = useMemo(() => {
@@ -534,11 +472,11 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
               <MacroBar label="Fat" value={totals.fat} target={targets.fat} color="#FFD166" />
               <div>
                 <div className="mb-1.5 flex items-baseline justify-between">
-                  <span className="label-mono">Fiber goal</span>
-                  <span className="font-numeric text-[11px] text-mist"><span className="text-chalk">28</span> / 35g</span>
+                  <span className="label-mono">Water</span>
+                  <span className="font-numeric text-[11px] text-mist"><span className="text-chalk">{fmt(waterMl)}</span> / {fmt(targets.waterMl)} ml</span>
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
-                  <div className="h-full rounded-full bg-mint" style={{ width: "80%" }} />
+                  <div className="h-full rounded-full bg-sky" style={{ width: `${Math.min(100, Math.round((waterMl / Math.max(1, targets.waterMl)) * 100))}%` }} />
                 </div>
               </div>
             </div>
@@ -744,8 +682,8 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
         <Card className="p-5 md:p-6 xl:col-span-8">
           <CardHeader
             label="7-day fuel average"
-            title={`${fmt(avgCalories)} kcal · ${avgProtein}g protein`}
-            action={<Badge tone={daysOnTarget >= 4 ? "acid" : "amber"}>{daysOnTarget}/7 days on target</Badge>}
+            title={loggedDays ? `${fmt(avgCalories)} kcal · ${avgProtein}g protein` : "No days logged yet"}
+            action={<Badge tone={daysOnTarget >= 4 ? "acid" : "amber"}>{daysOnTarget}/{loggedDays || 7} logged days on target</Badge>}
           />
           <WeekBars week={week} target={targets.calories} />
           <div className="mt-4 grid grid-cols-3 gap-3 border-t border-white/[0.07] pt-4">
@@ -755,7 +693,7 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
             </div>
             <div>
               <p className="label-mono mb-1">Best day</p>
-              <p className="font-numeric text-lg font-semibold text-acid">{week.length ? fmt(Math.max(...week.map((d) => d.protein))) : 0}g</p>
+              <p className="font-numeric text-lg font-semibold text-acid">{loggedDays ? fmt(Math.max(...week.map((d) => d.protein))) : 0}g</p>
             </div>
             <div>
               <p className="label-mono mb-1">Adherence</p>
@@ -900,176 +838,58 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
         </form>
       </Sheet>
 
-      {/* ───────────── PHOTO SCAN SHEET ───────────── */}
-      <Sheet open={sheet?.type === "scan"} onClose={() => setSheet(null)} eyebrow="Photo-to-macro" title="Scan your plate" wide>
-        {scanState === "idle" && (
-          <div>
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="group relative flex w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/[0.02] py-12 transition-colors hover:border-acid/40"
-            >
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(201,247,58,0.10),transparent_65%)]" />
+      {/* ───────────── PHOTO SHEET ───────────── */}
+      <Sheet open={sheet?.type === "scan"} onClose={() => setSheet(null)} eyebrow="Meal photo" title="Attach a photo" wide>
+        <div>
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="group relative flex w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/15 bg-white/[0.02] py-10 transition-colors hover:border-acid/40"
+          >
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(201,247,58,0.10),transparent_65%)]" />
+            {photo ? (
+              <img src={photo} alt="Selected meal" className="absolute inset-0 size-full object-cover opacity-70" />
+            ) : (
               <span className="relative grid size-14 place-items-center rounded-full border border-acid/25 bg-acid/10 text-acid">
                 <Camera className="size-6" />
               </span>
-              <p className="relative mt-4 font-display text-lg font-bold">Take or drop a photo</p>
-              <p className="relative mt-1 max-w-xs text-center text-[11px] leading-relaxed text-mist">
-                Top-down works best. Forge identifies each component and estimates portions from plate geometry.
-              </p>
-              <span className="relative mt-4 rounded-full bg-acid px-4 py-2 text-[11px] font-semibold text-ink">Open camera</span>
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-            />
-            <div className="mt-3 flex items-center gap-3">
-              <span className="h-px flex-1 bg-white/[0.07]" />
-              <span className="font-mono text-[8px] uppercase tracking-[0.16em] text-dim">or</span>
-              <span className="h-px flex-1 bg-white/[0.07]" />
-            </div>
-            <Button variant="secondary" size="md" className="mt-3 w-full" onClick={() => startScan(false)}>
-              <Sparkles className="size-3.5 text-acid" /> Try a demo plate
+            )}
+            <p className="relative mt-4 font-display text-lg font-bold">{photo ? "Photo attached" : "Take or choose a photo"}</p>
+            <p className="relative mt-1 max-w-xs text-center text-[11px] leading-relaxed text-mist">
+              {photo ? "Tap to replace. Continue below to enter what you ate." : "The photo is stored with the entry as a reference. Macros are entered and confirmed by you."}
+            </p>
+            <span className="relative mt-4 rounded-full bg-acid px-4 py-2 text-[11px] font-semibold text-ink">
+              {photo ? "Replace photo" : "Open camera"}
+            </span>
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+          />
+
+          <div className="mt-4 rounded-xl border border-amber/20 bg-amber/[0.05] p-3 text-[10.5px] leading-relaxed text-mist">
+            <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-amber">
+              {VISION_ENABLED ? "Recognition on" : "Recognition off"}
+            </p>
+            <p className="mt-1">
+              {VISION_ENABLED
+                ? "The vision model will prefill components; you confirm every item before it logs."
+                : "Automatic food recognition needs a vision API key (FOOD_VISION_API_KEY). Without it Forge will not guess your macros — the photo is kept as a reference and the numbers are yours."}
+            </p>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2">
+            <Button size="md" onClick={() => openManual(defaultMealForHour(new Date().getHours()), "photo")} disabled={!photo}>
+              <Utensils className="size-3.5" /> Enter this meal
             </Button>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-              {[
-                ["Regional", "Indian, Asian, Western"],
-                ["Mixed plates", "Up to 6 components"],
-                ["Portions", "Plate + hand scale"],
-              ].map(([title, body]) => (
-                <div key={title} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2">
-                  <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-chalk">{title}</p>
-                  <p className="mt-1 text-[8.5px] leading-snug text-dim">{body}</p>
-                </div>
-              ))}
-            </div>
+            <Button variant="ghost" size="md" onClick={() => openManual(defaultMealForHour(new Date().getHours()), "manual")}>
+              Log without a photo
+            </Button>
           </div>
-        )}
-
-        {scanState === "scanning" && (
-          <div>
-            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
-              {preview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={preview} alt="Meal being scanned" className="size-full object-cover opacity-80" />
-              ) : (
-                <div className="absolute inset-0 grid place-items-center bg-[radial-gradient(circle_at_50%_45%,#1a2115,#080a08_70%)]">
-                  <div className="relative size-44">
-                    <div className="absolute inset-0 rounded-full border border-acid/20" />
-                    <div className="absolute inset-5 rounded-full border border-white/10 bg-white/[0.03]" />
-                    <div className="absolute inset-12 rounded-full bg-gradient-to-br from-amber/30 via-white/10 to-flame/20 blur-[1px]" />
-                    <div className="absolute inset-x-10 top-12 h-3 rounded-full bg-amber/40" />
-                    <div className="absolute left-8 top-20 size-8 rounded-full bg-mint/30" />
-                    <div className="absolute right-7 top-24 size-6 rounded-full bg-flame/30" />
-                  </div>
-                </div>
-              )}
-              <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-acid/25 to-transparent animate-pulse" />
-              <div className="absolute inset-x-0 top-0 h-px bg-acid shadow-[0_0_20px_2px_rgba(201,247,58,0.65)] animate-pulse" />
-              <div className="absolute inset-x-3 bottom-3 flex items-center justify-between rounded-xl border border-white/10 bg-black/70 px-3 py-2 backdrop-blur">
-                <span className="flex items-center gap-2 text-[10.5px] text-chalk">
-                  <Loader2 className="size-3.5 animate-spin text-acid" />
-                  {scanStep < 1 ? "Detecting plate…" : scanStep < 2 ? "Segmenting components…" : "Estimating portions…"}
-                </span>
-                <span className="font-numeric text-[10px] text-acid">{Math.min(96, 24 + scanStep * 24)}%</span>
-              </div>
-            </div>
-            <div className="mt-4 space-y-2">
-              {["Plating + lighting check", "Food recognition model", "Portion & macro estimation"].map((step, i) => (
-                <div key={step} className="flex items-center gap-2 text-[10.5px]">
-                  <span className={cn("grid size-4 place-items-center rounded-full border", scanStep > i ? "border-acid bg-acid text-ink" : "border-white/15 text-dim")}>
-                    {scanStep > i ? <Check className="size-2.5" /> : <span className="size-1 rounded-full bg-current" />}
-                  </span>
-                  <span className={scanStep > i ? "text-chalk" : "text-dim"}>{step}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {scanState === "result" && detection && (
-          <div>
-            <div className="flex items-start gap-3 rounded-2xl border border-acid/20 bg-acid/[0.05] p-3.5">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-acid/15 text-acid"><ScanLine className="size-5" /></span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-display text-[17px] font-bold leading-none">{detection.title}</p>
-                  <Badge tone="acid">{detection.confidence}% match</Badge>
-                </div>
-                <p className="mt-1 text-[10.5px] text-mist">{detection.subtitle}</p>
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-2">
-              {detection.items.map((item, i) => (
-                <button
-                  key={item.name}
-                  onClick={() => setCheckedItems((prev) => prev.map((c, idx) => (idx === i ? !c : c)))}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors",
-                    checkedItems[i] ? "border-acid/25 bg-acid/[0.04]" : "border-white/[0.07] bg-white/[0.02] opacity-60",
-                  )}
-                >
-                  <span className={cn("grid size-5 shrink-0 place-items-center rounded-md border", checkedItems[i] ? "border-acid bg-acid text-ink" : "border-white/20 text-transparent")}>
-                    <Check className="size-3" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-medium text-chalk/90">{item.name}</p>
-                    <p className="font-mono text-[8.5px] uppercase tracking-[0.08em] text-dim">{item.serving}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-numeric text-[11px] text-chalk">{item.calories} kcal</p>
-                    <p className="font-numeric text-[9px] text-mist">{item.protein}g P · {item.carbs}g C · {item.fat}g F</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-              {[
-                ["Calories", `${scanTotals.calories}`, "kcal", "#C9F73A"],
-                ["Protein", `${scanTotals.protein}`, "g", "#C9F73A"],
-                ["Carbs", `${scanTotals.carbs}`, "g", "#6EA8FF"],
-                ["Fat", `${scanTotals.fat}`, "g", "#FFD166"],
-              ].map(([label, value, unit, color]) => (
-                <div key={label} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-2.5">
-                  <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-dim">{label}</p>
-                  <p className="mt-1 font-numeric text-lg font-semibold" style={{ color }}>{value}<span className="ml-0.5 text-[9px] font-normal text-dim">{unit}</span></p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-4">
-              <p className="label-mono mb-2">Log to</p>
-              <div className="grid grid-cols-4 gap-1.5">
-                {MEALS.map((m) => (
-                  <button
-                    key={m.key}
-                    onClick={() => setScanMeal(m.key)}
-                    className={cn(
-                      "rounded-lg border py-2 font-mono text-[8.5px] uppercase tracking-[0.08em] transition-colors",
-                      scanMeal === m.key ? "border-acid/40 bg-acid/10 text-acid" : "border-white/[0.08] text-dim hover:text-mist",
-                    )}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <Button variant="ghost" size="md" className="flex-1" onClick={openScan}>Rescan</Button>
-              <Button size="md" className="flex-[2]" onClick={logScan} disabled={!selectedItems.length || scanBusy}>
-                {scanBusy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-                Log {selectedItems.length} item{selectedItems.length === 1 ? "" : "s"}
-              </Button>
-            </div>
-            <p className="mt-3 text-center font-mono text-[8px] uppercase tracking-[0.12em] text-dim">Demo recognition · confirm before logging</p>
-          </div>
-        )}
+        </div>
       </Sheet>
 
       {/* ───────────── TARGETS SHEET ───────────── */}

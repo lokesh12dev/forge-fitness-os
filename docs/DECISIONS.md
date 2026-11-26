@@ -80,3 +80,67 @@ Each entry records a decision made during development, including context, option
 **Date:** 2026-11-25
 **Context:** Spec calls for Turborepo + pnpm monorepo. Current app is a single Next.js project.
 **Decision:** Complete Phase 0 bug fixes in the current structure. Begin monorepo migration at Sprint 1 start, as the first milestone before building the logger. Packages: apps/web, packages/ui, packages/engine, packages/db, packages/types. Mobile (apps/mobile) and API (apps/api) added later.
+
+---
+
+## D-009 — 2-Tap SetRow with Ghost Performance Watermarks
+
+**Date:** 2026-11-26
+**Context:** Sprint 1 target requires set logging in $\le 2$ taps with interaction latency $< 100\text{ms}$.
+**Decision:**
+- Pre-fill ghost placeholders from previous workout performance or adaptive target suggestion.
+- Tapping the checkmark logs the set in 1 tap if sticking with suggested weight/reps, or 2 taps if adjusting weight/reps.
+- Set index button cycles set type between Normal, Warmup (`W`), Drop (`D`), and Failure (`F`).
+- Playwright benchmark verified 1-tap logging latency at 29ms–48ms across viewports.
+
+---
+
+## D-010 — Superset Auto-Advance
+
+**Date:** 2026-11-26
+**Context:** Lifters alternating between paired lifts (`SS-1A` and `SS-1B`) need seamless switching without manual tab navigation.
+**Decision:**
+- When logging a set on an exercise with a superset group (e.g. `SS-1A`), `logSetSpecific` automatically detects and focuses the paired unfinished exercise (`SS-1B`).
+- Notifies the user with a subtle confirmation toast and auto-updates the active view.
+
+---
+
+## D-011 — Offline-First Sync Queue with Idempotency Keys & Crash Recovery
+
+**Date:** 2026-11-26
+**Context:** Lifters training in airplane mode or basements with poor cellular reception cannot lose sets.
+**Decision:**
+- `syncManager` (`src/lib/offline-sync.ts`) enqueues all set completions, deletions, and adjustments with unique UUID idempotency keys.
+- Real-time `SyncStatusPill` renders connection state (`🟢 Synced`, `🟡 Syncing`, `🔴 Offline`).
+- Active workout state is continuously saved to local storage snapshots (`saveActiveSnapshot`) and restored on page reload/crash recovery (`loadActiveSnapshot`).
+
+---
+
+## D-012 — Web Audio Synthesizer for Rest Timer Audio
+
+**Date:** 2026-11-26
+**Context:** Rest timer audio chime must work offline without external audio file requests (preventing 404s and network latency).
+**Decision:**
+- Built-in `FloatingRestTimer` synthesizes a dual-tone harmonic chime (sine/triangle oscillator at 587Hz → 880Hz → 1174Hz) using the standard Web Audio API with vibration haptics.
+- Supports +30s, -15s, skip, and mute controls.
+
+---
+
+## D-013 — Olympic Barbell Plate Math & Warm-up Generator
+
+**Date:** 2026-11-26
+**Context:** Lifters need instant plate loading math and progressive warm-up ramping before heavy working sets.
+**Decision:**
+- `PlateCalculatorModal` computes exact per-side Olympic plate loading (25, 20, 15, 10, 5, 2.5, 1.25kg) with standard IWF color-coded sleeve visualization (Red, Blue, Yellow, Green, White, Black).
+- Warm-up tab automatically generates progressive warm-up sets (empty bar mobility, 45% pattern groove, 65% acclimation, 82% CNS potentiation).
+
+---
+
+## D-014 — Exercise Alias & Acronym Matcher
+
+**Date:** 2026-11-26
+**Context:** Lifters search using gym shorthand (e.g., "rdl", "ohp", "bb bench", "db incline", "lat pull", "cgbp", "bss").
+**Decision:**
+- Implemented `src/lib/exercise-aliases.ts` mapping comprehensive gym abbreviations and acronyms to exercise slugs and full movement patterns.
+- Integrated into `ExerciseLibrary` and `AddExerciseSheet` for instant search filtering.
+

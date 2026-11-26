@@ -10,6 +10,12 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { PRCard } from "@/components/pr-card";
+import { SyncStatusPill } from "@/components/sync-status-pill";
+import { PlateCalculatorModal } from "@/components/plate-calculator";
+import { FloatingRestTimer, type RestTimerState } from "@/components/rest-timer";
+import { SetRow, type SetType } from "@/components/workout-keypad";
+import { syncManager } from "@/lib/offline-sync";
+import { matchExercise } from "@/lib/exercise-aliases";
 import { cn, formatClock, formatVolume, titleCase } from "@/lib/utils";
 import { alternativesFor, compressSession, e1rm, muscleColor, muscleLabel, plateBreakdown } from "@/lib/engine";
 import {
@@ -72,17 +78,31 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
     }
     return out;
   });
-  const [rest, setRest] = useState<{ total: number; remaining: number; label: string } | null>(null);
+  const [rest, setRest] = useState<RestTimerState | null>(null);
   const [nudge, setNudge] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [showSwap, setShowSwap] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [showFinish, setShowFinish] = useState(false);
   const [showCues, setShowCues] = useState(false);
+  const [showPlateCalc, setShowPlateCalc] = useState(false);
   const [celebrate, setCelebrate] = useState<{ exercise: string; value: number; previous: number | null; weight: number; reps: number } | null>(null);
   const [pending, startTransition] = useTransition();
   const [finishing, setFinishing] = useState(false);
   const elapsed = useElapsed(workout.startedAt);
+
+  // Crash recovery: restore snapshot from local storage if page reloaded
+  useEffect(() => {
+    const snapshot = syncManager.loadActiveSnapshot(workout.id);
+    if (snapshot?.state && Array.isArray(snapshot.state) && snapshot.state.length > 0) {
+      setItems(snapshot.state);
+    }
+  }, [workout.id]);
+
+  // Persist snapshot on every update
+  useEffect(() => {
+    syncManager.saveActiveSnapshot(workout.id, items);
+  }, [items, workout.id]);
 
   const active = items.find((i) => i.id === activeId) ?? items[0];
   const draft = active ? drafts[active.id] ?? { weight: "0", reps: String(active.repsMin), rpe: active.rpeTarget } : { weight: "0", reps: "8", rpe: 8 };
@@ -94,23 +114,22 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
   const totalSets = allSets.length;
 
   useEffect(() => {
-    if (!rest) return;
-    if (rest.remaining <= 0) {
-      setRest(null);
-      if ("vibrate" in navigator) navigator.vibrate?.([90, 60, 90]);
-      return;
-    }
-    const t = setTimeout(() => {
-      setRest((r) => (r ? { ...r, remaining: Math.max(0, r.remaining - 1) } : r));
-    }, 1000);
-    return () => clearTimeout(t);
-  }, [rest]);
-
-  useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2600);
     return () => clearTimeout(t);
   }, [toast]);
+
+  useEffect(() => {
+    if (!rest) return;
+    if (rest.remainingSec <= 0) {
+      setRest(null);
+      return;
+    }
+    const t = setTimeout(() => {
+      setRest((r) => (r ? { ...r, remainingSec: Math.max(0, r.remainingSec - 1) } : null));
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [rest]);
 
   const setDraft = (patch: Partial<{ weight: string; reps: string; rpe: number }>) => {
     if (!active) return;
@@ -118,39 +137,79 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
     setNudge(null);
   };
 
-  const startRest = (seconds: number, label: string) => {
-    setRest({ total: seconds, remaining: seconds, label });
-  };
-
-  const logSet = () => {
+  const logSetSpecific = (weight: number, reps: number, rpe: number, type: SetType = "normal") => {
     if (!active) return;
-    const weight = Math.max(0, Number(draft.weight) || 0);
-    const reps = Math.max(1, Math.min(100, Math.round(Number(draft.reps) || 0)));
-    const rpe = draft.rpe;
     const setIndex = active.sets.length;
     const tempId = `tmp-${uid()}`;
     const optimistic: SessionSet = {
-      id: tempId, setIndex, weightKg: weight, reps, rpe, isPR: false, completedAt: new Date().toISOString(),
+      id: tempId,
+      setIndex,
+      weightKg: weight,
+      reps,
+      rpe,
+      isPR: false,
+      completedAt: new Date().toISOString(),
     };
+
     setItems((prev) => prev.map((i) => (i.id === active.id ? { ...i, sets: [...i.sets, optimistic] } : i)));
-    startRest(active.restSec, active.supersetGroup ? `${active.supersetGroup} · superset` : active.exercise.name);
+    setRest({
+      totalSec: active.restSec,
+      remainingSec: active.restSec,
+      label: active.supersetGroup ? `${active.supersetGroup} · superset` : active.exercise.name,
+    });
+
+    // Superset auto-advance: if this exercise is paired, auto-focus next lift
+    if (active.supersetGroup) {
+      const basePrefix = active.supersetGroup.replace(/[AB]$/, "");
+      const paired = items.find(
+        (i) => i.id !== active.id && i.supersetGroup && i.supersetGroup.startsWith(basePrefix) && i.sets.length < i.targetSets,
+      );
+      if (paired) {
+        setActiveId(paired.id);
+        setToast(`Auto-advanced to superset partner: ${paired.exercise.name}`);
+      }
+    }
+
+    // Enqueue mutation in offline sync queue
+    syncManager.enqueue("COMPLETE_SET", {
+      workoutId: workout.id,
+      workoutExerciseId: active.id,
+      exerciseId: active.exerciseId,
+      setIndex,
+      weightKg: weight,
+      reps,
+      rpe,
+    });
 
     startTransition(async () => {
       const res = await completeSet({
-        workoutId: workout.id, workoutExerciseId: active.id, exerciseId: active.exerciseId,
-        setIndex, weightKg: weight, reps, rpe,
+        workoutId: workout.id,
+        workoutExerciseId: active.id,
+        exerciseId: active.exerciseId,
+        setIndex,
+        weightKg: weight,
+        reps,
+        rpe,
       });
+
       if (!res?.ok) {
         setItems((prev) => prev.map((i) => (i.id === active.id ? { ...i, sets: i.sets.filter((s) => s.id !== tempId) } : i)));
         setToast(res?.error ?? "Could not log set");
         return;
       }
-      setItems((prev) => prev.map((i) => (i.id === active.id
-        ? { ...i, sets: i.sets.map((s) => (s.id === tempId ? { ...s, id: res.setId ?? tempId, isPR: res.isPR } : s)) }
-        : i)));
+
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === active.id
+            ? { ...i, sets: i.sets.map((s) => (s.id === tempId ? { ...s, id: res.setId ?? tempId, isPR: res.isPR } : s)) }
+            : i,
+        ),
+      );
+
       if (res.isPR) {
         setCelebrate({ exercise: active.exercise.name, value: res.e1rm, previous: res.previousBest ?? null, weight, reps });
       }
+
       if (rpe >= 9.5) {
         setNudge(`RPE ${rpe} — Forge suggests ${roundTo(weight * 0.95)}kg next set to protect quality.`);
         setDrafts((d) => ({ ...d, [active.id]: { ...(d[active.id] ?? draft), weight: String(roundTo(weight * 0.95)) } }));
@@ -162,6 +221,12 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
       }
       router.refresh();
     });
+  };
+
+  const logSet = () => {
+    const weight = Math.max(0, Number(draft.weight) || 0);
+    const reps = Math.max(1, Math.min(100, Math.round(Number(draft.reps) || 0)));
+    logSetSpecific(weight, reps, draft.rpe, "normal");
   };
 
   const removeSet = (setId: string, itemId: string) => {
@@ -260,6 +325,7 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
               <span>{formatVolume(volume)} kg</span>
             </div>
           </div>
+          <SyncStatusPill className="shrink-0" />
           <button onClick={() => setShowFinish(true)} className="press inline-flex h-9 items-center gap-1.5 rounded-full bg-acid px-4 text-[12px] font-semibold text-ink">
             Finish <Check className="size-3.5" />
           </button>
@@ -290,6 +356,11 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
                 {complete ? "✓" : idx + 1}
               </span>
               <span className="max-w-[116px] truncate">{item.exercise.name}</span>
+              {item.supersetGroup && (
+                <span className="rounded bg-amber/15 px-1 py-0.5 font-mono text-[8px] font-bold text-amber">
+                  {item.supersetGroup}
+                </span>
+              )}
               <span className="font-mono text-[8.5px] text-dim">{item.sets.length}/{item.targetSets}</span>
             </button>
           );
@@ -319,9 +390,17 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
                 {active.exercise.unilateral ? "Per side · " : ""}Target {active.repsMin}–{active.repsMax} reps · RPE {active.rpeTarget} · {active.restSec}s rest
               </p>
             </div>
-            <button onClick={() => setShowSwap(true)} className="press flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] font-medium text-mist hover:text-chalk">
-              <ArrowRight className="size-3" /> Swap
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowPlateCalc(true)}
+                className="press flex shrink-0 items-center gap-1.5 rounded-full border border-acid/20 bg-acid/[0.05] px-3 py-2 text-[11px] font-medium text-acid hover:border-acid/40"
+              >
+                <Dumbbell className="size-3" /> Plates
+              </button>
+              <button onClick={() => setShowSwap(true)} className="press flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] font-medium text-mist hover:text-chalk">
+                <ArrowRight className="size-3" /> Swap
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-2">
@@ -366,86 +445,105 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
       </div>
 
       {/* sets */}
-      <div className="mt-4 rounded-2xl border border-white/[0.07] bg-panel/60">
-        <div className="grid grid-cols-[36px_1fr_1fr_56px_28px] items-center gap-2 border-b border-white/[0.06] px-4 py-2.5">
-          <span className="label-mono">Set</span>
-          <span className="label-mono">Weight</span>
-          <span className="label-mono">Reps</span>
-          <span className="label-mono">RPE</span>
-          <span />
-        </div>
-        {active.sets.map((s, idx) => (
-          <div key={s.id} className="group grid grid-cols-[36px_1fr_1fr_56px_28px] items-center gap-2 border-b border-white/[0.04] px-4 py-2.5">
-            <span className={cn("grid size-6 place-items-center rounded-md font-mono text-[10px]", s.isPR ? "bg-amber/15 text-amber" : "bg-white/[0.05] text-mist")}>
-              {s.isPR ? <Trophy className="size-3" /> : idx + 1}
+      <div className="mt-4 space-y-2 rounded-2xl border border-white/[0.07] bg-panel/60 p-4">
+        <div className="flex items-center justify-between pb-1">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[9px] uppercase tracking-wider text-dim">Lifting sets</span>
+            <span className="font-mono text-[8.5px] text-acid">
+              {active.sets.length}/{active.targetSets} completed
             </span>
-            <span className="font-numeric text-[13px] text-chalk">{s.weightKg}<span className="ml-0.5 text-[9px] text-dim">kg</span></span>
-            <span className="font-numeric text-[13px] text-chalk">{s.reps}<span className="ml-0.5 text-[9px] text-dim">reps</span></span>
-            <span className="font-numeric text-[11px] text-mist">{s.rpe}</span>
-            <button onClick={() => removeSet(s.id, active.id)} className="grid size-6 place-items-center rounded text-dim opacity-0 transition-opacity hover:text-flame group-hover:opacity-100" aria-label="Delete set">
-              <Trash2 className="size-3" />
-            </button>
           </div>
+          <button
+            onClick={() => setShowPlateCalc(true)}
+            className="flex items-center gap-1 font-mono text-[9px] text-mist hover:text-acid transition-colors"
+          >
+            <Dumbbell className="size-3" /> Plate Math
+          </button>
+        </div>
+
+        {/* Completed Sets using SetRow */}
+        {active.sets.map((s, idx) => (
+          <SetRow
+            key={s.id}
+            index={idx}
+            setData={{
+              id: s.id,
+              setIndex: idx,
+              weightKg: s.weightKg,
+              reps: s.reps,
+              rpe: s.rpe,
+              isPR: s.isPR,
+              isCompleted: true,
+            }}
+            previousWeight={active.history.weight}
+            previousReps={active.history.reps}
+            targetRepsMin={active.repsMin}
+            targetRepsMax={active.repsMax}
+            targetWeight={active.suggestion || 40}
+            onLog={(w, r, rpe, t) => logSetSpecific(w, r, rpe, t)}
+            onDelete={() => removeSet(s.id, active.id)}
+            onOpenPlateCalc={() => setShowPlateCalc(true)}
+          />
         ))}
 
-        {/* logger */}
-        <div className="bg-white/[0.02] p-4">
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <label className="label-mono mb-1.5 block">Weight · kg</label>
-              <div className="flex items-center overflow-hidden rounded-xl border border-white/[0.1] bg-ink">
-                <button onClick={() => setDraft({ weight: String(Math.max(0, roundTo(Number(draft.weight) - 2.5))) })} className="grid h-11 w-10 shrink-0 place-items-center text-lg text-mist hover:bg-white/5">−</button>
-                <input
-                  inputMode="decimal"
-                  value={draft.weight}
-                  onChange={(e) => setDraft({ weight: e.target.value.replace(/[^0-9.]/g, "") })}
-                  className="h-11 min-w-0 flex-1 bg-transparent text-center font-numeric text-xl font-semibold text-chalk outline-none"
-                />
-                <button onClick={() => setDraft({ weight: String(roundTo(Number(draft.weight) + 2.5)) })} className="grid h-11 w-10 shrink-0 place-items-center text-lg text-mist hover:bg-white/5">+</button>
-              </div>
-            </div>
-            <div className="w-[104px]">
-              <label className="label-mono mb-1.5 block">Reps</label>
-              <div className="flex items-center overflow-hidden rounded-xl border border-white/[0.1] bg-ink">
-                <button onClick={() => setDraft({ reps: String(Math.max(1, Number(draft.reps) - 1)) })} className="grid h-11 w-8 shrink-0 place-items-center text-mist hover:bg-white/5">−</button>
-                <input
-                  inputMode="numeric"
-                  value={draft.reps}
-                  onChange={(e) => setDraft({ reps: e.target.value.replace(/[^0-9]/g, "") })}
-                  onKeyDown={(e) => { if (e.key === "Enter") logSet(); }}
-                  className="h-11 min-w-0 flex-1 bg-transparent text-center font-numeric text-xl font-semibold text-chalk outline-none"
-                />
-                <button onClick={() => setDraft({ reps: String(Number(draft.reps) + 1) })} className="grid h-11 w-8 shrink-0 place-items-center text-mist hover:bg-white/5">+</button>
-              </div>
-            </div>
-            <button onClick={logSet} disabled={pending} className="press grid h-11 w-12 shrink-0 place-items-center rounded-xl bg-acid text-ink shadow-[0_6px_24px_-8px_rgba(201,247,58,0.6)] disabled:opacity-60" aria-label="Log set">
-              <Check className="size-5" strokeWidth={3} />
-            </button>
-          </div>
+        {/* Next / Planned Pending Sets */}
+        {Array.from({ length: Math.max(1, active.targetSets - active.sets.length) }).map((_, pIdx) => {
+          const currentSetIdx = active.sets.length + pIdx;
+          return (
+            <SetRow
+              key={`pending-${currentSetIdx}`}
+              index={currentSetIdx}
+              setData={{
+                id: `pending-${currentSetIdx}`,
+                setIndex: currentSetIdx,
+                weightKg: Number(draft.weight) || active.suggestion || active.history.weight || 40,
+                reps: Number(draft.reps) || active.repsMin || 8,
+                rpe: draft.rpe,
+                isCompleted: false,
+              }}
+              previousWeight={active.history.weight}
+              previousReps={active.history.reps}
+              targetRepsMin={active.repsMin}
+              targetRepsMax={active.repsMax}
+              targetWeight={active.suggestion || active.history.weight || 40}
+              onLog={(w, r, rpe, t) => logSetSpecific(w, r, rpe, t)}
+              onOpenPlateCalc={() => setShowPlateCalc(true)}
+            />
+          );
+        })}
 
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-dim">RPE</span>
-            {[6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10].map((r) => (
+        {/* Quick Stepper & Voice input */}
+        <div className="pt-2 border-t border-white/[0.04] flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-dim">Quick Load</span>
+            {[-10, -5, -2.5, 2.5, 5, 10].map((delta) => (
               <button
-                key={r}
-                onClick={() => setDraft({ rpe: r })}
-                className={cn(
-                  "h-6 min-w-[26px] rounded-md border px-1.5 font-numeric text-[10px] transition-colors",
-                  draft.rpe === r ? "border-acid bg-acid text-ink" : "border-white/10 text-mist hover:border-white/25",
-                )}
+                key={delta}
+                onClick={() =>
+                  setDraft({
+                    weight: String(Math.max(0, roundTo((Number(draft.weight) || active.suggestion || 40) + delta))),
+                  })
+                }
+                className="rounded-md border border-white/[0.08] px-2 py-1 font-mono text-[9.5px] text-mist hover:border-acid/40 hover:text-acid transition-colors"
               >
-                {r}
+                {delta > 0 ? `+${delta}` : delta}
               </button>
             ))}
+          </div>
+
+          <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                const SR = (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike; SpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition
-                  ?? (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition;
-                if (!SR) { setToast("Voice logging needs Chrome or Safari. Type it for now."); return; }
+                const SR =
+                  (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+                if (!SR) {
+                  setToast("Voice logging needs Chrome or Safari. Type it for now.");
+                  return;
+                }
                 const rec = new SR();
                 rec.lang = "en-US";
                 rec.interimResults = false;
-                rec.onresult = (e: { results: { 0: { 0: { transcript: string } } } }) => {
+                rec.onresult = (e: any) => {
                   const text = e.results[0][0].transcript.toLowerCase();
                   const nums = text.match(/\d+(\.\d+)?/g)?.map(Number) ?? [];
                   const rpeMatch = text.match(/rpe\s*(\d+(\.\d+)?)/);
@@ -453,51 +551,31 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
                   if (nums.length) {
                     const weight = nums[0];
                     const reps = forMatch ? Number(forMatch[1]) : nums[1] ?? Number(draft.reps);
-                    setDraft({ weight: String(weight), reps: String(reps), ...(rpeMatch ? { rpe: Number(rpeMatch[1]) } : {}) });
-                    setToast(`Heard: ${weight}kg × ${reps}${rpeMatch ? ` @ RPE ${rpeMatch[1]}` : ""}`);
-                  } else setToast("Couldn't parse that. Try “100 kilos for 8”.");
+                    const rpeVal = rpeMatch ? Number(rpeMatch[1]) : draft.rpe;
+                    setDraft({ weight: String(weight), reps: String(reps), rpe: rpeVal });
+                    setToast(`Heard: ${weight}kg × ${reps} @ RPE ${rpeVal}`);
+                    logSetSpecific(weight, reps, rpeVal);
+                  } else {
+                    setToast("Couldn't parse that. Try “100 kilos for 8”.");
+                  }
                 };
                 rec.onerror = () => setToast("Mic unavailable. Check permissions.");
                 rec.start();
                 setToast("Listening… say “100 kilos for 8”");
               }}
-              className="ml-auto flex h-6 items-center gap-1 rounded-md border border-white/10 px-2 text-[9.5px] text-mist hover:border-acid/40 hover:text-acid"
+              className="flex h-7 items-center gap-1 rounded-md border border-white/10 px-2.5 text-[10px] text-mist hover:border-acid/40 hover:text-acid"
             >
-              <Mic className="size-2.5" /> Voice
+              <Mic className="size-3" /> Voice Log
             </button>
           </div>
-
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1">
-              <span className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-dim">Quick</span>
-              {[0.9, 0.95, 1, 1.05].map((m) => {
-                const base = active.suggestion || active.history.weight || 40;
-                const w = roundTo(base * m);
-                return (
-                  <button key={m} onClick={() => setDraft({ weight: String(w) })} className="rounded-md border border-white/[0.08] px-2 py-1 font-numeric text-[10px] text-mist hover:border-acid/30 hover:text-chalk">
-                    {w}
-                  </button>
-                );
-              })}
-            </div>
-            {plates && Number(draft.weight) > 0 && (
-              <div className="flex items-center gap-1.5 text-[9.5px] text-dim">
-                <Dumbbell className="size-3" />
-                <span>Per side</span>
-                {plates.perSide.length ? plates.perSide.map((p, i) => (
-                  <span key={i} className="rounded bg-white/[0.07] px-1.5 py-0.5 font-numeric text-[9px] text-mist">{p}</span>
-                )) : <span className="text-dim">bar only</span>}
-              </div>
-            )}
-          </div>
-
-          {nudge && (
-            <div className="animate-fade-in mt-3 flex items-start gap-2 rounded-xl border border-acid/20 bg-acid/[0.06] p-2.5">
-              <Zap className="mt-0.5 size-3.5 shrink-0 text-acid" />
-              <p className="text-[10.5px] leading-relaxed text-acid/90">{nudge}</p>
-            </div>
-          )}
         </div>
+
+        {nudge && (
+          <div className="animate-fade-in mt-2 flex items-start gap-2 rounded-xl border border-acid/20 bg-acid/[0.06] p-2.5">
+            <Zap className="mt-0.5 size-3.5 shrink-0 text-acid" />
+            <p className="text-[10.5px] leading-relaxed text-acid/90">{nudge}</p>
+          </div>
+        )}
       </div>
 
       {/* actions */}
@@ -522,26 +600,22 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
         </button>
       )}
 
-      {/* rest timer */}
-      {rest && (
-        <div className="fixed inset-x-0 bottom-[64px] z-50 px-3 md:bottom-4 md:left-[248px] md:px-6">
-          <div className="animate-fade-in mx-auto flex max-w-2xl items-center gap-3 rounded-2xl border border-acid/30 bg-[#0c0e12]/95 p-3 shadow-[0_20px_60px_-15px_rgba(201,247,58,0.35)] backdrop-blur-xl">
-            <div className="relative grid size-12 shrink-0 place-items-center">
-              <svg viewBox="0 0 44 44" className="absolute inset-0 -rotate-90">
-                <circle cx="22" cy="22" r="19" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3" />
-                <circle cx="22" cy="22" r="19" fill="none" stroke="#C9F73A" strokeWidth="3" strokeLinecap="round" strokeDasharray={2 * Math.PI * 19} strokeDashoffset={2 * Math.PI * 19 * (1 - rest.remaining / Math.max(1, rest.total))} style={{ transition: "stroke-dashoffset 1s linear" }} />
-              </svg>
-              <span className="font-numeric text-[13px] font-bold text-acid">{rest.remaining}</span>
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold text-chalk">Resting · {rest.label}</p>
-              <p className="font-mono text-[8.5px] uppercase tracking-[0.1em] text-dim">Next set in {rest.remaining}s · breathe</p>
-            </div>
-            <button onClick={() => setRest((r) => (r ? { ...r, remaining: r.remaining + 30, total: r.total + 30 } : r))} className="rounded-lg border border-white/10 px-2.5 py-1.5 font-mono text-[10px] text-mist hover:text-chalk">+30</button>
-            <button onClick={() => setRest(null)} className="rounded-lg bg-acid px-3 py-1.5 text-[10.5px] font-semibold text-ink">Skip</button>
-          </div>
-        </div>
-      )}
+      {/* floating rest timer */}
+      <FloatingRestTimer
+        timer={rest}
+        onAdjust={(delta) =>
+          setRest((r) =>
+            r
+              ? {
+                  ...r,
+                  remainingSec: Math.max(0, r.remainingSec + delta),
+                  totalSec: Math.max(r.totalSec, r.totalSec + delta),
+                }
+              : null,
+          )
+        }
+        onSkip={() => setRest(null)}
+      />
 
       {/* toast */}
       {toast && (
@@ -560,6 +634,18 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
         previous={celebrate?.previous ?? null}
         weight={celebrate?.weight ?? 0}
         reps={celebrate?.reps ?? 0}
+      />
+
+      {/* plate calculator modal */}
+      <PlateCalculatorModal
+        isOpen={showPlateCalc}
+        onClose={() => setShowPlateCalc(false)}
+        weightKg={Number(draft.weight) || active.suggestion || active.history.weight || 40}
+        exerciseName={active.exercise.name}
+        onSelectWeight={(w) => {
+          setDraft({ weight: String(w) });
+          setShowPlateCalc(false);
+        }}
       />
 
       {/* swap modal */}
@@ -651,16 +737,24 @@ type SpeechRecognitionLike = {
 };
 
 function Sheet({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-[75] flex items-end justify-center sm:items-center">
-      <button className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} aria-label="Close" />
+      <button className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} aria-label="Close backdrop" />
       <div className="animate-fade-up relative max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-panel p-5 shadow-2xl sm:rounded-3xl md:p-6">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h3 className="font-display text-xl font-bold tracking-[-0.03em]">{title}</h3>
             <p className="mt-1 text-[11px] text-mist">{subtitle}</p>
           </div>
-          <button onClick={onClose} className="grid size-8 shrink-0 place-items-center rounded-full border border-white/10 text-mist hover:text-chalk"><X className="size-4" /></button>
+          <button onClick={onClose} aria-label="Close sheet" className="grid size-8 shrink-0 place-items-center rounded-full border border-white/10 text-mist hover:text-chalk"><X className="size-4" /></button>
         </div>
         {children}
       </div>
@@ -670,7 +764,7 @@ function Sheet({ title, subtitle, onClose, children }: { title: string; subtitle
 
 function AddExerciseSheet({ allExercises, onAdd, onClose }: { allExercises: ExerciseLite[]; onAdd: (e: ExerciseLite) => void; onClose: () => void }) {
   const [q, setQ] = useState("");
-  const filtered = allExercises.filter((e) => `${e.name} ${e.primaryMuscle} ${e.equipment}`.toLowerCase().includes(q.toLowerCase())).slice(0, 30);
+  const filtered = allExercises.filter((e) => matchExercise(q, e)).slice(0, 30);
   return (
     <Sheet title="Add exercise" subtitle="Anything in the library. Forge logs it the same way." onClose={onClose}>
       <div className="flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-ink px-3">

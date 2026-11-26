@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, Share2, Trophy, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -167,6 +167,15 @@ export function PRCard({
   const [shared, setShared] = useState(false);
   const date = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const ensure = async () => {
@@ -211,9 +220,13 @@ export function PRCard({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-      <button className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={onClose} aria-label="Close" />
+      <button className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={onClose} aria-label="Close PR backdrop" />
       <div className="animate-scale-in relative w-full max-w-md">
-        <button onClick={onClose} className="absolute -right-1 -top-1 z-10 grid size-9 place-items-center rounded-full border border-white/15 bg-ink text-mist hover:text-chalk">
+        <button
+          onClick={onClose}
+          aria-label="Close PR celebration"
+          className="absolute -right-1 -top-1 z-10 grid size-9 place-items-center rounded-full border border-white/15 bg-ink text-mist hover:text-chalk"
+        >
           <X className="size-4" />
         </button>
         <div className="overflow-hidden rounded-3xl border border-white/10 bg-ink-2 shadow-[0_40px_120px_-20px_rgba(201,247,58,0.35)]">

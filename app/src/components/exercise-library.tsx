@@ -8,6 +8,7 @@ import {
 import { Badge } from "@/components/ui";
 import { cn, titleCase } from "@/lib/utils";
 import { alternativesFor, muscleColor, muscleLabel } from "@/lib/engine";
+import { matchExercise } from "@/lib/exercise-aliases";
 import { addExerciseToWorkout } from "@/app/actions";
 
 type ExerciseLite = {
@@ -63,7 +64,7 @@ export function ExerciseLibrary({
 
   const filtered = useMemo(() => {
     return exercises.filter((e) => {
-      if (q && !`${e.name} ${e.primaryMuscle} ${e.secondaryMuscles.join(" ")} ${e.equipment} ${e.pattern}`.toLowerCase().includes(q.toLowerCase())) return false;
+      if (q && !matchExercise(q, e)) return false;
       if (muscle === "arms" ? !ARM_MUSCLES.includes(e.primaryMuscle) : muscle !== "all" && e.primaryMuscle !== muscle) return false;
       if (equip !== "all" && e.equipment !== equip) return false;
       if (level !== "all" && e.difficulty !== level) return false;

@@ -9,13 +9,13 @@ export default function FormCheckPage() {
       <PageHeader
         eyebrow={
           <>
-            <Badge tone="acid" dot>On-device pose AI</Badge>
-            <Badge tone="grape"><ScanFace className="size-2.5" /> 17-joint tracking</Badge>
-            <span className="label-mono text-dim">Private · 30 fps</span>
+            <Badge tone="acid" dot>Live squat count pilot</Badge>
+            <Badge tone="grape"><ScanFace className="size-2.5" /> 33-point pose landmarks</Badge>
+            <span className="label-mono text-dim">Local inference · device dependent</span>
           </>
         }
         title="Form check."
-        subtitle="A mirror tells you how you look. This tells you what to fix. Film a set from your phone and get rep counting, depth, bar path and the one cue that will clean it up — in under ten seconds."
+        subtitle="Use a side-on camera to preview body landmarks and count squat-like bend-and-return cycles. Live mode reports a rough rep count only; scores and technique cues remain clearly labeled examples."
         actions={
           <>
             <ButtonLink href="/app/train" variant="secondary" size="md">
@@ -30,10 +30,10 @@ export default function FormCheckPage() {
 
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-4 py-3">
         <span className="flex items-center gap-1.5 font-mono text-[8.5px] uppercase tracking-[0.12em] text-acid">
-          <Sparkles className="size-3" /> Demo mode
+          <Sparkles className="size-3" /> Separate sample mode
         </span>
         <span className="text-[11px] text-mist">
-          Try the full analysis without a camera. Enable yours to see the live pose overlay — video never leaves this device.
+          The sample report is illustrative. Live mode processes camera frames in your browser and currently supports a conservative squat rep count.
         </span>
       </div>
 

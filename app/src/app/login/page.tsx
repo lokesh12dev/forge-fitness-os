@@ -11,7 +11,7 @@ export const metadata = {
 const PROOF = [
   "Adaptive sessions that re-plan around time, gear and readiness",
   "Photo-to-macro nutrition with a protein-gap generator",
-  "On-device camera form checks with one actionable cue",
+  "A side-view squat rep-count pilot processed in your browser",
   "Muscle recovery map, PR cards and a live community floor",
 ];
 

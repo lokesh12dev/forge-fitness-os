@@ -69,6 +69,8 @@ flowchart TB
 | `src/lib/coach.ts` | Deterministic data-grounded reply generator |
 | `src/lib/auth.ts` | Cookie session (`forge_uid`), demo fallback |
 | `src/lib/date.ts` | Local day keys, week windows, relative labels |
+| `src/components/form-check-client.tsx` | Opt-in camera preview, lazy MediaPipe initialization, browser-side pose overlay, labeled sample reports, and the squat-count pilot; does not persist frames or results |
+| `src/lib/form-check/pose-metrics.ts` | Visibility-gated image-plane knee-angle estimate and squat bend/return counter state |
 | `src/db/schema.ts` | 21 tables, indexes, relations |
 | `src/db/seed.ts` | Idempotent demo dataset |
 
@@ -443,7 +445,7 @@ Terraform for network, DB, Redis, buckets, IAM; environment parity; secrets via 
 | Offline | Optimistic UI | Durable queue, sync protocol, conflict resolution |
 | Realtime | None | WebSocket/SSE, presence, feed fan-out |
 | AI coach | Deterministic templates | LLM with tool calling, citations, guardrails, cost caps |
-| Vision | Simulated metrics | On-device pose model, eval set, confidence UX |
+| Vision | Browser pose overlay + rough squat rep-count pilot; other metrics remain sample fixtures | Worker-based inference, calibrated camera UX, representative evaluation set, validated exercise-specific confidence and cue UX |
 | Food scan | Curated candidates | Classifier + portion estimation + database + human correction |
 | Media | None | Signed uploads, transcode, retention, moderation |
 | Payments | None | Stripe/RevenueCat, entitlements, trials, win-back |

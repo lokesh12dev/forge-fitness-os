@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, Camera, CameraOff, Check, CheckCircle2, ChevronRight, Gauge,
-  Loader2, Play, RotateCcw, Shield, Sparkles, Timer, Video, Zap,
+  AlertTriangle, Camera, CameraOff, Check, CheckCircle2, ChevronRight,
+  Loader2, Play, RotateCcw, Shield, Sparkles, Video,
 } from "lucide-react";
+import type { PoseLandmarker as PoseLandmarkerType } from "@mediapipe/tasks-vision";
 import { Button, IconButton, ProgressBar } from "@/components/ui";
+import { createSquatCounter, measureSideLeg, updateSquatCounter, type PosePoint } from "@/lib/form-check/pose-metrics";
 import { cn } from "@/lib/utils";
 
 /* ───────────────────────────── DATA ───────────────────────────── */
@@ -78,8 +80,6 @@ const LIFTS: Record<LiftKey, {
     wins: ["Lockout complete on every rep", "No lower-back rounding at the start", "Consistent setup routine"],
   },
 };
-
-const ANGLES = ["Side", "Front"] as const;
 
 /* ───────────────────────────── SKELETON ───────────────────────────── */
 
@@ -209,105 +209,310 @@ function Skeleton({ phase, lift }: { phase: number; lift: LiftKey }) {
 
 /* ───────────────────────────── STUDIO ───────────────────────────── */
 
+const POSE_BONES = [
+  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+  [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28],
+  [27, 29], [27, 31], [28, 30], [28, 32],
+] as const;
+
+const POSE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/wasm";
+const POSE_MODEL_URL = "https://huggingface.co/litert-community/MediaPipe-PoseLandmarker-Lite/resolve/105f65fd3484e46a25fe517a3722932d4392083c/pose_landmarker_lite.task";
+
+function drawPose(canvas: HTMLCanvasElement, landmarks: PosePoint[] | undefined) {
+  const context = canvas.getContext("2d");
+  if (!context) return;
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  if (!landmarks) return;
+
+  const point = (index: number) => landmarks[index];
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.lineWidth = Math.max(2, canvas.width * 0.005);
+  context.strokeStyle = "rgba(201,247,58,0.82)";
+  context.fillStyle = "#C9F73A";
+
+  for (const [aIndex, bIndex] of POSE_BONES) {
+    const a = point(aIndex);
+    const b = point(bIndex);
+    if (!a || !b || (a.visibility ?? 0) < 0.4 || (b.visibility ?? 0) < 0.4) continue;
+    context.beginPath();
+    context.moveTo(a.x * canvas.width, a.y * canvas.height);
+    context.lineTo(b.x * canvas.width, b.y * canvas.height);
+    context.stroke();
+  }
+
+  for (const landmark of landmarks) {
+    if ((landmark.visibility ?? 0) < 0.4) continue;
+    context.beginPath();
+    context.arc(landmark.x * canvas.width, landmark.y * canvas.height, Math.max(2.5, canvas.width * 0.006), 0, Math.PI * 2);
+    context.fill();
+  }
+}
+
 export function FormCheckStudio() {
+  const [mode, setMode] = useState<"demo" | "live">("demo");
   const [lift, setLift] = useState<LiftKey>("squat");
-  const [angle, setAngle] = useState<(typeof ANGLES)[number]>("Side");
   const [status, setStatus] = useState<"idle" | "scanning" | "done">("idle");
   const [progress, setProgress] = useState(0);
   const [cameraOn, setCameraOn] = useState(false);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelReady, setModelReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [poseError, setPoseError] = useState<string | null>(null);
+  const [poseVisibility, setPoseVisibility] = useState<number | null>(null);
+  const [kneeAngle, setKneeAngle] = useState<number | null>(null);
+  const [liveReps, setLiveReps] = useState(0);
+  const [deepestAngle, setDeepestAngle] = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [saved, setSaved] = useState(false);
+  const landmarkerRef = useRef<PoseLandmarkerType | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const cameraEpochRef = useRef(0);
+  const lastVideoTimeRef = useRef(-1);
+  const lastInferenceAtRef = useRef(0);
+  const lastTimestampRef = useRef(0);
+  const liveActiveRef = useRef(false);
+  const counterRef = useRef(createSquatCounter());
   const data = LIFTS[lift];
 
-  const phase = status === "scanning" ? progress / 100 : status === "done" ? 0.86 : 0.12;
-  const reps = status === "done" ? data.reps : Math.min(data.reps, Math.floor((progress / 100) * data.reps));
-  const score = status === "done" ? data.score : Math.min(data.score, Math.round((progress / 100) * data.score));
+  const phase = status === "scanning" && mode === "demo" ? progress / 100 : status === "done" ? 0.86 : 0.12;
+  const demoReps = status === "done" ? data.reps : Math.min(data.reps, Math.floor((progress / 100) * data.reps));
+
+  function stopPoseLoop() {
+    if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+    animationFrameRef.current = null;
+    lastVideoTimeRef.current = -1;
+    if (canvasRef.current) drawPose(canvasRef.current, undefined);
+  }
+
+  function stopCamera() {
+    cameraEpochRef.current += 1;
+    liveActiveRef.current = false;
+    stopPoseLoop();
+    landmarkerRef.current?.close();
+    landmarkerRef.current = null;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraOn(false);
+    setModelReady(false);
+    setModelLoading(false);
+    setPoseVisibility(null);
+    setKneeAngle(null);
+  }
+
+  function startPoseLoop() {
+    stopPoseLoop();
+    const tick = (now: number) => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const landmarker = landmarkerRef.current;
+
+      if (video && canvas && landmarker && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0) {
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+
+        if (now - lastInferenceAtRef.current >= 125 && video.currentTime !== lastVideoTimeRef.current) {
+          lastInferenceAtRef.current = now;
+          lastVideoTimeRef.current = video.currentTime;
+          try {
+            const timestamp = Math.max(video.currentTime * 1000, lastTimestampRef.current + 1);
+            lastTimestampRef.current = timestamp;
+            const result = landmarker.detectForVideo(video, timestamp);
+            const landmarks = result.landmarks[0] as PosePoint[] | undefined;
+            drawPose(canvas, landmarks);
+            const measurement = landmarks ? measureSideLeg(landmarks, video.videoWidth / video.videoHeight) : null;
+            setPoseVisibility(measurement?.visibility ?? null);
+            setKneeAngle(measurement ? Math.round(measurement.angleDegrees) : null);
+
+            if (measurement && liveActiveRef.current) {
+              const update = updateSquatCounter(counterRef.current, measurement.angleDegrees, timestamp);
+              counterRef.current = update.state;
+              if (update.repCompleted) setLiveReps(update.state.reps);
+              setDeepestAngle(update.state.deepestAngle === null ? null : Math.round(update.state.deepestAngle));
+            }
+          } catch {
+            setPoseError("The local pose model could not process this frame. Try restarting the camera.");
+            liveActiveRef.current = false;
+            setStatus("idle");
+            landmarker.close();
+            landmarkerRef.current = null;
+            setModelReady(false);
+            return;
+          }
+        }
+      }
+
+      animationFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(tick);
+  }
 
   async function enableCamera() {
+    if (modelLoading) return;
+    stopCamera();
+    const requestId = cameraEpochRef.current;
+    setMode("live");
+    setLift("squat");
+    setStatus("idle");
     setCameraError(null);
+    setPoseError(null);
+    setModelLoading(true);
+    setProgress(0);
+    counterRef.current = createSquatCounter();
+    setLiveReps(0);
+    setDeepestAngle(null);
+    let cameraStarted = false;
+
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("This browser does not provide camera access.");
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+      if (requestId !== cameraEpochRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
       }
+
+      streamRef.current = stream;
+      if (!videoRef.current) throw new Error("The camera preview is not ready.");
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
       setCameraOn(true);
-    } catch {
-      setCameraError("Camera permission denied — running the demo analysis instead.");
-      setCameraOn(false);
+      cameraStarted = true;
+
+      const { FilesetResolver, PoseLandmarker } = await import("@mediapipe/tasks-vision");
+      const vision = await FilesetResolver.forVisionTasks(POSE_WASM_URL);
+      const landmarker = await PoseLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: POSE_MODEL_URL },
+        runningMode: "VIDEO",
+        numPoses: 1,
+        minPoseDetectionConfidence: 0.55,
+        minPosePresenceConfidence: 0.55,
+        minTrackingConfidence: 0.55,
+      });
+
+      if (requestId !== cameraEpochRef.current) {
+        landmarker.close();
+        return;
+      }
+
+      landmarkerRef.current = landmarker;
+      setModelReady(true);
+      startPoseLoop();
+    } catch (error) {
+      if (requestId !== cameraEpochRef.current) return;
+      const message = error instanceof Error ? error.message : "The camera could not be started.";
+      if (!cameraStarted) {
+        setCameraError(message);
+        stopCamera();
+      } else {
+        setPoseError("Camera is on, but the pose engine could not load. Check your connection and try again.");
+      }
+    } finally {
+      if (requestId === cameraEpochRef.current) setModelLoading(false);
     }
   }
 
-  function stopCamera() {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-    setCameraOn(false);
-  }
-
   useEffect(() => {
-    if (status !== "scanning") return;
-    setSaved(false);
-    const t = setInterval(() => {
-      setProgress((p) => {
-        const next = p + 1.4;
+    if (mode !== "demo" || status !== "scanning") return;
+    const timer = setInterval(() => {
+      setProgress((value) => {
+        const next = value + 1.4;
         if (next >= 100) {
-          clearInterval(t);
+          clearInterval(timer);
           setStatus("done");
           return 100;
         }
         return next;
       });
     }, 90);
-    return () => clearInterval(t);
-  }, [status]);
+    return () => clearInterval(timer);
+  }, [mode, status]);
 
-  useEffect(() => () => stopCamera(), []);
+  useEffect(() => () => {
+    cameraEpochRef.current += 1;
+    liveActiveRef.current = false;
+    if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+    landmarkerRef.current?.close();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
 
-  function start() {
+  function selectDemo() {
+    stopCamera();
+    setMode("demo");
+    setStatus("idle");
     setProgress(0);
-    setSaved(false);
+  }
+
+  function startDemo() {
+    stopCamera();
+    setMode("demo");
+    setProgress(0);
     setStatus("scanning");
   }
 
+  function startLiveSet() {
+    counterRef.current = createSquatCounter();
+    setLiveReps(0);
+    setDeepestAngle(null);
+    liveActiveRef.current = true;
+    setStatus("scanning");
+  }
+
+  function finishLiveSet() {
+    liveActiveRef.current = false;
+    setDeepestAngle(counterRef.current.deepestAngle === null ? null : Math.round(counterRef.current.deepestAngle));
+    setStatus("done");
+  }
+
   function reset() {
+    liveActiveRef.current = false;
     setProgress(0);
+    setLiveReps(0);
+    setDeepestAngle(null);
+    counterRef.current = createSquatCounter();
     setStatus("idle");
-    setSaved(false);
   }
 
   function changeLift(key: LiftKey) {
+    if (mode === "live" && key !== "squat") return;
     setLift(key);
     setProgress(0);
     setStatus("idle");
-    setSaved(false);
   }
+
+  const displayedReps = mode === "live" ? liveReps : demoReps;
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-      {/* STAGE */}
       <div className="xl:col-span-8">
         <div className="surface overflow-hidden rounded-2xl">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.07] px-4 py-3">
             <div className="flex items-center gap-2">
               <span className={cn("size-2 rounded-full", status === "scanning" ? "animate-pulse-dot bg-flame" : status === "done" ? "bg-acid" : "bg-dim")} />
               <span className="font-mono text-[8.5px] uppercase tracking-[0.14em] text-mist">
-                {status === "scanning" ? "Analyzing movement…" : status === "done" ? "Set analyzed" : "Camera ready"}
+                {mode === "demo" ? status === "scanning" ? "Example animation · not your movement" : status === "done" ? "Illustrative sample report" : "Example mode" : status === "scanning" ? "Live squat rep counter" : status === "done" ? "Live count complete" : modelLoading ? "Loading local pose model…" : modelReady ? "Pose preview ready" : cameraOn ? "Camera preview · pose unavailable" : "Live camera mode"}
               </span>
             </div>
             <div className="flex items-center gap-1.5">
-              {LIFTS && (Object.keys(LIFTS) as LiftKey[]).map((key) => (
+              {(Object.keys(LIFTS) as LiftKey[]).map((key) => (
                 <button
                   key={key}
                   onClick={() => changeLift(key)}
+                  disabled={mode === "live" && key !== "squat"}
+                  title={mode === "live" && key !== "squat" ? "Live counting is currently available for the back squat pilot only." : undefined}
                   className={cn(
-                    "rounded-full border px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] transition-colors",
+                    "rounded-full border px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] transition-colors disabled:cursor-not-allowed disabled:opacity-35",
                     lift === key ? "border-acid/30 bg-acid/10 text-acid" : "border-white/[0.07] text-dim hover:text-mist",
                   )}
                 >
@@ -317,84 +522,114 @@ export function FormCheckStudio() {
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.07] px-4 py-2.5">
+            <div className="flex rounded-full border border-white/[0.08] bg-white/[0.02] p-0.5">
+              <button onClick={selectDemo} className={cn("rounded-full px-3 py-1.5 font-mono text-[8px] uppercase tracking-[0.1em]", mode === "demo" ? "bg-white/10 text-chalk" : "text-dim hover:text-mist")}>Example report</button>
+              <button onClick={enableCamera} className={cn("rounded-full px-3 py-1.5 font-mono text-[8px] uppercase tracking-[0.1em]", mode === "live" ? "bg-acid/10 text-acid" : "text-dim hover:text-mist")}>Live camera</button>
+            </div>
+            {mode === "demo" && <span className="font-mono text-[7.5px] uppercase tracking-[0.1em] text-amber">Illustrative data · not generated from camera</span>}
+            {mode === "live" && <span className="font-mono text-[7.5px] uppercase tracking-[0.1em] text-mint">Frames processed in browser · no video upload</span>}
+          </div>
+
           <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#080A0C] sm:aspect-[16/10]">
-            {/* background */}
-            {cameraOn ? (
-              <video ref={videoRef} playsInline muted className="absolute inset-0 size-full -scale-x-100 object-cover opacity-80" />
-            ) : (
+            {!cameraOn && (
               <div className="absolute inset-0">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(201,247,58,0.07),transparent_55%)]" />
                 <div className="absolute inset-0 grid-lines opacity-[0.18]" />
               </div>
             )}
 
-            {/* skeleton + HUD */}
-            <div className="absolute inset-0">
-              <Skeleton phase={phase} lift={lift} />
-            </div>
+            <video ref={videoRef} playsInline muted aria-hidden="true" className={cn("absolute inset-0 size-full -scale-x-100 object-cover", cameraOn ? "opacity-80" : "opacity-0")} />
+            <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 size-full -scale-x-100 object-cover" aria-label="Live pose landmark overlay" />
 
-            {/* corner HUD */}
+            {mode === "demo" && <div className="absolute inset-0"><Skeleton phase={phase} lift={lift} /></div>}
+
             <div className="pointer-events-none absolute left-3 top-3 space-y-1.5">
               <span className="flex items-center gap-1.5 rounded-md border border-white/10 bg-black/50 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-mist backdrop-blur">
-                <Video className="size-2.5 text-acid" /> {angle} view · 30 fps
+                <Video className="size-2.5 text-acid" /> {mode === "live" ? "Local camera · side view" : "Example movement"}
               </span>
-              <span className="flex items-center gap-1.5 rounded-md border border-white/10 bg-black/50 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-mist backdrop-blur">
-                <Gauge className="size-2.5 text-sky" /> Pose confidence 97%
-              </span>
-            </div>
-
-            <div className="pointer-events-none absolute right-3 top-3 flex flex-col items-end gap-1.5">
-              <span className="rounded-md border border-acid/20 bg-black/50 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-acid backdrop-blur">
-                {reps} / {data.reps} reps
-              </span>
-              {cameraOn && (
-                <span className="rounded-md border border-flame/25 bg-black/50 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-flame backdrop-blur">
-                  ● Recording
+              {mode === "live" && (
+                <span className="flex items-center gap-1.5 rounded-md border border-white/10 bg-black/50 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-mist backdrop-blur">
+                  <span className={cn("size-1.5 rounded-full", poseVisibility === null ? "bg-dim" : "bg-sky")} />
+                  {poseVisibility === null ? "Lower-body landmarks not ready" : `Landmark visibility ${Math.round(poseVisibility * 100)}%`}
                 </span>
               )}
             </div>
 
-            {/* progress */}
+            <div className="pointer-events-none absolute right-3 top-3 flex flex-col items-end gap-1.5">
+              <span className="rounded-md border border-acid/20 bg-black/50 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-acid backdrop-blur">
+                {mode === "live" ? `${liveReps} reps` : `${displayedReps} / ${data.reps} sample reps`}
+              </span>
+              {mode === "live" && kneeAngle !== null && (
+                <span className="rounded-md border border-white/10 bg-black/50 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-mist backdrop-blur">
+                  Approx. 2D knee angle {kneeAngle}°
+                </span>
+              )}
+            </div>
+
             <div className="absolute inset-x-0 bottom-0">
               <div className="flex items-end justify-between gap-3 bg-gradient-to-t from-black/80 to-transparent px-4 pb-3 pt-10">
                 <div>
-                  <p className="font-mono text-[7.5px] uppercase tracking-[0.14em] text-dim">Rep counter</p>
+                  <p className="font-mono text-[7.5px] uppercase tracking-[0.14em] text-dim">{mode === "live" ? "Live squat count" : "Sample rep count"}</p>
                   <p className="font-numeric text-[22px] font-bold leading-none tracking-[-0.04em] text-chalk">
-                    {reps}
-                    <span className="ml-1 text-[10px] font-normal text-dim">of {data.reps}</span>
+                    {displayedReps}
+                    {mode === "demo" && <span className="ml-1 text-[10px] font-normal text-dim">of {data.reps}</span>}
                   </p>
                 </div>
                 <div className="min-w-[140px] flex-1 sm:max-w-[220px]">
                   {status === "done" ? (
                     <div className="flex items-center justify-end gap-1.5 rounded-full border border-acid/25 bg-acid/10 px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-acid">
-                      <CheckCircle2 className="size-2.5" /> Analysis complete
+                      <CheckCircle2 className="size-2.5" /> {mode === "live" ? "Count complete" : "Sample complete"}
                     </div>
-                  ) : (
-                    <ProgressBar value={progress} color="#C9F73A" height={4} />
+                  ) : mode === "demo" ? <ProgressBar value={progress} color="#C9F73A" height={4} /> : (
+                    <div className="flex justify-end font-mono text-[8px] uppercase tracking-[0.1em] text-dim">{status === "scanning" ? "Counting from pose" : "Ready when you are"}</div>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* center CTA */}
-            {status === "idle" && (
+            {((mode === "demo" && status === "idle") || (mode === "live" && (!cameraOn || status !== "scanning"))) && (
               <div className="absolute inset-0 grid place-items-center bg-black/20">
-                <div className="text-center">
-                  <button
-                    onClick={start}
-                    className="group mx-auto grid size-16 place-items-center rounded-full border border-acid/40 bg-acid/15 text-acid backdrop-blur transition-all hover:scale-105 hover:bg-acid hover:text-ink"
-                  >
-                    <Play className="ml-1 size-6 fill-current" />
-                  </button>
-                  <p className="mt-3 font-display text-[15px] font-semibold text-chalk">Analyze a set</p>
-                  <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">Demo runs without a camera</p>
+                <div className="max-w-[290px] px-4 text-center">
+                  {mode === "demo" ? (
+                    <>
+                      <button onClick={startDemo} className="group mx-auto grid size-16 place-items-center rounded-full border border-acid/40 bg-acid/15 text-acid backdrop-blur transition-all hover:scale-105 hover:bg-acid hover:text-ink"><Play className="ml-1 size-6 fill-current" /></button>
+                      <p className="mt-3 font-display text-[15px] font-semibold text-chalk">Preview a sample report</p>
+                      <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">Uses illustrative example data</p>
+                    </>
+                  ) : !cameraOn ? (
+                    <>
+                      <button onClick={enableCamera} disabled={modelLoading} className="group mx-auto grid size-16 place-items-center rounded-full border border-acid/40 bg-acid/15 text-acid backdrop-blur transition-all hover:scale-105 hover:bg-acid hover:text-ink disabled:opacity-50"><Camera className="size-6" /></button>
+                      <p className="mt-3 font-display text-[15px] font-semibold text-chalk">Enable camera and pose model</p>
+                      <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">Side-on · head and feet in frame</p>
+                    </>
+                  ) : modelReady ? (
+                    <>
+                      <button onClick={startLiveSet} disabled={poseVisibility === null} className="group mx-auto grid size-16 place-items-center rounded-full border border-acid/40 bg-acid/15 text-acid backdrop-blur transition-all hover:scale-105 hover:bg-acid hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"><Play className="ml-1 size-6 fill-current" /></button>
+                      <p className="mt-3 font-display text-[15px] font-semibold text-chalk">{poseVisibility === null ? "Step back into full view" : status === "done" ? "Start another count" : "Start squat count"}</p>
+                      <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">{poseVisibility === null ? "Keep hips, knees and ankles visible" : "Only counts a bend-and-return cycle"}</p>
+                    </>
+                  ) : modelLoading ? (
+                    <>
+                      <Loader2 className="mx-auto size-6 animate-spin text-acid" />
+                      <p className="mt-3 font-display text-[15px] font-semibold text-chalk">Loading on-device pose model</p>
+                      <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">First use needs an internet connection</p>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={enableCamera} className="group mx-auto grid size-16 place-items-center rounded-full border border-acid/40 bg-acid/15 text-acid backdrop-blur transition-all hover:scale-105 hover:bg-acid hover:text-ink"><RotateCcw className="size-6" /></button>
+                      <p className="mt-3 font-display text-[15px] font-semibold text-chalk">Pose model unavailable</p>
+                      <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">{poseError ?? "Reconnect to try again"}</p>
+                    </>
+                  )}
                 </div>
               </div>
             )}
-            {status === "scanning" && (
+
+            {mode === "live" && status === "scanning" && (
               <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full border border-flame/25 bg-black/60 px-3 py-1 font-mono text-[8px] uppercase tracking-[0.12em] text-flame backdrop-blur">
                 <span className="mr-1.5 inline-block size-1.5 animate-pulse-dot rounded-full bg-flame" />
-                Tracking 17 joints
+                Live count · on-device
               </div>
             )}
           </div>
@@ -404,239 +639,99 @@ export function FormCheckStudio() {
               <IconButton onClick={cameraOn ? stopCamera : enableCamera} aria-label={cameraOn ? "Disable camera" : "Enable camera"}>
                 {cameraOn ? <CameraOff className="size-4" /> : <Camera className="size-4" />}
               </IconButton>
-              <div className="flex rounded-full border border-white/[0.08] bg-white/[0.02] p-0.5">
-                {ANGLES.map((a) => (
-                  <button
-                    key={a}
-                    onClick={() => setAngle(a)}
-                    className={cn(
-                      "rounded-full px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] transition-colors",
-                      angle === a ? "bg-white/10 text-chalk" : "text-dim hover:text-mist",
-                    )}
-                  >
-                    {a}
-                  </button>
-                ))}
-              </div>
               <span className="ml-1 hidden font-mono text-[8px] uppercase tracking-[0.1em] text-dim sm:inline">
-                {cameraOn ? "Live camera + pose overlay" : "Demo athlete"}
+                {mode === "live" ? cameraOn ? "Side view · stationary camera" : "Camera not connected" : "Example athlete · no camera input"}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              {status === "done" && (
-                <Button variant="ghost" size="sm" onClick={reset}>
-                  <RotateCcw className="size-3.5" /> Reset
-                </Button>
-              )}
-              <Button
-                size="sm"
-                onClick={status === "scanning" ? () => setStatus("done") : start}
-                disabled={false}
-              >
-                {status === "scanning" ? (
-                  <><Loader2 className="size-3.5 animate-spin" /> Finish early</>
-                ) : status === "done" ? (
-                  <><Play className="size-3.5" /> Analyze another</>
-                ) : (
-                  <><Camera className="size-3.5" /> Start analysis</>
-                )}
+              {status === "done" && <Button variant="ghost" size="sm" onClick={reset}><RotateCcw className="size-3.5" /> Reset</Button>}
+              <Button size="sm" onClick={mode === "demo" ? status === "scanning" ? () => setStatus("done") : startDemo : !cameraOn ? enableCamera : modelLoading ? undefined : !modelReady ? enableCamera : status === "scanning" ? finishLiveSet : startLiveSet} disabled={mode === "live" && (modelLoading || (modelReady && poseVisibility === null && status !== "scanning"))}>
+                {mode === "demo" ? status === "scanning" ? <><Loader2 className="size-3.5 animate-spin" /> Finish example</> : status === "done" ? <><Play className="size-3.5" /> Replay example</> : <><Play className="size-3.5" /> Run example</> : !cameraOn ? <><Camera className="size-3.5" /> Enable camera</> : modelLoading ? <><Loader2 className="size-3.5 animate-spin" /> Loading pose model</> : !modelReady ? <><RotateCcw className="size-3.5" /> Retry pose setup</> : status === "scanning" ? <><Check className="size-3.5" /> Finish count</> : status === "done" ? <><Play className="size-3.5" /> Count another set</> : <><Play className="size-3.5" /> Start squat count</>}
               </Button>
             </div>
           </div>
         </div>
 
-        {cameraError && (
+        {(cameraError || poseError) && (
           <div className="mt-2 flex items-center gap-2 rounded-xl border border-amber/20 bg-amber/[0.05] px-3 py-2 text-[10.5px] text-amber">
-            <AlertTriangle className="size-3.5 shrink-0" /> {cameraError}
+            <AlertTriangle className="size-3.5 shrink-0" /> {cameraError ?? poseError}
           </div>
         )}
 
-        {/* RESULTS */}
-        {status === "done" && (
+        {mode === "live" && status === "done" && (
+          <div className="animate-fade-up mt-4 surface rounded-2xl p-5">
+            <p className="label-mono mb-1.5">Live session · squat rep count pilot</p>
+            <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+              <div><p className="font-numeric text-4xl font-bold tracking-[-0.05em] text-chalk">{liveReps}</p><p className="font-mono text-[8px] uppercase tracking-[0.12em] text-dim">counted reps</p></div>
+              {deepestAngle !== null && <div><p className="font-numeric text-2xl font-bold tracking-[-0.04em] text-chalk">{deepestAngle}°</p><p className="font-mono text-[8px] uppercase tracking-[0.12em] text-dim">lowest observed 2D knee angle</p></div>}
+            </div>
+            <p className="mt-4 rounded-xl border border-amber/15 bg-amber/[0.04] px-3 py-2.5 text-[10px] leading-relaxed text-mist">This pilot reports a rough camera-based count only. It does not grade squat depth, load, bar path, safety, pain, or lifting technique. Camera angle, clothing, occlusion, and the pose model can affect the count.</p>
+          </div>
+        )}
+
+        {mode === "demo" && status === "done" && (
           <div className="animate-fade-up mt-4 space-y-4">
+            <div className="rounded-xl border border-amber/20 bg-amber/[0.06] px-4 py-3 text-[10px] leading-relaxed text-amber">
+              <strong className="font-mono uppercase tracking-[0.1em]">Example output only.</strong> This sample report is not generated from your camera or movement.
+            </div>
             <div className="surface rounded-2xl p-5">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="relative grid size-[72px] place-items-center">
-                    <svg viewBox="0 0 80 80" className="absolute inset-0 size-full -rotate-90">
-                      <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="5" />
-                      <circle
-                        cx="40" cy="40" r="34" fill="none" stroke="#C9F73A" strokeWidth="5" strokeLinecap="round"
-                        strokeDasharray={`${(data.score / 100) * 213.6} 213.6`}
-                      />
-                    </svg>
-                    <div className="text-center">
-                      <p className="font-numeric text-[22px] font-bold leading-none tracking-[-0.05em] text-chalk">{data.score}</p>
-                      <p className="font-mono text-[6.5px] uppercase tracking-[0.12em] text-dim">score</p>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="label-mono mb-1.5">Movement report · {data.label}</p>
-                    <h3 className="max-w-md font-display text-[19px] font-bold leading-[1.08] tracking-[-0.03em] text-chalk">
-                      {data.verdict}
-                    </h3>
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.1em] text-mist">
-                        {data.reps} reps · {angle.toLowerCase()} view
-                      </span>
-                      <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 font-mono text-[7.5px] uppercase tracking-[0.1em] text-mist">
-                        {data.issues.length} cues
-                      </span>
-                    </div>
-                  </div>
+              <div className="flex flex-wrap items-start gap-4">
+                <div className="relative grid size-[72px] shrink-0 place-items-center">
+                  <svg viewBox="0 0 80 80" className="absolute inset-0 size-full -rotate-90"><circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="5" /><circle cx="40" cy="40" r="34" fill="none" stroke="#C9F73A" strokeWidth="5" strokeLinecap="round" strokeDasharray={`${(data.score / 100) * 213.6} 213.6`} /></svg>
+                  <div className="text-center"><p className="font-numeric text-[22px] font-bold leading-none tracking-[-0.05em] text-chalk">{data.score}</p><p className="font-mono text-[6.5px] uppercase tracking-[0.12em] text-dim">sample score</p></div>
                 </div>
-                <Button
-                  size="md"
-                  variant={saved ? "secondary" : "primary"}
-                  onClick={() => setSaved(true)}
-                  disabled={saved}
-                >
-                  {saved ? <><Check className="size-3.5" /> Saved to session</> : <><Sparkles className="size-3.5" /> Attach to workout</>}
-                </Button>
+                <div className="min-w-[200px] flex-1">
+                  <p className="label-mono mb-1.5">Illustrative movement report · {data.label}</p>
+                  <h3 className="max-w-md font-display text-[19px] font-bold leading-[1.08] tracking-[-0.03em] text-chalk">{data.verdict}</h3>
+                  <p className="mt-2 text-[10px] leading-relaxed text-dim">Every value and coaching note below is placeholder content for a proposed future experience.</p>
+                </div>
               </div>
-
               <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {data.metrics.map((m) => (
-                  <div key={m.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
-                    <p className="font-mono text-[7.5px] uppercase tracking-[0.12em] text-dim">{m.label}</p>
-                    <p className={cn("mt-1 font-numeric text-[15px] font-semibold", m.ok ? "text-chalk" : "text-flame")}>{m.value}</p>
-                    <p className="mt-0.5 font-mono text-[7px] uppercase tracking-[0.08em] text-dim">{m.target}</p>
-                  </div>
-                ))}
+                {data.metrics.map((metric) => <div key={metric.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"><p className="font-mono text-[7.5px] uppercase tracking-[0.12em] text-dim">{metric.label}</p><p className={cn("mt-1 font-numeric text-[15px] font-semibold", metric.ok ? "text-chalk" : "text-flame")}>{metric.value}</p><p className="mt-0.5 font-mono text-[7px] uppercase tracking-[0.08em] text-dim">{metric.target}</p></div>)}
               </div>
-
               <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/15 p-3">
-                <p className="mb-2 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">What was good</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {data.wins.map((w) => (
-                    <span key={w} className="flex items-center gap-1 rounded-full border border-mint/20 bg-mint/[0.06] px-2.5 py-1 text-[9.5px] text-mint">
-                      <Check className="size-2.5" /> {w}
-                    </span>
-                  ))}
-                </div>
+                <p className="mb-2 font-mono text-[8px] uppercase tracking-[0.12em] text-dim">Illustrative positive observations</p>
+                <div className="flex flex-wrap gap-1.5">{data.wins.map((win) => <span key={win} className="flex items-center gap-1 rounded-full border border-mint/20 bg-mint/[0.06] px-2.5 py-1 text-[9.5px] text-mint"><Check className="size-2.5" /> {win}</span>)}</div>
               </div>
             </div>
-
             <div className="surface rounded-2xl p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="label-mono mb-1.5">Fix list</p>
-                  <h3 className="font-display text-[19px] font-bold tracking-[-0.03em] text-chalk">Three cues, in priority order</h3>
-                </div>
-                <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-dim">Timestamps inside set</span>
-              </div>
-              <div className="mt-4 space-y-2">
-                {data.issues.map((issue, i) => (
-                  <div key={issue.title} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5">
-                    <div className="flex items-start gap-3">
-                      <span className={cn(
-                        "grid size-7 shrink-0 place-items-center rounded-lg font-numeric text-[11px] font-bold",
-                        issue.severity === "high" ? "bg-flame/10 text-flame" : issue.severity === "medium" ? "bg-amber/10 text-amber" : "bg-white/[0.05] text-mist",
-                      )}>
-                        {i + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-[12px] font-semibold text-chalk">{issue.title}</p>
-                          <span className="font-mono text-[7.5px] uppercase tracking-[0.1em] text-dim">@ {issue.at}</span>
-                          <span className={cn(
-                            "rounded-full px-1.5 py-0.5 font-mono text-[6.5px] uppercase tracking-[0.1em]",
-                            issue.severity === "high" ? "bg-flame/10 text-flame" : issue.severity === "medium" ? "bg-amber/10 text-amber" : "bg-white/[0.05] text-dim",
-                          )}>
-                            {issue.severity}
-                          </span>
-                        </div>
-                        <p className="mt-1 flex items-start gap-1.5 text-[10.5px] leading-relaxed text-mist">
-                          <ChevronRight className="mt-0.5 size-3 shrink-0 text-acid" />
-                          {issue.cue}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 flex items-center gap-2 rounded-xl border border-acid/15 bg-acid/[0.04] px-3 py-2.5 text-[10.5px] text-mist">
-                <Sparkles className="size-3.5 shrink-0 text-acid" />
-                Coach has attached these cues to your next {data.label.toLowerCase()} session. You&apos;ll see one at a time on the live screen.
-              </div>
+              <p className="label-mono mb-1.5">Example cue cards</p>
+              <h3 className="font-display text-[19px] font-bold tracking-[-0.03em] text-chalk">A future coaching format</h3>
+              <div className="mt-4 space-y-2">{data.issues.map((issue, index) => <div key={issue.title} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5"><div className="flex items-start gap-3"><span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/[0.05] font-numeric text-[11px] font-bold text-mist">{index + 1}</span><div className="min-w-0"><p className="text-[12px] font-semibold text-chalk">{issue.title}</p><p className="mt-1 flex items-start gap-1.5 text-[10.5px] leading-relaxed text-mist"><ChevronRight className="mt-0.5 size-3 shrink-0 text-acid" />{issue.cue}</p></div></div></div>)}</div>
             </div>
           </div>
         )}
       </div>
 
-      {/* RAIL */}
       <div className="space-y-4 xl:col-span-4">
         <div className="surface rounded-2xl p-5">
-          <p className="label-mono mb-1.5">How it works</p>
-          <h3 className="font-display text-[19px] font-bold tracking-[-0.03em] text-chalk">Your camera becomes a coach</h3>
-          <div className="mt-4 space-y-3">
-            {[
-              { n: "01", title: "Frame the set", body: "Prop your phone at hip height, side-on. Full body in frame." },
-              { n: "02", title: "Lift normally", body: "17-joint pose tracking runs on-device at 30fps. No upload." },
-              { n: "03", title: "Get one cue", body: "The highest-leverage fix surfaces mid-set, not in a report nobody reads." },
-            ].map((s) => (
-              <div key={s.n} className="flex gap-3">
-                <span className="font-numeric text-[11px] font-bold text-acid/60">{s.n}</span>
-                <div>
-                  <p className="text-[11px] font-semibold text-chalk/90">{s.title}</p>
-                  <p className="mt-0.5 text-[10px] leading-relaxed text-dim">{s.body}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <p className="label-mono mb-1.5">Camera setup</p>
+          <h3 className="font-display text-[19px] font-bold tracking-[-0.03em] text-chalk">Give the counter a clean view</h3>
+          <div className="mt-4 space-y-3">{[
+            { n: "01", title: "Place it side-on", body: "Set the lens around hip height, square to your side. Keep the camera still." },
+            { n: "02", title: "Fit your whole body", body: "Leave space around your head, hips, knees, and feet. Use even light and avoid backlighting." },
+            { n: "03", title: "Count only", body: "The pilot overlays pose landmarks and counts a bend-and-return cycle. It does not grade form." },
+          ].map((step) => <div key={step.n} className="flex gap-3"><span className="font-numeric text-[11px] font-bold text-acid/60">{step.n}</span><div><p className="text-[11px] font-semibold text-chalk/90">{step.title}</p><p className="mt-0.5 text-[10px] leading-relaxed text-dim">{step.body}</p></div></div>)}</div>
         </div>
 
         <div className="surface rounded-2xl p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="label-mono mb-1.5">Scoring rubric</p>
-              <h3 className="font-display text-[17px] font-bold tracking-[-0.03em] text-chalk">What 87 means</h3>
-            </div>
-            <Gauge className="size-4 text-sky" />
-          </div>
-          <div className="mt-3 space-y-2.5">
-            {[
-              { label: "Depth + range", value: 92 },
-              { label: "Bar / joint path", value: 88 },
-              { label: "Tempo control", value: 90 },
-              { label: "Symmetry", value: 78 },
-            ].map((row) => (
-              <div key={row.label}>
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-[10px] text-mist">{row.label}</span>
-                  <span className="font-numeric text-[9.5px] text-dim">{row.value}</span>
-                </div>
-                <ProgressBar value={row.value} color={row.value >= 85 ? "#C9F73A" : "#FFD166"} height={3} />
-              </div>
-            ))}
-          </div>
-          <p className="mt-3 text-[9.5px] leading-relaxed text-dim">
-            Scores compare your movement against a biomechanical model, not against other athletes. A 78 in symmetry is a signal, not a judgment.
-          </p>
-        </div>
-
-        <div className="surface rounded-2xl p-5">
-          <div className="flex items-center gap-2">
-            <Shield className="size-4 text-mint" />
-            <p className="text-[11.5px] font-semibold text-chalk">Private by architecture</p>
-          </div>
-          <p className="mt-2 text-[10px] leading-relaxed text-dim">
-            Video never leaves your device. Only joint coordinates and the resulting cues are stored, and you can delete them any time.
-          </p>
-          <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/[0.06] bg-black/15 px-3 py-2">
-            <Timer className="size-3 text-sky" />
-            <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-dim">Avg analysis 8.4s · on-device</span>
-          </div>
+          <div className="flex items-center gap-2"><Shield className="size-4 text-mint" /><p className="text-[11.5px] font-semibold text-chalk">Camera frames stay in this browser</p></div>
+          <p className="mt-2 text-[10px] leading-relaxed text-dim">Camera frames and landmarks are processed in this browser and are not uploaded or saved by this feature. First use downloads MediaPipe runtime files from jsDelivr and the pose model from Hugging Face. MediaPipe also documents usage/performance metrics sent to Google; its privacy notice says input media is not sent. <a className="text-mist underline underline-offset-2" href="https://developers.google.com/edge/mediapipe/solutions/privacy" target="_blank" rel="noreferrer">MediaPipe privacy notice</a>.</p>
+          <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/15 px-3 py-2 font-mono text-[8px] uppercase tracking-[0.1em] text-dim">Inference capped near 8 frames/sec · device dependent</div>
         </div>
 
         <div className="rounded-2xl border border-white/[0.07] bg-[linear-gradient(140deg,rgba(201,247,58,0.07),rgba(255,107,53,0.05))] p-5">
-          <div className="flex items-center gap-2">
-            <Zap className="size-4 text-acid" />
-            <p className="font-mono text-[8.5px] uppercase tracking-[0.12em] text-acid">Pro tip</p>
+          <div className="flex items-center gap-2"><Sparkles className="size-4 text-acid" /><p className="font-mono text-[8.5px] uppercase tracking-[0.12em] text-acid">Pilot boundaries</p></div>
+          <p className="mt-2 text-[11px] leading-relaxed text-mist">One 2D side view can miss rotation, load, bar path, and hidden joints. The angle shown is a rough image estimate. Do not use this counter to judge safety, pain, readiness, or technique.</p>
+        </div>
+
+        <div className="surface rounded-2xl p-5">
+          <p className="label-mono mb-1.5">Supported today</p>
+          <div className="space-y-2 text-[10px]">
+            <div className="flex items-center justify-between"><span className="text-mist">Squat bend-and-return count</span><span className="font-mono uppercase tracking-[0.1em] text-mint">Live pilot</span></div>
+            <div className="flex items-center justify-between"><span className="text-mist">Bench press · deadlift</span><span className="font-mono uppercase tracking-[0.1em] text-dim">Sample only</span></div>
+            <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/15 p-3 text-dim">The camera does not identify load or exercise variation. No barbell detection, form score, cue generation, or workout saving is connected yet.</div>
           </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-mist">
-            Film one set per lift per week from the same angle. The score matters less than the trend — and the trend is what Coach programs against.
-          </p>
         </div>
       </div>
     </div>

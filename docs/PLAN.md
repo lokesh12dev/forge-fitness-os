@@ -133,7 +133,7 @@ Food log with authentic Indian foods and standard regional units, smart protein 
 | 4.11 | Trainer & Athlete Roster Portal | F3, F4 | **COMPLETE** | Full athlete roster, adherence monitoring, fatigue alerts, and 1-tap program prescription with custom load modifiers |
 | 4.12 | Gym Owner Operations & Attendance Portal | H1-H4 | **COMPLETE** | Live floor occupancy gauge, equipment sensor bottlenecks, fast check-in terminal, and real-time MRR analytics |
 | 4.13 | Wearables & Platform Sync Engine | C3-C6, I5 | **COMPLETE** | Bidirectional sync with Apple Health / Health Connect / Garmin; imports resting HR, HRV, sleep into CNS readiness engine |
-| 4.14 | On-Device Form Check Studio | C2 | **COMPLETE** | 17-joint tracking simulation, depth checking (hip < knee), bar path analysis, and real-time biomechanical cues |
+| 4.14 | On-Device Form Check Studio | C2 | **PILOT** | MediaPipe 33-landmark overlay and rough squat-like rep count; sample reports remain illustrative; no validated form scoring, cues, or workout persistence |
 | 4.15 | Complete Verification & Multi-Viewport E2E | — | **COMPLETE** | 174/174 unit tests passing, Playwright e2e passing across 360px, 768px, and 1440px with 0 console errors |
 
 ### Phase 4 Verification Results (2026-11-26)

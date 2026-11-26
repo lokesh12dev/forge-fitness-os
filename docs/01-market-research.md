@@ -180,7 +180,7 @@ Pricing is approximate, monthly-equivalent, and varies by region/promo. Verify b
 **Category:** Adaptive Training OS.
 **Frame:** “Your program has been guessing.”
 **Promise:** The right session for the body, kit and time you have today — and the fuel and recovery to support it.
-**Proof:** Visible inputs, real logs, one-tap adaptation, on-device form analysis, protein gap closed.
+**Proof:** Visible inputs, real logs, one-tap adaptation, a clearly scoped on-device squat-count pilot, protein gap closed.
 **Personality:** Serious training tool with editorial confidence. Not a cheerleader, not a clinician.
 **Anti-positioning:** Not another social network, not a generic AI chatbot, not a gym ERP.
 

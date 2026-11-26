@@ -176,13 +176,15 @@ Each requirement has an ID, priority (P0 = must, P1 = should, P2 = could), and a
 
 ### 6.5 Form check
 
+**Shipping boundary:** The live camera experience is an early squat-count pilot, not the full form-analysis product described in the roadmap. Sample scores and cue cards are illustrative and must remain labeled; live camera output is limited to a rough count until representative evaluation supports additional claims.
+
 | ID | Requirement | Priority | Acceptance criteria |
 | --- | --- | --- | --- |
-| FRM-1 | Camera opt-in with clear privacy copy | P0 | No camera access until explicit click; video never uploaded; stop control |
-| FRM-2 | Simulated 17-joint pose overlay | P1 | Overlay renders for squat/bench/deadlift; visibly labeled simulation in demo |
-| FRM-3 | Rep counting and lift metrics | P0 | Reps, depth, torso angle, valgus/bar path, tempo; deterministic from selected lift |
-| FRM-4 | Form score and prioritized cues | P0 | Score 0–100; 1 primary cue + supporting evidence; no medical claims |
-| FRM-5 | Attach cue to next session | P2 | Cue appears in live session/summary as a note |
+| FRM-1 | Camera opt-in with clear privacy copy | P0 | No camera access until explicit click; frames and landmarks are not uploaded or persisted by this feature; disclose external model/runtime downloads; stop control releases tracks |
+| FRM-2 | Live pose overlay pilot | P1 | Browser renders MediaPipe landmarks; sample overlays remain visibly labeled as examples |
+| FRM-3 | Conservative squat rep-count pilot | P0 | Count is derived from a confidence-gated, side-view bend-and-return cycle; no unsupported barbell or exercise-variation claim |
+| FRM-4 | Validated form score and prioritized cues | P0 | Not shipped; requires representative evaluation and coach agreement before live claims |
+| FRM-5 | Attach cue to next session | P2 | Not shipped; requires persisted result schema and explicit user action |
 
 ### 6.6 Progress & social
 

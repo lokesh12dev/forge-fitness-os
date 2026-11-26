@@ -3,7 +3,7 @@ import {
   ArrowRight, ArrowUpRight, Award, BarChart3, Battery, Brain, Camera,
   Check, ChevronRight, CircleDollarSign, Dumbbell, Flame, HeartPulse,
   Layers, MessageSquare, Mic, Minus, Play, ScanFace, ShieldCheck, Sparkles,
-  Star, Target, Timer, TrendingUp, Trophy, Users, Utensils, Wand2, Zap,
+  Target, Timer, TrendingUp, Trophy, Users, Utensils, Wand2, Zap,
 } from "lucide-react";
 import { Badge, ButtonLink, Logo } from "@/components/ui";
 import { Ring } from "@/components/charts";
@@ -17,7 +17,7 @@ import { formatVolume, clamp } from "@/lib/utils";
 const NAV = [
   { href: "#product", label: "Product" },
   { href: "#intelligence", label: "Intelligence" },
-  { href: "#community", label: "Community" },
+  { href: "#principles", label: "Principles" },
   { href: "#pricing", label: "Pricing" },
 ];
 
@@ -37,8 +37,8 @@ const FEATURES = [
   },
   {
     icon: ScanFace,
-    title: "Your camera, as a coach",
-    body: "On-device pose tracking counts reps and catches depth, bar path and knee valgus. One cue at a time, mid-set.",
+    title: "A camera squat-count pilot",
+    body: "A side-view pose overlay counts squat-like bend-and-return cycles in your browser. Form scores, bar-path analysis and coaching cues are not live yet.",
     tone: "#B49CFF",
   },
   {
@@ -72,33 +72,27 @@ const COMPARISON = [
   { feature: "Adaptive workout engine", forge: true, tracker: false, coach: "partial", nutrition: false, social: false },
   { feature: "Equipment swaps mid-session", forge: true, tracker: false, coach: "partial", nutrition: false, social: false },
   { feature: "Voice / natural-language logging", forge: true, tracker: "partial", coach: false, nutrition: "partial", social: false },
-  { feature: "Camera form feedback", forge: true, tracker: false, coach: false, nutrition: false, social: false },
+  { feature: "Live camera squat rep-count pilot", forge: true, tracker: false, coach: false, nutrition: false, social: false },
   { feature: "Photo macro scanner", forge: true, tracker: false, coach: false, nutrition: true, social: false },
   { feature: "Muscle recovery heatmap", forge: true, tracker: "partial", coach: false, nutrition: false, social: false },
   { feature: "Live community + challenges", forge: true, tracker: "partial", coach: false, nutrition: false, social: "partial" },
   { feature: "PR share cards", forge: true, tracker: "partial", coach: false, nutrition: false, social: "partial" },
 ];
 
-const TESTIMONIALS = [
+const PRODUCT_PRINCIPLES = [
   {
-    quote: "I stopped program-hopping the week I started Forge. It's the first app that changes the plan instead of just counting what I did.",
-    name: "Maya Chen",
-    role: "51kg class powerlifter · 3 plates",
-    initials: "MC",
+    title: "Adapt to the day",
+    body: "Keep the training intent. Adjust for the equipment, time and readiness you actually have.",
     accent: "#FF6B35",
   },
   {
-    quote: "The form check caught my left knee caving. Six weeks later my squat is 12kg heavier and my knees don't ache. That's the whole review.",
-    name: "Jordan Blake",
-    role: "Hybrid athlete · 42 years old",
-    initials: "JB",
+    title: "Separate signal from sample",
+    body: "Live camera mode shows a pose overlay and a rough squat count. Example scores stay visibly labeled as examples.",
     accent: "#6EA8FF",
   },
   {
-    quote: "As a coach I recommend exactly one app to clients now. The protein-gap generator alone is worth the subscription.",
-    name: "Marcus Webb",
-    role: "S&C coach · 200+ athletes",
-    initials: "MW",
+    title: "Explain the next step",
+    body: "Show the inputs behind an adaptation so athletes can understand, question and override it.",
     accent: "#FFD166",
   },
 ];
@@ -118,7 +112,7 @@ const PRICING = [
     price: "$14",
     cadence: "/ month",
     blurb: "The adaptive engine, unlocked.",
-    features: ["Adaptive program engine", "Equipment swaps + compression", "Camera form check", "Photo-to-macro scanner", "Recovery heatmap", "AI coach with your data"],
+    features: ["Adaptive program engine", "Equipment swaps + compression", "Squat rep-count pilot", "Photo-to-macro scanner", "Recovery heatmap", "AI coach with your data"],
     cta: "Start 14-day trial",
     highlight: true,
   },
@@ -127,7 +121,7 @@ const PRICING = [
     price: "$29",
     cadence: "/ month",
     blurb: "For people whose sport is the gym.",
-    features: ["Everything in Pro", "Advanced periodization", "Strength standards + peaks", "Priority form analysis", "Coach sharing & client seats", "Early feature access"],
+    features: ["Everything in Pro", "Advanced periodization", "Strength standards + peaks", "Early access to pose pilots", "Coach sharing & client seats", "Early feature access"],
     cta: "Go Black",
     highlight: false,
   },
@@ -144,7 +138,7 @@ const FAQS = [
   },
   {
     q: "Does the camera upload my videos?",
-    a: "No. Pose estimation runs on-device at 30fps. Only joint coordinates and the resulting cues are stored, and you can delete them at any time. Video stays in your phone.",
+    a: "Live camera frames are processed in your browser and this feature does not upload or save frames or landmarks. First use downloads MediaPipe runtime files from jsDelivr and the pose model from Hugging Face. MediaPipe documents usage/performance metrics sent to Google; its privacy notice says input media is not sent. The current pilot counts squat-like bend-and-return cycles; it does not produce a form score or coaching cues.",
   },
   {
     q: "What if I train at home with almost nothing?",
@@ -152,7 +146,7 @@ const FAQS = [
   },
   {
     q: "Can I use it with a coach or a physio?",
-    a: "Yes. Black tier lets you share a read-only training view with a coach. Form reports export as a clean summary, so professionals see signal instead of screenshots.",
+    a: "Black tier supports a read-only training view with a coach. Camera form reports and cue exports are not available yet; the live pose pilot is a rough rep counter and is not an assessment.",
   },
 ];
 
@@ -574,46 +568,27 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* TESTIMONIALS */}
-        <section id="community" className="scroll-mt-20 mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28">
+        {/* PRODUCT PRINCIPLES */}
+        <section id="principles" className="scroll-mt-20 mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="label-mono mb-4 text-acid">The floor</p>
+              <p className="label-mono mb-4 text-acid">The product</p>
               <h2 className="font-display text-[clamp(2rem,4vw,3.2rem)] font-extrabold leading-[0.98] tracking-[-0.05em]">
-                People who stopped
+                Built around a better
                 <br />
-                switching apps.
+                training loop.
               </h2>
             </div>
-            <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-4 py-2">
-              <div className="flex -space-x-2">
-                {TESTIMONIALS.map((t) => (
-                  <span key={t.name} className="grid size-6 place-items-center rounded-full border border-ink text-[7px] font-bold" style={{ background: `${t.accent}22`, color: t.accent }}>
-                    {t.initials}
-                  </span>
-                ))}
-              </div>
-              <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-mist">38,000+ athletes</span>
-            </div>
+            <span className="rounded-full border border-white/[0.08] bg-white/[0.02] px-4 py-2 font-mono text-[8px] uppercase tracking-[0.1em] text-mist">Product principles · not testimonials</span>
           </div>
 
           <div className="mt-8 grid gap-3 md:grid-cols-3">
-            {TESTIMONIALS.map((t) => (
-              <figure key={t.name} className="flex flex-col rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5">
-                <div className="flex gap-0.5">
-                  {Array.from({ length: 5 }).map((_, i) => <Star key={i} className="size-3 fill-amber text-amber" />)}
-                </div>
-                <blockquote className="mt-3 flex-1 text-[12px] leading-relaxed text-mist">“{t.quote}”</blockquote>
-                <figcaption className="mt-4 flex items-center gap-2.5 border-t border-white/[0.06] pt-3.5">
-                  <span className="grid size-8 place-items-center rounded-full text-[9px] font-bold" style={{ background: `${t.accent}18`, color: t.accent }}>
-                    {t.initials}
-                  </span>
-                  <div>
-                    <p className="text-[10.5px] font-semibold text-chalk">{t.name}</p>
-                    <p className="font-mono text-[7.5px] uppercase tracking-[0.08em] text-dim">{t.role}</p>
-                  </div>
-                </figcaption>
-              </figure>
+            {PRODUCT_PRINCIPLES.map((principle) => (
+              <article key={principle.title} className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5">
+                <span className="mb-4 block h-1 w-10 rounded-full" style={{ backgroundColor: principle.accent }} />
+                <h3 className="font-display text-[17px] font-bold tracking-[-0.03em] text-chalk">{principle.title}</h3>
+                <p className="mt-2 text-[12px] leading-relaxed text-mist">{principle.body}</p>
+              </article>
             ))}
           </div>
 

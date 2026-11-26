@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "1.2.3",
     "better-sqlite3": "^13.2.0",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.4",

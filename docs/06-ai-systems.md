@@ -282,11 +282,16 @@ Top-1 / top-3 dish accuracy; portion MAE; calorie MAE; confirmation rate; correc
 
 ## 8. Form analysis
 
-### 8.1 Demo
-- Webcam is opt-in; `getUserMedia` only after a click; stop control releases tracks.
-- A 17-joint SVG skeleton is animated over the video with lift-specific angles.
-- Metrics, rep count, score, cues and wins are deterministic fixtures per lift (squat/bench/deadlift).
-- The UI labels the analysis as a simulation; no frames leave the browser.
+### 8.1 Current browser pilot (2026-11-27)
+- Camera access is opt-in; `getUserMedia` is requested after a click and the stop control releases camera tracks.
+- The live route loads MediaPipe Pose Landmarker Lite and overlays the model's 33 body landmarks. The version-pinned runtime downloads from jsDelivr and the revision-pinned Lite model downloads from the LiteRT Community Hugging Face repository; camera frames and landmarks are processed in the browser and are not uploaded or persisted by this feature.
+- MediaPipe's current privacy notice says Tasks send usage/performance metrics to Google while input media is not sent. Disclose this SDK telemetry separately from the app's camera-frame flow; see the [MediaPipe Tasks privacy notice](https://developers.google.com/edge/mediapipe/solutions/privacy).
+- Live output is limited to a rough side-view 2D knee-angle estimate and a squat-like bend-and-return count. It does not identify load or lift variation, assess safety, grade depth or technique, generate cues, or attach a result to a workout.
+- The sample-report mode retains deterministic squat/bench/deadlift fixtures, with explicit `sample`/`illustrative` labels. Those values do not come from the camera.
+- Measurement gates require at least 0.55 visibility for the selected hip/knee/ankle landmarks. The counter smooths the image-plane angle, arms after two frames at or below 115°, and completes after two frames at or above 155° with at least 250 ms between bottom and return. These are unvalidated pilot thresholds, not biomechanical standards.
+- Inference is capped near 8 frames/sec and currently runs synchronously in the browser's main thread. Performance varies by device; a worker and device/browser performance matrix are production follow-ups.
+
+**Primary technical references:** [MediaPipe Pose Landmarker overview](https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker?tab=Web) documents the 33 normalized/world landmarks and visibility outputs; the [Web JavaScript guide](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker/web_js) documents `@mediapipe/tasks-vision`, `VIDEO` mode and `detectForVideo()`, and warns that synchronous inference blocks the UI thread. The Lite model's [model card](https://huggingface.co/litert-community/MediaPipe-PoseLandmarker-Lite) documents its Apache-2.0 license and model file; the application pins a repository revision for asset stability. The app keeps inference behind an explicit client-side action, consistent with [Next.js Client Component guidance](https://nextjs.org/docs/app/getting-started/server-and-client-components).
 
 ### 8.2 Production pipeline (on-device first)
 ```

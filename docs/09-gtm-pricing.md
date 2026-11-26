@@ -49,14 +49,14 @@ The GTM must prove that loop works — retention comes from trust in the prescri
 | Tier | Price (annual) | Monthly eq. | Includes |
 | --- | --- | --- | --- |
 | **Free** | $0 | — | Logging, exercise library, basic program, macro ring, social feed, 3 posts/mo |
-| **Pro** | $79/yr | ~$6.50 | Adaptive engine, readiness, recovery map, compression, swaps, RPE autoreg, unlimited posts, PR cards, form check (simulated), coach chat, nutrition scan (limited) |
-| **Black** | $179/yr | ~$15 | Everything in Pro + food scan unlimited, AI coach (LLM), voice logging, pose form check, wearable sync, coach seats (1 client), priority support |
+| **Pro** | $79/yr | ~$6.50 | Adaptive engine, readiness, recovery map, compression, swaps, RPE autoreg, unlimited posts, PR cards, squat rep-count pilot, coach chat, nutrition scan (limited) |
+| **Black** | $179/yr | ~$15 | Everything in Pro + food scan unlimited, AI coach (LLM), voice logging, early access to pose pilots, wearable sync, coach seats (1 client), priority support |
 | **Coach** | $149/yr per coach seat | ~$12 | Client management, adherence dashboard, program publishing, client reports |
 
 ### Rationale
 - **Logging stays free.** Charging for basic set logging is increasingly untenable (Hevy/Strong set the expectation). Free tier is a funnel, not a crippleware wall.
 - **Adaptation is paid.** Readiness → load, recovery map, compression, swaps — these are the defensible, high-value outputs. Pro is the main revenue tier.
-- **AI is a premium feature.** LLM coach and on-device pose/food recognition carry inference costs; Black tier absorbs them.
+- **AI is a premium feature.** LLM coach and on-device pose/food recognition carry inference costs; Black tier absorbs them. Form scoring and coaching from pose remain roadmap items until they pass evaluation.
 - **Coach is B2B2C.** Sold per seat to trainers; higher LTV, lower churn, distribution through clients.
 
 ### Entry pricing anchors
@@ -90,7 +90,7 @@ Forge's Pro at $79/yr sits between "just a logger" and "black-box generator" —
 The right session for the body, kit, and time you have today — and the fuel and recovery to support it.
 
 ### Proof
-Visible inputs, real logs, one-tap adaptation, on-device form analysis, protein gap closed.
+Visible inputs, real logs, one-tap adaptation, a clearly scoped on-device squat-count pilot, protein gap closed.
 
 ### Personality
 Serious training tool with editorial confidence. Not a cheerleader, not a clinician.
@@ -104,7 +104,7 @@ Not another social network. Not a generic AI chatbot. Not a gym ERP.
 ### Key messages by tier
 - **Free:** Log fast. Program ready. Community waiting.
 - **Pro:** Your session adapts to sleep, time, and equipment. Not static. Not blind.
-- **Black:** AI coach, pose form check, unlimited food scan. The complete loop.
+- **Black:** AI coach, early access to pose pilots, unlimited food scan. Full form assessment remains roadmap work.
 - **Coach:** Manage clients, not spreadsheets.
 
 ### Proof points (to be validated in beta)

@@ -2,7 +2,7 @@
 
 > A tracker records what happened. **Forge decides what should happen next.**
 
-Forge is a full-stack, local-first gym super-app: adaptive programming, frictionless set logging, on-device form analysis, photo-to-macro nutrition, a per-muscle recovery model, and a social layer that rewards consistency rather than noise.
+Forge is a full-stack, local-first gym app: adaptive programming, frictionless set logging, an early on-device squat-count pilot, photo-to-macro nutrition, a per-muscle recovery model, and a social layer that rewards consistency rather than noise.
 
 Built as a working product demo in Next.js 16, not a clickable mockup. Every screen reads real rows from SQLite; the adaptive engine, PR detection, protein-gap generator and recovery map are deterministic, inspectable code.
 
@@ -29,7 +29,7 @@ Open **http://localhost:3000**.
 | `/app/train/[id]` | Live logging: rest timer, RPE autoreg, plate math, voice log, swaps |
 | `/app/nutrition` | Macro ring, meal log, photo scanner, protein-gap generator |
 | `/app/progress` | e1RM trends, volume, body metrics, strength standards, PR cards |
-| `/app/form-check` | Camera studio with pose overlay, depth/path metrics and cues |
+| `/app/form-check` | Camera pose overlay and live squat-like rep-count pilot; sample reports are separate |
 | `/app/social` | Feed, check-ins, leaderboard, challenges, gym radar |
 | `/app/coach` | Chat grounded in the athlete's real training data |
 | `/app/settings` | Profile, equipment, macro targets, account |
@@ -37,7 +37,7 @@ Open **http://localhost:3000**.
 **Demo athlete:** `alex@forge.app` (or click “Enter as Alex Rivera”).
 The database ships with 7 athletes, 63 exercises, 35 workouts, 561 logged sets, 15 program days, 85 body-metric readings and social data.
 
-> Requires Node 20+. SQLite is used for zero-setup local development. No Docker, cloud account or API key needed. Camera form check is a simulation by default; enabling the webcam shows a live pose overlay and never uploads video.
+> Requires Node 20+. SQLite is used for zero-setup local development. No Docker, cloud account or API key is needed. Live camera mode runs MediaPipe pose inference in the browser and counts a squat-like bend-and-return cycle. The browser downloads the pinned runtime from jsDelivr and a revision-pinned model from Hugging Face on first use. Camera frames and landmarks are not uploaded or saved by this feature. MediaPipe documents usage/performance metrics sent to Google; its privacy notice says input media is not sent. Example scores and cues are illustrative only.
 
 ---
 
@@ -67,7 +67,7 @@ The differentiator is not a longer feature list. It is that **inputs change the 
 | --- | --- |
 | **Adaptive training** | Readiness model from sleep/HRV/soreness; load multiplier; RPE-driven next-set suggestion; “how much time do you have?” compression into supersets with trimmed rest; same-pattern equipment swaps mid-session |
 | **Zero-friction logging** | Optimistic set completion, weight/rep steppers, previous-set ghosts, rest timer, plate breakdown, natural-language and voice parsing (“bench 185 for 8 at RPE 7”), undo, auto PR celebration |
-| **Form intelligence** | Simulated 17-joint squat/bench/deadlift analysis: rep count, depth, torso angle, knee valgus, bar path, tempo, scored rubric, prioritized cues, attach-to-session |
+| **Form check** | On-device 33-landmark pose overlay and a conservative squat-like rep-count pilot; bench/deadlift reports, scores, biomechanics and cues are labeled sample content only |
 | **Recovery** | Per-muscle fatigue decay from volume × intensity × recency, front/back body map, “train what's ready” next-session logic |
 | **Nutrition** | Macro ring, water, meal log; photo-to-macro confirmation flow with regional foods; protein-gap generator that builds the smallest meal that closes the day; targets feed the coach |
 | **Progress** | e1RM and volume trends, bodyweight/waist/body-fat, strength standards by sex/bodyweight, level/XP/streak, canvas-rendered Instagram-ready PR cards with native share |
@@ -160,7 +160,7 @@ Seeding is idempotent: it clears and rebuilds demo rows.
 2. **One cue, not a report.** Form feedback surfaces the highest-leverage fix, then evidence.
 3. **Never punish a missed session.** Compression and swaps preserve the stimulus instead of breaking the streak.
 4. **Evidence over vibes.** Every adaptive claim shows its inputs (“sleep debt detected”, “last RPE 7.5”).
-5. **Local-first privacy.** Camera video never leaves the device; the demo database is a file you own.
+5. **Local-first privacy.** Camera frames and pose landmarks stay in the browser; the demo database is a file you own. The browser downloads the pose runtime/model from their documented hosts on first use.
 6. **Accessible by default.** Semantic controls, focus-visible rings, `aria-label`s on icon buttons, reduced-motion respect, contrast-checked text.
 
 Full tokens, type scale and component rules: [`docs/07-design-system.md`](docs/07-design-system.md).
@@ -200,7 +200,7 @@ Details per repo: [`docs/10-research-repos.md`](docs/10-research-repos.md).
 ## Known demo limitations
 
 - Auth is a demo cookie; there is no password, OAuth, email verification or rate limiting.
-- Camera analysis is a deterministic simulation of the pose pipeline, not a trained model. The webcam feed is real and local; joint inference is mocked.
+- Camera mode uses a real MediaPipe Pose Landmarker model in the browser; live output is limited to a rough 2D squat-like rep count. It is not validated as form coaching. Scores, biomechanics and cues in the separate sample mode are placeholders. The revision-pinned model and version-pinned runtime download from Hugging Face and jsDelivr; camera frames and landmarks are not sent to the app server or persisted by this feature.
 - Food scanning uses a curated regional food set and a simulated recognition step; barcode/OCR and nutrition-provider integration are production work.
 - AI coach replies are deterministic templates over real data, not an LLM call. Production guardrails and tool-calling design are documented.
 - Social features are single-instance SQLite with optimistic UI; no websocket fan-out, moderation queue or object storage.

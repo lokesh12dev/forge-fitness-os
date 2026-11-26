@@ -211,7 +211,12 @@ class SyncManager {
 export const syncManager = new SyncManager();
 
 export function useSyncStatus() {
-  const [state, setState] = useState<SyncState>(() => syncManager.getState());
+  const [state, setState] = useState<SyncState>({
+    status: "synced",
+    pendingCount: 0,
+    isOnline: true,
+    lastSyncedAt: null,
+  });
 
   useEffect(() => {
     return syncManager.subscribe(setState);

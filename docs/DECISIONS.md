@@ -234,5 +234,62 @@ Each entry records a decision made during development, including context, option
 - Implemented mock payment adapters for Razorpay (India UPI/cards) and Stripe (Global subscriptions) with INR (₹799/yr) and USD ($9.99/mo) currency switching.
 - Implemented 1-click unencumbered training data export (CSV & JSON) and local IndexedDB cache purge for complete user data sovereignty.
 
+---
+
+## D-023 — Universal Workout CSV Importer & Exporter (A11)
+
+**Date:** 2026-11-26
+**Context:** Lifters migrating from Hevy, Strong, FitNotes, or Jefit refuse to abandon years of logged historical workouts and personal records.
+**Decision:**
+- Implemented `parseWorkoutCSV()` and `exportWorkoutsToCSV()` in `app/src/lib/workout-import-export.ts`.
+- Automatically recognizes headers and formats from Hevy, Strong, FitNotes, Jefit, and universal schemas.
+- Converts imperial weight (`lbs`) to metric (`kg`) with precise precision factor (`0.45359237`).
+- Integrates `findExerciseByAlias()` to canonicalize raw lift strings ("Bench Press (Barbell)", "Flat BB Bench", "RDL") into internal exercise slugs.
+- Built interactive drag-and-drop `CsvImportModal` with sample fixture buttons and instant volume preview.
+
+---
+
+## D-024 — 10 Periodized Built-in Programs Catalog (F1)
+
+**Date:** 2026-11-26
+**Context:** Lifters need proven, complete program blueprints with progression schemes rather than generic random workout lists.
+**Decision:**
+- Implemented `BUILTIN_PROGRAMS` in `app/src/lib/programs-db.ts` containing 10 battle-tested programs:
+  1. Push Pull Legs (PPL Hypertrophy 6-day)
+  2. Upper / Lower Split (4-day)
+  3. Full Body 3x (Beginner / Time-crunched)
+  4. 5/3/1 Boring But Big (Pure Strength 4-day)
+  5. GZCLP (Linear Progression 4-day)
+  6. PHUL (Power Hypertrophy 4-day)
+  7. Arnold Classic Split (Antagonist Pairs 6-day)
+  8. Calisthenics & Bodyweight Strength (4-day)
+  9. Glute & Lower Body Focus (4-day)
+  10. Athletic Performance & Speed (4-day)
+- Built interactive `ProgramsClient` with goal filters (`hypertrophy`, `strength`, `athletic`, `bodyweight`), macrocycle progression wave, day inspection modal, and 1-tap enrollment.
+
+---
+
+## D-025 — Automated Plateau Detection & Rebalancing Engine (B6, B9, B10)
+
+**Date:** 2026-11-26
+**Context:** Stalls in strength progression cause frustration when lifters lack clear periodization strategies. Missed sessions cause guilt or dangerous overload.
+**Decision:**
+- Implemented `detectPlateau()` in `app/src/lib/adaptive-features.ts`: flags when an exercise e1RM stalls across 3 consecutive sessions at RPE ≥ 8.0, generating three specific interventions:
+  1. *Micro-Loading:* Suggests adding +0.5–1.0kg using micro-plates.
+  2. *Periodized Rep Shift:* Recommends shifting from 5s to 8s or 8s to 3s to break adaptation plateaus.
+  3. *10% Back-Off Reset:* Recommends a 10% load reduction focusing on concentric bar velocity.
+- Implemented `rescheduleMissedSession()` supporting three calendar strategies: Rolling Slide (pushes future days by 1), Antagonist Merge (combines missed compounds into supersets), and Forgive & Advance.
+
+---
+
+## D-026 — Crowded Gym Auto-Substitution Mode (B7)
+
+**Date:** 2026-11-26
+**Context:** Peak gym hours frequently leave power racks and barbell flat benches occupied, causing lifters to lose momentum and workout quality.
+**Decision:**
+- Implemented `adaptForCrowdedGym()` in `app/src/lib/adaptive-features.ts` and integrated a 1-tap "Crowded" action button into `live-workout.tsx`.
+- Automatically substitutes barbell rack dependencies with dumbbell, cable, or bodyweight equivalents (Barbell Bench → Heavy DB Bench, Squat → Bulgarian Split Squat, Deadlift → DB RDL, Barbell Row → One-Arm DB Row) while maintaining equivalent muscular stimulus.
+
+
 
 

@@ -127,3 +127,43 @@ export function matchExercise(
 
   return false;
 }
+
+/**
+ * Looks up an exercise slug and display name by an alias, acronym, or raw name.
+ */
+export function findExerciseByAlias(query: string): { slug: string; name: string } | null {
+  const clean = query.trim().toLowerCase();
+  if (!clean) return null;
+
+  // Exact slug match or slug without dashes
+  for (const [slug, aliases] of Object.entries(EXERCISE_ALIASES)) {
+    if (slug === clean || slug.replace(/-/g, " ") === clean) {
+      return {
+        slug,
+        name: slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
+      };
+    }
+    for (const alias of aliases) {
+      if (alias.toLowerCase() === clean) {
+        return {
+          slug,
+          name: slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
+        };
+      }
+    }
+  }
+
+  // Substring or token match
+  for (const [slug, aliases] of Object.entries(EXERCISE_ALIASES)) {
+    for (const alias of aliases) {
+      if (clean.includes(alias.toLowerCase()) || alias.toLowerCase().includes(clean)) {
+        return {
+          slug,
+          name: slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
+        };
+      }
+    }
+  }
+
+  return null;
+}

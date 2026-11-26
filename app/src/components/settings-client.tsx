@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation";
 import {
   Activity, BadgeCheck, Bell, Check, ChevronRight, CreditCard, Dumbbell, Flame,
   Globe, Loader2, Lock, LogOut, Salad, Shield, ShieldAlert, ShieldCheck, Sparkles,
-  Target, Trash2, User, Users, Zap,
+  Target, Trash2, UploadCloud, User, Users, Zap,
 } from "lucide-react";
 import { signOut, updateEquipment, updateProfile, updateTargets } from "@/app/actions";
 import { Avatar, Badge, Button, ProgressBar } from "@/components/ui";
 import { PLANS, mockRazorpayCheckout, mockStripeCheckout, type PlanTier } from "@/lib/plans";
 import { formatUserLevel } from "@/lib/consistency";
+import { CsvImportModal } from "@/components/csv-import-modal";
 import { cn } from "@/lib/utils";
 
 type SettingsUser = {
@@ -102,6 +103,7 @@ export function SettingsClient({
   const [savingProfile, startProfile] = useTransition();
   const [savingTargets, startTargets] = useTransition();
   const [leaving, startLeave] = useTransition();
+  const [showImportModal, setShowImportModal] = useState(false);
 
   function ping(msg: string) {
     setToast(msg);
@@ -642,6 +644,25 @@ export function SettingsClient({
                 </div>
               </div>
 
+              {/* Universal Logger CSV Migration (A11) */}
+              <div className="mt-4 rounded-2xl border border-acid/25 bg-acid/[0.04] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-[13px] font-bold text-chalk flex items-center gap-2">
+                    <UploadCloud className="size-4 text-acid" /> Migrate Workout History (A11)
+                  </span>
+                  <span className="text-[11px] text-mist mt-0.5 block">
+                    Import historical sets and routines from Hevy, Strong, FitNotes, or Jefit CSV exports.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(true)}
+                  className="press rounded-xl bg-acid px-4 py-2 font-mono text-[10.5px] font-bold text-ink hover:bg-[#b8e330] shrink-0 self-start sm:self-auto"
+                >
+                  Import CSV
+                </button>
+              </div>
+
               {/* Danger Zone */}
               <div className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/[0.04] p-4">
                 <div className="flex items-center gap-2 text-rose-400">
@@ -758,6 +779,13 @@ export function SettingsClient({
           <Check className="mr-1.5 inline size-3" /> {toast}
         </div>
       )}
+
+      {/* CSV Import Modal (A11) */}
+      <CsvImportModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImportComplete={() => ping("Successfully imported historical workouts!")}
+      />
     </div>
   );
 }

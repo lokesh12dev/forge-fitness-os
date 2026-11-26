@@ -18,10 +18,13 @@ export type ChatMessage = {
 };
 
 const QUICK_PROMPTS = [
+  { label: "Analyze bench stall", icon: Zap },
+  { label: "Structure a deload", icon: Flame },
+  { label: "Gym is crowded", icon: Dumbbell },
+  { label: "Missed my last workout", icon: Sparkles },
   { label: "I only have 25 minutes", icon: Zap },
   { label: "Hit my remaining protein", icon: Utensils },
   { label: "How's my recovery today?", icon: Flame },
-  { label: "What should I train today?", icon: Dumbbell },
 ] as const;
 
 function Inline({ text }: { text: string }) {

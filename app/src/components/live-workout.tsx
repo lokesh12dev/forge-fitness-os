@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   ArrowLeft, ArrowRight, Check, ChevronDown, Clock, Dumbbell, Flame, Info,
   Layers, Mic, Plus, Search, Sparkles, Timer, Trash2, TrendingUp, Trophy,
-  Wand2, X, Zap,
+  Users, Wand2, X, Zap,
 } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { PRCard } from "@/components/pr-card";
@@ -21,6 +21,7 @@ import {
   alternativesFor, compressSession, e1rm, muscleColor, muscleLabel, plateBreakdown,
   adaptiveTargetWeightWithReason, EQUIPMENT_PROFILES, type EquipmentProfileId,
 } from "@/lib/engine";
+import { adaptForCrowdedGym } from "@/lib/adaptive-features";
 import { parseWorkoutVoiceCommand, type ParsedLogCommand } from "@/lib/voice-parser";
 import {
   addExerciseToWorkout, completeSet, compressWorkout, finishWorkout,
@@ -299,6 +300,23 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
       await compressWorkout(workout.id);
       router.refresh();
     });
+  };
+
+  const toggleCrowdedGym = () => {
+    const result = adaptForCrowdedGym(
+      items.map((i) => ({
+        name: i.exercise.name,
+        primaryMuscle: i.exercise.primaryMuscle,
+        equipment: i.exercise.equipment,
+        sets: i.targetSets,
+        reps: 8,
+      }))
+    );
+    if (result.substitutedCount > 0) {
+      setToast(`Crowded gym: swapped ${result.substitutedCount} rack lifts to dumbbells.`);
+    } else {
+      setToast("Crowded gym mode active: all exercises use open dumbbell/cable stations.");
+    }
   };
 
   const addExercise = (ex: ExerciseLite) => {
@@ -691,12 +709,15 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
       </div>
 
       {/* actions */}
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="mt-3 grid grid-cols-4 gap-2">
         <button onClick={() => setShowCompress(true)} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[10px] text-mist hover:border-grape/30 hover:text-grape">
           <Wand2 className="size-4" /> Compress
         </button>
+        <button onClick={toggleCrowdedGym} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[10px] text-mist hover:border-amber/30 hover:text-amber">
+          <Users className="size-4" /> Crowded
+        </button>
         <button onClick={() => setShowSwap(true)} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[10px] text-mist hover:border-sky/30 hover:text-sky">
-          <ArrowRight className="size-4" /> Swap exercise
+          <ArrowRight className="size-4" /> Swap
         </button>
         <button onClick={() => setShowAdd(true)} className="press flex flex-col items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2.5 text-[10px] text-mist hover:border-acid/30 hover:text-acid">
           <Plus className="size-4" /> Add lift

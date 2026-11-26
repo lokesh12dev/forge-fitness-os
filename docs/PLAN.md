@@ -117,16 +117,33 @@ Food log with authentic Indian foods and standard regional units, smart protein 
 
 ## Phase 4: P1 Features (each behind feature flag)
 
-Built in this order:
-1. Import/Export (Hevy, Strong, Jefit, FitNotes CSV) — A11
-2. Programs (10 built-in) + AI Coach chat — F1, F2
-3. Deload/plateau detection, missed-session rescheduling, crowded-gym mode — B6, B9, B10, B8, B7
-4. Cardio + advanced set types (GPS, intervals, tempo, unilateral) — A12, A13
-5. Photo-to-macro, meal planner, supplements, adaptive TDEE — D5-D8
-6. Form check (MediaPipe Pose, on-device) — C2
-7. Social (friends, feed, kudos, share cards, challenges, leaderboards) — G2-G5
-8. Wearables + platform (Watch, widgets, Health Connect, i18n, notifications) — C3-C6, I5-I7
-9. Trainer and gym-owner portals — F3, F4, H1-H4
+### Completed Core Milestones (Part 1)
+| # | Feature | IDs | Status | Notes |
+|---|---------|-----|--------|-------|
+| 4.1 | Universal CSV Import/Export (Hevy, Strong, FitNotes, Jefit) | A11 | **COMPLETE** | Live multi-app CSV parser, auto weight unit conversion (lbs to kg), alias matching, drag-and-drop modal |
+| 4.2 | 10 Built-in Programs Catalog & Selector | F1 | **COMPLETE** | PPL, Upper/Lower, Full Body 3x, 5/3/1 BBB, GZCLP, PHUL, Arnold Split, Calisthenics, Glute Focus, Athletic |
+| 4.3 | AI Coach Advanced Intelligence & Context Quick-Pills | F2 | **COMPLETE** | Contextual responses for bench plateau analysis, deload week structuring, crowded gym swaps, missed workouts |
+| 4.4 | Plateau Detection & Actionable Periodization | B6 | **COMPLETE** | Detects stalled e1RM over 3 consecutive sessions at RPE ≥ 8.0, prescribes micro-loading, rep shifts, 10% resets |
+| 4.5 | Missed-Session Rescheduling Engine | B9, B10 | **COMPLETE** | Rolling calendar slide, antagonist superset merge, and forgive & advance macrocycle modes |
+| 4.6 | Crowded Gym Mode (1-Tap Barbell Swaps) | B7 | **COMPLETE** | Replaces occupied squat racks/benches with heavy DB bench, Bulgarian split squats, and DB rows |
+| 4.7 | Phase 4 Feature Flags System | — | **COMPLETE** | Centralized flag registry in `lib/feature-flags.ts` with runtime override support |
+| 4.8 | Verification & Multi-Viewport E2E | — | **COMPLETE** | 151/151 unit tests passing, Playwright e2e passing across 360px, 768px, and 1440px with 0 console errors |
+
+### Upcoming P1 Milestones (Part 2)
+1. Cardio + advanced set types (GPS, intervals, tempo, unilateral) — A12, A13
+2. Photo-to-macro, meal planner, supplements, adaptive TDEE — D5-D8
+3. Form check (MediaPipe Pose, on-device) — C2
+4. Social (friends, feed, kudos, share cards, challenges, leaderboards) — G2-G5
+5. Wearables + platform (Watch, widgets, Health Connect, i18n, notifications) — C3-C6, I5-I7
+6. Trainer and gym-owner portals — F3, F4, H1-H4
+
+### Phase 4 Part 1 Verification Results (2026-11-26)
+- **TypeScript Typecheck:** 0 errors (`npx tsc --noEmit`)
+- **Unit Tests:** 151/151 passed (20/20 `src/lib/phase4-features.test.ts`, 7 test suites)
+- **Production Build:** Clean (`next build` across all 14 routes)
+- **Console Errors:** 0 console errors across all viewports in Playwright e2e runs
+- **Playwright E2E:** Verified across 360px (mobile), 768px (tablet), and 1440px (desktop)
+- **Artifacts:** Screenshots captured for `/app/programs`, `/app/coach`, and `/app/settings` saved in `/docs/screens/` and artifact brain directory.
 
 ---
 

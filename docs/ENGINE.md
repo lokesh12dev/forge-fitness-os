@@ -296,6 +296,50 @@ Single source of truth in `app/src/lib/consistency.ts`:
 
 ---
 
+## 18. Plateau Detection Engine (B6)
+
+`detectPlateau(history, minStalledSessions = 3)` monitors lift e1RM across historical workouts:
+
+```
+progressPct = ((recentE1rm - firstRecentE1rm) / firstRecentE1rm) × 100
+isPlateaued = allRecentRpe ≥ 8.0 AND progressPct ≤ 1.0%
+```
+
+When triggered, returns 3 concrete interventions:
+1. **Micro-Loading:** Proscribes +0.5kg or +1.0kg jumps using micro-plates rather than standard 2.5kg jumps.
+2. **Periodized Rep Shift:** Adjusts rep targets (e.g. 5 reps → 8 reps for hypertrophy or 3 reps for neural potentiation).
+3. **10% Back-Off Reset:** Computes `round(weight × 0.9 × 2) / 2` and prescribes explosive bar velocity.
+
+---
+
+## 19. Missed-Session Rescheduling (B9, B10)
+
+`rescheduleMissedSession(schedule, missedDayIndex, strategy)`:
+- `rolling_slide`: Shifts subsequent day indices forward by 1, preserving all sets and volume in order.
+- `antagonist_merge`: Fuses the primary compound lifts of the missed session with the next session as antagonist supersets (45m time limit).
+- `forgive_advance`: Skips the missed day cleanly, preserves macrocycle cadence, and flags the muscle group for an extra set next week.
+
+---
+
+## 20. Crowded Gym Mode (B7)
+
+`adaptForCrowdedGym(exercises)` substitutes barbell rack and platform dependencies with dumbbell/cable alternatives:
+- Barbell Bench Press → Heavy Dumbbell Bench Press (equal pec activation, zero rack required)
+- Barbell Back Squat → Bulgarian Split Squat (+2 reps, eliminates spinal compression)
+- Barbell Deadlift → Dumbbell Romanian Deadlift (+3 reps, pure hamstring/glute focus)
+- Barbell Row → One-Arm Dumbbell Row (+2 reps, lat isolation)
+- Overhead Press → Seated Dumbbell Shoulder Press (+2 reps)
+
+---
+
+## 21. Universal CSV Importer & Exporter (A11)
+
+- Automatic header recognition for Hevy, Strong, FitNotes, and Jefit exports.
+- Exact imperial conversion: `weightKg = rawWeight × 0.45359237`.
+- Alias lookup via `findExerciseByAlias()` resolves colloquial exercise names to standard slugs.
+
+---
+
 ## Contract for UI code
 
 1. Never compute level, e1RM, readiness, or target weights inline in a component.

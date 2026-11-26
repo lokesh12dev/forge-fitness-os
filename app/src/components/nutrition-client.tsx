@@ -179,16 +179,22 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
   const [showPhotoScanner, setShowPhotoScanner] = useState(false);
   const [indianFoodSearch, setIndianFoodSearch] = useState("");
   const [indianFoodFilter, setIndianFoodFilter] = useState<"all" | "high_protein" | "vegetarian" | "vegan" | "staples">("all");
-  const [manualMeal, setManualMeal] = useState(defaultMealForHour(new Date().getHours()));
+  const [manualMeal, setManualMeal] = useState("lunch");
   const [form, setForm] = useState({
     name: "",
-    meal: defaultMealForHour(new Date().getHours()),
+    meal: "lunch",
     serving: "1 serving",
     calories: "",
     protein: "",
     carbs: "",
     fat: "",
   });
+
+  useEffect(() => {
+    const m = defaultMealForHour(new Date().getHours());
+    setManualMeal(m);
+    setForm((prev) => ({ ...prev, meal: m }));
+  }, []);
   const [busy, setBusy] = useState(false);
   const [quickAdding, setQuickAdding] = useState<string | null>(null);
   const [proteinFilter, setProteinFilter] = useState("all");
@@ -553,7 +559,7 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
                         <div key={row.id} className="group flex items-center gap-3 border-b border-white/[0.05] px-3.5 py-2.5 last:border-0">
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-[12px] font-medium text-chalk/90">{row.name}</p>
-                            <p className="mt-0.5 flex items-center gap-1.5 font-mono text-[8.5px] uppercase tracking-[0.08em] text-dim">
+                            <p suppressHydrationWarning className="mt-0.5 flex items-center gap-1.5 font-mono text-[8.5px] uppercase tracking-[0.08em] text-dim">
                               {row.serving} · {new Date(row.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                             </p>
                           </div>
@@ -605,7 +611,7 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
             />
             {remainingProtein > 0 ? (
               <>
-                <p className="mt-2 text-[11.5px] leading-relaxed text-mist">
+                <p suppressHydrationWarning className="mt-2 text-[11.5px] leading-relaxed text-mist">
                   A stack that fits your remaining macros. One tap logs it to {new Date().getHours() < 11 ? "breakfast" : new Date().getHours() < 16 ? "lunch" : "today"}.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-1.5">

@@ -119,7 +119,7 @@ export function ShareCardModal({
                 FORGE<span className="text-acid">.</span>
               </span>
             </div>
-            <span className="font-mono text-[9px] uppercase tracking-wider text-dim">
+            <span suppressHydrationWarning className="font-mono text-[9px] uppercase tracking-wider text-dim">
               {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
             </span>
           </div>

@@ -78,9 +78,11 @@ function triggerHaptic(pattern: "set" | "pr") {
 }
 
 function useElapsed(start: string) {
-  const [sec, setSec] = useState(() => Math.max(0, Math.floor((Date.now() - new Date(start).getTime()) / 1000)));
+  const [sec, setSec] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setSec(Math.max(0, Math.floor((Date.now() - new Date(start).getTime()) / 1000))), 1000);
+    const update = () => setSec(Math.max(0, Math.floor((Date.now() - new Date(start).getTime()) / 1000)));
+    update();
+    const t = setInterval(update, 1000);
     return () => clearInterval(t);
   }, [start]);
   return sec;
@@ -390,7 +392,7 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-semibold text-chalk">{workout.name}</p>
             <div className="mt-0.5 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.1em] text-dim">
-              <span className="flex items-center gap-1"><Clock className="size-2.5" /> {formatClock(elapsed)}</span>
+              <span suppressHydrationWarning className="flex items-center gap-1"><Clock className="size-2.5" /> {formatClock(elapsed)}</span>
               <span>·</span>
               <span>{totalSets} sets</span>
               <span>·</span>

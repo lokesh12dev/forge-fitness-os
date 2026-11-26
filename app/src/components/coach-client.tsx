@@ -174,7 +174,7 @@ export function CoachChat({
 
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
         <div className="flex justify-center">
-          <span className="rounded-full border border-white/[0.06] bg-white/[0.02] px-3 py-1 font-mono text-[7.5px] uppercase tracking-[0.14em] text-dim">
+          <span suppressHydrationWarning className="rounded-full border border-white/[0.06] bg-white/[0.02] px-3 py-1 font-mono text-[7.5px] uppercase tracking-[0.14em] text-dim">
             Today · {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
           </span>
         </div>
@@ -191,7 +191,7 @@ export function CoachChat({
               <div className={cn("max-w-[84%] sm:max-w-[76%]", !isCoach && "text-right")}>
                 <div className="mb-1 flex items-center gap-2 text-[8px] font-mono uppercase tracking-[0.1em] text-dim">
                   <span className={isCoach ? "text-acid/80" : "text-mist"}>{isCoach ? "Coach" : user.name.split(" ")[0]}</span>
-                  <span>{new Date(m.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
+                  <span suppressHydrationWarning>{new Date(m.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
                 </div>
                 <div
                   className={cn(
@@ -227,7 +227,7 @@ export function CoachChat({
       </div>
 
       <div className="border-t border-white/[0.07] bg-black/20 px-3.5 pb-3.5 pt-3">
-        <div className="mb-2.5 flex flex-wrap gap-1.5">
+        <div className="mb-2.5 flex gap-1.5 overflow-x-auto no-scrollbar sm:flex-wrap">
           {QUICK_PROMPTS.map((p) => {
             const Icon = p.icon;
             return (

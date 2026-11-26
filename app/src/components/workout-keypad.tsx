@@ -67,6 +67,7 @@ export function SetRow({
 
   const [rpe, setRpe] = useState<number>(setData.rpe ?? 8);
   const [type, setType] = useState<SetType>(setData.type ?? (index === 0 && previousWeight && previousWeight > 50 ? "warmup" : "normal"));
+  const displayType: SetType = setData.isCompleted && setData.type ? setData.type : type;
 
   // 1-tap logging: if user taps checkmark directly without typing, it uses the ghost / target values
   const handleCheck = () => {
@@ -101,21 +102,37 @@ export function SetRow({
     >
       {/* Set Number & Type Badge */}
       <button
+        type="button"
         onClick={cycleType}
-        title="Tap to toggle set type (Normal, Warmup, Drop, Failure)"
+        title="Tap to cycle set type (Normal, Warmup, Drop, Failure)"
         className={cn(
           "grid size-7 shrink-0 place-items-center rounded-lg font-mono text-[10px] font-bold transition-colors select-none",
-          type === "warmup"
+          displayType === "warmup"
             ? "border border-amber/30 bg-amber/15 text-amber"
-            : type === "drop"
+            : displayType === "drop"
             ? "border border-sky/30 bg-sky/15 text-sky"
-            : type === "failure"
+            : displayType === "failure"
             ? "border border-flame/30 bg-flame/15 text-flame"
             : "border border-white/10 bg-white/[0.04] text-dim group-hover:text-chalk",
         )}
       >
-        {type === "warmup" ? "W" : type === "drop" ? "D" : type === "failure" ? "F" : index + 1}
+        {displayType === "warmup" ? "W" : displayType === "drop" ? "D" : displayType === "failure" ? "F" : index + 1}
       </button>
+
+      {displayType !== "normal" && (
+        <span
+          className={cn(
+            "hidden md:inline-block shrink-0 rounded px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider font-bold",
+            displayType === "warmup"
+              ? "bg-amber/10 text-amber"
+              : displayType === "drop"
+              ? "bg-sky/10 text-sky"
+              : "bg-flame/10 text-flame"
+          )}
+        >
+          {displayType}
+        </span>
+      )}
 
       {/* Previous Performance Ghost Watermark */}
       <div className="hidden sm:flex flex-col min-w-[70px]">

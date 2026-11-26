@@ -8,15 +8,20 @@
 4. **GPL-3.0 repos** (OpenNutriTracker) — reference only, no code merged
 5. **Open-source repos** — check each license before any import
 
-## Reviewed Repos
+## Reviewed Repos & Benchmarks
 
-| Repo | License | Usage |
-|------|---------|-------|
-| wger | AGPL-3.0 | Reference only — studied data model and exercise structure |
-| OpenNutriTracker | GPL-3.0 | Reference only — studied nutrition data model |
-| GYM-One | Custom/MIT? | Reference only — studied member management |
-| free-exercise-db | CC0 | May import exercise names, muscles, equipment as seed data with attribution |
-| Open Food Facts | ODbL | May import food data with attribution (requires share-alike for derived DB) |
+| Project / Repository | License / Type | Usage in FORGE |
+|----------------------|----------------|----------------|
+| openGym (`DuarteSantos8/openGym`) | MIT | Melih Colpan anatomical vector body contours (`body-paths.ts`, `body-map.tsx`) and exercise library targeting |
+| lyftr (`Cawlumm/lyftr`) | MIT | Powerlifting RPE progression formulas, warm-up plate calculator, multi-formula 1RM suite |
+| gymcoach (`gymcoach-app/gymcoach`) | MIT | Superset pairing, Web Audio rest timer synthesis, active workout focus flow |
+| OpenNutriTracker (`simonoppowa/OpenNutriTracker`) | GPL-3.0 | Reference only (no code merged) — water hydration logging, TDEE energy balance, macro rings |
+| GymFlow (`priyansh13-c/GymFlow`) | MIT | Active workout session player, fast keypad steppers, live PR celebrations |
+| wger (`wger-project/wger`) | AGPL-3.0 | Reference only (no code merged) — multi-point anthropometric body measurement tracking |
+| GYM-One (`mayerbalintdev/GYM-One`) | MIT | Routine folder organization, PR trophy wall, streak visualizer |
+| laragym (`johndavedecano/laragym`) | MIT | B2B gym management, QR attendance check-in, member roster, plan renewals |
+| advice.fit (`https://advice.fit/`) | Reference / Web | Adaptive coaching consultation, soreness-aware load regulation, time-crunch workouts |
+| gymsmart.in (`https://www.gymsmart.in/`) | Reference / Web | Indian gym operations, first-class Indian food database (IFCT), WhatsApp shareable workout/diet summaries |
 
 ## Data Sources
 

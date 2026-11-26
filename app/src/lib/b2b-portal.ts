@@ -66,6 +66,53 @@ export type GymFinancialMetrics = {
   avgSessionsPerMemberMonth: number;
 };
 
+export type MembershipStatus = "active" | "expiring_soon" | "expired" | "guest_pass";
+
+export type GymMemberRecord = {
+  id: string;
+  qrBadgeCode: string;
+  name: string;
+  phone: string;
+  planName: string;
+  monthlyFeeINR: number;
+  expiryDate: string; // YYYY-MM-DD
+  sessionsThisMonth: number;
+  streakDays: number;
+  lastWorkoutName: string;
+  lastCheckIn: string;
+};
+
+export type TierRevenueRow = {
+  tierName: string;
+  members: number;
+  mrrINR: number;
+  mrrUSD: number;
+  color: string;
+};
+
+export type PeakHourSlot = {
+  hourLabel: string;
+  occupancyPct: number;
+  avgMembers: number;
+};
+
+export type RoutineFolder = {
+  id: string;
+  name: string;
+  description: string;
+  accent: string;
+  programIds: string[];
+};
+
+export type QrScanResult = {
+  matched: boolean;
+  canEnter: boolean;
+  status: MembershipStatus | "unknown";
+  daysLeft: number;
+  reason: string;
+  member?: GymMemberRecord;
+};
+
 /**
  * Calculates athlete compliance rate across scheduled microcycle sessions.
  */
@@ -197,6 +244,156 @@ export function processMemberCheckIn(
     checkIns: [record, ...currentCheckIns],
     newOccupancy: currentOccupancy + 1,
   };
+}
+
+/**
+ * Evaluates a member's plan renewal status from their expiry date (laragym).
+ */
+export function evaluateMembershipRenewal(
+  expiryIso: string,
+  referenceDate: Date = new Date("2026-11-26T12:00:00Z")
+): { status: "active" | "expiring_soon" | "expired"; daysLeft: number } {
+  const expiryMs = new Date(`${expiryIso}T23:59:59Z`).getTime();
+  if (Number.isNaN(expiryMs)) {
+    return { status: "expired", daysLeft: -1 };
+  }
+  const diffDays = Math.ceil((expiryMs - referenceDate.getTime()) / 86_400_000);
+  if (diffDays < 0) {
+    return { status: "expired", daysLeft: diffDays };
+  }
+  if (diffDays <= 7) {
+    return { status: "expiring_soon", daysLeft: diffDays };
+  }
+  return { status: "active", daysLeft: diffDays };
+}
+
+/**
+ * Validates a scanned QR badge code or member ID at the gym front desk kiosk.
+ */
+export function verifyQrBadgeScan(
+  badgeCode: string,
+  directory: GymMemberRecord[],
+  referenceDate: Date = new Date("2026-11-26T12:00:00Z")
+): QrScanResult {
+  const clean = badgeCode.trim().toUpperCase();
+  if (!clean) {
+    return {
+      matched: false,
+      canEnter: false,
+      status: "unknown",
+      daysLeft: 0,
+      reason: "Enter or scan a valid QR badge code (e.g. FRG-1001).",
+    };
+  }
+
+  const member = directory.find(
+    (m) =>
+      m.qrBadgeCode.toUpperCase() === clean ||
+      m.id.toUpperCase() === clean ||
+      m.name.toUpperCase() === clean
+  );
+
+  if (!member) {
+    return {
+      matched: false,
+      canEnter: false,
+      status: "unknown",
+      daysLeft: 0,
+      reason: `No member record found matching "${badgeCode.trim()}".`,
+    };
+  }
+
+  if (member.planName.toLowerCase().includes("guest")) {
+    return {
+      matched: true,
+      canEnter: true,
+      status: "guest_pass",
+      daysLeft: 2,
+      reason: `Guest Pass verified for ${member.name}. Day access granted.`,
+      member,
+    };
+  }
+
+  const renewal = evaluateMembershipRenewal(member.expiryDate, referenceDate);
+  if (renewal.status === "expired") {
+    return {
+      matched: true,
+      canEnter: false,
+      status: "expired",
+      daysLeft: renewal.daysLeft,
+      reason: `${member.name}'s ${member.planName} expired ${Math.abs(renewal.daysLeft)}d ago. Renewal required before turnstile unlock.`,
+      member,
+    };
+  }
+
+  if (renewal.status === "expiring_soon") {
+    return {
+      matched: true,
+      canEnter: true,
+      status: "expiring_soon",
+      daysLeft: renewal.daysLeft,
+      reason: `${member.name} verified (${renewal.daysLeft}d left on ${member.planName}). Remind at desk to renew.`,
+      member,
+    };
+  }
+
+  return {
+    matched: true,
+    canEnter: true,
+    status: "active",
+    daysLeft: renewal.daysLeft,
+    reason: `${member.name} verified · ${member.planName} active (${renewal.daysLeft}d remaining).`,
+    member,
+  };
+}
+
+/**
+ * Extends a member's active subscription expiry date immutably.
+ */
+export function renewMemberPlan(
+  member: GymMemberRecord,
+  planName: string,
+  months: number = 1,
+  referenceDate: Date = new Date("2026-11-26T12:00:00Z")
+): GymMemberRecord {
+  const currentExpiry = new Date(`${member.expiryDate}T12:00:00Z`);
+  const baseDate =
+    !Number.isNaN(currentExpiry.getTime()) && currentExpiry.getTime() > referenceDate.getTime()
+      ? currentExpiry
+      : new Date(referenceDate);
+  baseDate.setUTCMonth(baseDate.getUTCMonth() + Math.max(1, months));
+  const nextExpiry = baseDate.toISOString().slice(0, 10);
+
+  return {
+    ...member,
+    planName,
+    expiryDate: nextExpiry,
+  };
+}
+
+/**
+ * Pushes a shared training prescription across multiple selected athletes (batch assignment).
+ */
+export function batchPrescribeProgram(
+  athletes: AthleteClient[],
+  selectedIds: string[],
+  programId: string,
+  programName: string,
+  customIntensityMultiplier: number = 1.0,
+  focusCue: string = "Prioritize clean concentric velocity and controlled eccentrics."
+): AthleteClient[] {
+  const idSet = new Set(selectedIds);
+  return athletes.map((ath) => {
+    if (!idSet.has(ath.id)) return ath;
+    const { prescription: _rx, ...updatedAthlete } = prescribeProgramToAthlete(
+      ath,
+      programId,
+      programName,
+      customIntensityMultiplier,
+      focusCue
+    );
+    return updatedAthlete;
+  });
 }
 
 /* ───────────────────────────── AUTHENTIC MOCK SEED DATA ───────────────────────────── */
@@ -332,3 +529,130 @@ export const INITIAL_GYM_FINANCIALS: GymFinancialMetrics = {
   churnRatePercent: 1.8,
   avgSessionsPerMemberMonth: 14.6,
 };
+
+export const INITIAL_GYM_MEMBERS: GymMemberRecord[] = [
+  {
+    id: "mem-1",
+    qrBadgeCode: "FRG-1001",
+    name: "Vikram Sharma",
+    phone: "+91 98450 11220",
+    planName: "Annual Black Tier",
+    monthlyFeeINR: 2499,
+    expiryDate: "2027-06-15",
+    sessionsThisMonth: 19,
+    streakDays: 14,
+    lastWorkoutName: "Push A (Chest Focus)",
+    lastCheckIn: "Today, 07:15 AM",
+  },
+  {
+    id: "mem-2",
+    qrBadgeCode: "FRG-1002",
+    name: "Ananya Patel",
+    phone: "+91 98451 44310",
+    planName: "Gold All-Access",
+    monthlyFeeINR: 1799,
+    expiryDate: "2027-02-10",
+    sessionsThisMonth: 17,
+    streakDays: 19,
+    lastWorkoutName: "Lower Body Sculpt",
+    lastCheckIn: "Today, 08:30 AM",
+  },
+  {
+    id: "mem-3",
+    qrBadgeCode: "FRG-1003",
+    name: "Priya Nair",
+    phone: "+91 99001 77812",
+    planName: "Student Athlete Pass",
+    monthlyFeeINR: 1199,
+    expiryDate: "2026-12-20",
+    sessionsThisMonth: 21,
+    streakDays: 24,
+    lastWorkoutName: "Full Body Compound",
+    lastCheckIn: "Today, 06:10 AM",
+  },
+  {
+    id: "mem-4",
+    qrBadgeCode: "FRG-1004",
+    name: "Rohan Gupta",
+    phone: "+91 97400 88219",
+    planName: "Monthly Standard",
+    monthlyFeeINR: 1499,
+    expiryDate: "2026-11-30",
+    sessionsThisMonth: 12,
+    streakDays: 5,
+    lastWorkoutName: "Upper Power Split",
+    lastCheckIn: "Today, 08:42 AM",
+  },
+  {
+    id: "mem-5",
+    qrBadgeCode: "FRG-1005",
+    name: "Kabir Malhotra",
+    phone: "+91 98802 65430",
+    planName: "Monthly Standard",
+    monthlyFeeINR: 1499,
+    expiryDate: "2026-11-22",
+    sessionsThisMonth: 9,
+    streakDays: 0,
+    lastWorkoutName: "Deadlift & Posterior",
+    lastCheckIn: "4 days ago",
+  },
+  {
+    id: "mem-6",
+    qrBadgeCode: "FRG-1006",
+    name: "Meera Krishnan",
+    phone: "+91 98114 39022",
+    planName: "Gold All-Access",
+    monthlyFeeINR: 1799,
+    expiryDate: "2026-11-29",
+    sessionsThisMonth: 15,
+    streakDays: 9,
+    lastWorkoutName: "Pull B (Lats & Arms)",
+    lastCheckIn: "Yesterday, 07:10 PM",
+  },
+];
+
+export const MEMBERSHIP_TIER_REVENUE: TierRevenueRow[] = [
+  { tierName: "Annual Black Tier", members: 94, mrrINR: 234900, mrrUSD: 2825, color: "#C9F73A" },
+  { tierName: "Gold All-Access", members: 126, mrrINR: 214200, mrrUSD: 2580, color: "#6EA8FF" },
+  { tierName: "Monthly Standard", members: 88, mrrINR: 96800, mrrUSD: 1165, color: "#FFD166" },
+  { tierName: "Student & Day Passes", members: 60, mrrINR: 42100, mrrUSD: 510, color: "#7BE0AD" },
+];
+
+export const PEAK_HOURS_HEATMAP: PeakHourSlot[] = [
+  { hourLabel: "06 AM", occupancyPct: 72, avgMembers: 54 },
+  { hourLabel: "07 AM", occupancyPct: 91, avgMembers: 68 },
+  { hourLabel: "08 AM", occupancyPct: 84, avgMembers: 63 },
+  { hourLabel: "10 AM", occupancyPct: 42, avgMembers: 31 },
+  { hourLabel: "12 PM", occupancyPct: 36, avgMembers: 27 },
+  { hourLabel: "02 PM", occupancyPct: 28, avgMembers: 21 },
+  { hourLabel: "04 PM", occupancyPct: 55, avgMembers: 41 },
+  { hourLabel: "06 PM", occupancyPct: 89, avgMembers: 67 },
+  { hourLabel: "07 PM", occupancyPct: 96, avgMembers: 72 },
+  { hourLabel: "08 PM", occupancyPct: 78, avgMembers: 58 },
+  { hourLabel: "09 PM", occupancyPct: 46, avgMembers: 34 },
+  { hourLabel: "10 PM", occupancyPct: 21, avgMembers: 16 },
+];
+
+export const INITIAL_ROUTINE_FOLDERS: RoutineFolder[] = [
+  {
+    id: "folder-hypertrophy",
+    name: "Hypertrophy & Aesthetics",
+    description: "PPL, Upper/Lower, PHUL, and specialization splits tuned for mechanical tension.",
+    accent: "#C9F73A",
+    programIds: ["ppl-hypertrophy", "upper-lower-4day", "phul-power-hypertrophy", "arnold-split-6day", "glute-core-sculpt"],
+  },
+  {
+    id: "folder-strength",
+    name: "Strength & Powerlifting",
+    description: "Wave periodization, submaximal triples, and linear SBD blueprints.",
+    accent: "#FF6B35",
+    programIds: ["full-body-3x", "strength-531-bbb", "gzclp-linear"],
+  },
+  {
+    id: "folder-athletic",
+    name: "Athletic & Bodyweight",
+    description: "Explosive power, work capacity, and minimal-kit calisthenics.",
+    accent: "#38BDF8",
+    programIds: ["athletic-conditioning", "calisthenics-bodyweight"],
+  },
+];

@@ -34,6 +34,88 @@ export function e1rm(weightKg: number, reps: number) {
   return Math.round(weightKg * (1 + reps / 30) * 10) / 10;
 }
 
+export type OneRepMaxFormula = "epley" | "brzycki" | "wathan" | "lombardi" | "mayhew" | "oconner";
+
+export function calculate1RM(weightKg: number, reps: number, formula: OneRepMaxFormula = "epley"): number {
+  if (!weightKg || reps <= 0) return 0;
+  if (reps === 1) return weightKg;
+
+  let result = 0;
+  switch (formula) {
+    case "epley":
+      result = weightKg * (1 + reps / 30);
+      break;
+    case "brzycki":
+      result = reps >= 37 ? weightKg * (1 + reps / 30) : weightKg * (36 / (37 - reps));
+      break;
+    case "wathan":
+      result = (100 * weightKg) / (48.8 + 53.8 * Math.exp(-0.075 * reps));
+      break;
+    case "lombardi":
+      result = weightKg * Math.pow(reps, 0.1);
+      break;
+    case "mayhew":
+      result = (100 * weightKg) / (52.2 + 41.9 * Math.exp(-0.055 * reps));
+      break;
+    case "oconner":
+      result = weightKg * (1 + reps / 40);
+      break;
+  }
+  return Math.round(result * 10) / 10;
+}
+
+export function calculateAll1RM(weightKg: number, reps: number): Record<OneRepMaxFormula | "average", number> {
+  const epley = calculate1RM(weightKg, reps, "epley");
+  const brzycki = calculate1RM(weightKg, reps, "brzycki");
+  const wathan = calculate1RM(weightKg, reps, "wathan");
+  const lombardi = calculate1RM(weightKg, reps, "lombardi");
+  const mayhew = calculate1RM(weightKg, reps, "mayhew");
+  const oconner = calculate1RM(weightKg, reps, "oconner");
+  const average = Math.round(((epley + brzycki + wathan + lombardi + mayhew + oconner) / 6) * 10) / 10;
+  return { epley, brzycki, wathan, lombardi, mayhew, oconner, average };
+}
+
+export function generateRepMaxTable(oneRmKg: number) {
+  const percentages = [
+    { reps: 1, pct: 1.0 },
+    { reps: 2, pct: 0.95 },
+    { reps: 3, pct: 0.93 },
+    { reps: 4, pct: 0.9 },
+    { reps: 5, pct: 0.87 },
+    { reps: 6, pct: 0.85 },
+    { reps: 7, pct: 0.83 },
+    { reps: 8, pct: 0.8 },
+    { reps: 9, pct: 0.77 },
+    { reps: 10, pct: 0.75 },
+    { reps: 11, pct: 0.72 },
+    { reps: 12, pct: 0.7 },
+  ];
+  return percentages.map((p) => ({
+    reps: p.reps,
+    pct: Math.round(p.pct * 100),
+    weightKg: roundTo(oneRmKg * p.pct, 2.5),
+  }));
+}
+
+// Mike Tuchscherer / Reactive Training Systems (RTS) Powerlifting RPE Table
+export const RPE_PERCENTAGES: Record<number, Record<number, number>> = {
+  10: { 1: 1.0, 2: 0.955, 3: 0.922, 4: 0.892, 5: 0.863, 6: 0.837, 7: 0.811, 8: 0.786, 9: 0.762, 10: 0.739 },
+  9.5: { 1: 0.978, 2: 0.939, 3: 0.907, 4: 0.878, 5: 0.85, 6: 0.824, 7: 0.799, 8: 0.774, 9: 0.751, 10: 0.723 },
+  9: { 1: 0.955, 2: 0.922, 3: 0.892, 4: 0.863, 5: 0.837, 6: 0.811, 7: 0.786, 8: 0.762, 9: 0.739, 10: 0.707 },
+  8.5: { 1: 0.939, 2: 0.907, 3: 0.878, 4: 0.85, 5: 0.824, 6: 0.799, 7: 0.774, 8: 0.751, 9: 0.723, 10: 0.694 },
+  8: { 1: 0.922, 2: 0.892, 3: 0.863, 4: 0.837, 5: 0.811, 6: 0.786, 7: 0.762, 8: 0.739, 9: 0.707, 10: 0.68 },
+  7.5: { 1: 0.907, 2: 0.878, 3: 0.85, 4: 0.824, 5: 0.799, 6: 0.774, 7: 0.751, 8: 0.723, 9: 0.694, 10: 0.667 },
+  7: { 1: 0.892, 2: 0.863, 3: 0.837, 4: 0.811, 5: 0.786, 6: 0.762, 7: 0.739, 8: 0.707, 9: 0.68, 10: 0.653 },
+  6.5: { 1: 0.878, 2: 0.85, 3: 0.824, 4: 0.799, 5: 0.774, 6: 0.751, 7: 0.723, 8: 0.694, 9: 0.667, 10: 0.64 },
+  6: { 1: 0.863, 2: 0.837, 3: 0.811, 4: 0.786, 5: 0.762, 6: 0.739, 7: 0.707, 8: 0.68, 9: 0.653, 10: 0.626 },
+};
+
+export function estimateLoadForRpe(oneRmKg: number, targetReps: number, targetRpe: number): number {
+  const rpeRow = RPE_PERCENTAGES[targetRpe] || RPE_PERCENTAGES[8];
+  const pct = rpeRow?.[Math.min(10, Math.max(1, targetReps))] ?? 0.8;
+  return roundTo(oneRmKg * pct, 2.5);
+}
+
 export function readinessScore(input: {
   sleepHours?: number | null;
   hrv?: number | null;

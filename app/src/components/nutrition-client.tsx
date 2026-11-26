@@ -5,7 +5,7 @@ import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowUpRight, Camera, Check, ChevronRight, Coffee, Cookie, Droplets, Flame,
-  Info, Loader2, Moon, Plus, ScanLine, Sparkles, Sun, Target, Trash2, Utensils, X, Zap,
+  Info, Loader2, Moon, Plus, ScanLine, Share2, Sparkles, Sun, Target, Trash2, Utensils, X, Zap,
 } from "lucide-react";
 import { addWater, deleteFood, logFood, updateTargets } from "@/app/actions";
 import { Badge, Button, IconButton, ProgressBar } from "@/components/ui";
@@ -63,13 +63,16 @@ const MEALS = [
 
 const QUICK_FOODS: FoodItem[] = [
   { name: "Paneer bhurji + 2 roti", serving: "1 plate", calories: 520, protein: 28, carbs: 42, fat: 26 },
+  { name: "Dal tadka + jeera rice bowl", serving: "1 bowl", calories: 380, protein: 16, carbs: 58, fat: 8 },
+  { name: "Soya chunks curry + rice", serving: "1 plate", calories: 420, protein: 39, carbs: 54, fat: 6 },
+  { name: "Egg bhurji (3 eggs + 2 roti)", serving: "1 plate", calories: 440, protein: 26, carbs: 36, fat: 20 },
+  { name: "Chicken biryani (lean)", serving: "1 plate", calories: 690, protein: 38, carbs: 84, fat: 22 },
   { name: "Grilled chicken breast", serving: "150 g", calories: 248, protein: 35, carbs: 0, fat: 5 },
   { name: "Greek yogurt & berries", serving: "250 g", calories: 240, protein: 20, carbs: 26, fat: 5 },
-  { name: "Dal + curd bowl", serving: "1 bowl", calories: 320, protein: 18, carbs: 44, fat: 8 },
-  { name: "Whey isolate shake", serving: "1 scoop", calories: 160, protein: 30, carbs: 4, fat: 2 },
-  { name: "2 idli + sambar", serving: "1 plate", calories: 310, protein: 12, carbs: 56, fat: 5 },
-  { name: "Chicken biryani", serving: "1 plate", calories: 690, protein: 38, carbs: 84, fat: 22 },
-  { name: "Banana", serving: "1 medium", calories: 105, protein: 1, carbs: 27, fat: 0 },
+  { name: "Whey isolate in toned milk", serving: "1 scoop + 250ml", calories: 240, protein: 36, carbs: 14, fat: 4 },
+  { name: "2 idli + sambar + chutney", serving: "1 plate", calories: 310, protein: 12, carbs: 56, fat: 5 },
+  { name: "Curd bowl + almonds & chia", serving: "1 bowl", calories: 210, protein: 14, carbs: 16, fat: 10 },
+  { name: "Banana + peanut butter", serving: "1 medium + 20g", calories: 220, protein: 6, carbs: 34, fat: 8 },
 ];
 
 const PROTEIN_PICKS = [
@@ -395,6 +398,19 @@ export function NutritionClient({ firstName, dateLabel, targets, totals, logs, w
         subtitle={`${firstName}, food is the other half of the workout. Scan a plate, close your protein gap, and let the week average — not one meal — decide the result.`}
         actions={
           <>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                const text = `🥗 *FORGE Daily Nutrition Card · ${firstName}*\n📅 ${dateLabel}\n\n🔥 Calories: ${Math.round(totals.calories)} / ${targets.calories} kcal\n🥩 Protein: ${Math.round(totals.protein)} / ${targets.protein} g\n🍚 Carbs: ${Math.round(totals.carbs)} / ${targets.carbs} g\n🥑 Fat: ${Math.round(totals.fat)} / ${targets.fat} g\n💧 Hydration: ${(waterMl / 1000).toFixed(1)} / ${(targets.waterMl / 1000).toFixed(1)} L\n\n⚡ ${streak}-day logging streak · Powered by FORGE`;
+                if (typeof window !== "undefined") {
+                  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
+                }
+              }}
+              title="Share diet card to WhatsApp (gymsmart.in)"
+            >
+              <Share2 className="size-3.5 text-mint" /> WhatsApp Diet
+            </Button>
             <Button variant="secondary" size="md" onClick={() => setShowBarcodeScanner(true)}>
               <ScanLine className="size-3.5 text-sky" /> Barcode
             </Button>

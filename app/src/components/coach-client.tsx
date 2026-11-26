@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowUp, Brain, Dumbbell, Flame, Loader2, Sparkles, Utensils, Zap,
+  ArrowUp, Brain, Camera, ClipboardCheck, Dumbbell, Flame, Loader2, ShieldAlert, Sparkles, Utensils, Zap,
 } from "lucide-react";
 import { sendCoachMessage } from "@/app/actions";
 import { Avatar } from "@/components/ui";
@@ -19,12 +20,13 @@ export type ChatMessage = {
 
 const QUICK_PROMPTS = [
   { label: "Analyze bench stall", icon: Zap },
+  { label: "My shoulder hurts", icon: ShieldAlert },
+  { label: "I only have 25 minutes", icon: Zap },
+  { label: "Weekly check-in summary", icon: ClipboardCheck },
+  { label: "Form check cues", icon: Camera },
   { label: "Structure a deload", icon: Flame },
   { label: "Gym is crowded", icon: Dumbbell },
-  { label: "Missed my last workout", icon: Sparkles },
-  { label: "I only have 25 minutes", icon: Zap },
   { label: "Hit my remaining protein", icon: Utensils },
-  { label: "How's my recovery today?", icon: Flame },
 ] as const;
 
 function Inline({ text }: { text: string }) {
@@ -157,9 +159,17 @@ export function CoachChat({
             <p className="font-mono text-[8px] uppercase tracking-[0.12em] text-acid">Online · sees your data</p>
           </div>
         </div>
-        <span className="hidden items-center gap-1.5 rounded-full border border-white/[0.07] bg-white/[0.02] px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-dim sm:flex">
-          <Brain className="size-2.5 text-grape" /> Adaptive engine v4
-        </span>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/app/form-check"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-acid/25 bg-acid/10 px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-acid hover:bg-acid hover:text-ink transition-colors"
+          >
+            <Camera className="size-2.5" /> Form Check AI
+          </Link>
+          <span className="hidden items-center gap-1.5 rounded-full border border-white/[0.07] bg-white/[0.02] px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-dim sm:flex">
+            <Brain className="size-2.5 text-grape" /> Adaptive engine v4
+          </span>
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-5">

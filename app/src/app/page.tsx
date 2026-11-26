@@ -518,7 +518,7 @@ export default async function LandingPage() {
                 <span className="flex items-center gap-1 font-mono text-[7.5px] uppercase tracking-[0.1em] text-acid"><span className="size-1.5 animate-pulse-dot rounded-full bg-acid" /> Live</span>
               </div>
               <div className="flex justify-center">
-                <BodyMap recovery={muscleRecovery} />
+                <BodyMap recovery={muscleRecovery} svgHeightClass="max-h-[245px]" showLabels />
               </div>
             </div>
           </div>

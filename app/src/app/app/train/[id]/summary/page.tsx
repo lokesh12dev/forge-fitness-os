@@ -9,7 +9,7 @@ import { getWorkspace, nextPlanAfter, workoutDetail } from "@/lib/queries";
 import { muscleColor, muscleLabel, computeLevelProgress } from "@/lib/engine";
 import { Badge, ButtonLink, Stat } from "@/components/ui";
 import { Card, CardHeader, PageHeader } from "@/components/page-header";
-import { SummaryActions, type SharePR } from "@/components/summary-actions";
+import { SummaryActions, WorkoutWhatsAppShare, type SharePR } from "@/components/summary-actions";
 import { formatClock, formatDuration, formatVolume } from "@/lib/utils";
 
 export default async function SummaryPage({ params }: { params: Promise<{ id: string }> }) {
@@ -83,6 +83,18 @@ export default async function SummaryPage({ params }: { params: Promise<{ id: st
           <div className="mt-6 flex flex-wrap gap-2">
             <ButtonLink href="/app/train" size="md" variant="secondary"><Dumbbell className="size-3.5" /> Back to training</ButtonLink>
             <ButtonLink href="/app/progress" size="md" variant="ghost"><TrendingUp className="size-3.5" /> View analytics</ButtonLink>
+            <WorkoutWhatsAppShare
+              athleteName={user.name}
+              workoutName={workout.name}
+              dateLabel={new Date(workout.completedAt ?? workout.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              totalVolumeLabel={formatVolume(workout.totalVolume)}
+              durationLabel={formatDuration(workout.durationSec)}
+              setsSummary={`${setCount}/${detail.items.reduce((a, i) => a + i.targetSets, 0)}`}
+              avgRpe={avgRpe}
+              prCount={sharePrs.length}
+              topSetSummary={topSet ? `${topSet.weightKg}kg × ${topSet.reps} (${Math.round(topSet.weightKg * (1 + topSet.reps / 30))}kg e1RM)` : undefined}
+              streakDays={user.streak}
+            />
           </div>
         </div>
       </div>

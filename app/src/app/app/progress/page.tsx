@@ -10,7 +10,15 @@ import { e1rm, muscleColor, muscleLabel, readinessVerdict, recoveryMap, strength
 import { Badge, ButtonLink, ProgressBar, Stat } from "@/components/ui";
 import { Card, CardHeader, PageHeader } from "@/components/page-header";
 import { BodyMap, RecoveryLegend, recoveryColor } from "@/components/body-map";
-import { BodyTrends, LevelChip, PerformancePanel, ShareLiftButton, BadgeShowcase, ExportDataTrigger } from "@/components/progress-client";
+import {
+  AnthropometricMeasurementsCard,
+  BadgeShowcase,
+  BodyTrends,
+  ExportDataTrigger,
+  LevelChip,
+  PerformancePanel,
+  ShareLiftButton,
+} from "@/components/progress-client";
 import { evaluateBadges } from "@/lib/gamification";
 import { formatDuration, formatVolume } from "@/lib/utils";
 
@@ -234,7 +242,7 @@ export default async function ProgressPage() {
             action={<Badge tone={ws.readiness >= 80 ? "acid" : ws.readiness >= 65 ? "mint" : "amber"}>{verdict.label}</Badge>}
           />
           <div className="mt-4">
-            <BodyMap recovery={recovery} />
+            <BodyMap recovery={recovery} svgHeightClass="max-h-[210px]" showDetailsCard={false} />
           </div>
           <div className="mt-4 border-t border-white/[0.07] pt-4">
             <p className="label-mono mb-3">Most fatigued</p>
@@ -425,6 +433,11 @@ export default async function ProgressPage() {
             </p>
           </div>
         </Card>
+
+        {/* ANTHROPOMETRIC TAPE MEASUREMENTS (wger) */}
+        <div className="xl:col-span-12">
+          <AnthropometricMeasurementsCard />
+        </div>
 
         {/* ACHIEVEMENTS & BADGES (G1) */}
         <Card className="p-5 md:p-6 xl:col-span-12">

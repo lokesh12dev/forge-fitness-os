@@ -36,7 +36,7 @@ type ExerciseLite = {
 };
 
 type SessionSet = {
-  id: string; setIndex: number; weightKg: number; reps: number; rpe: number;
+  id: string; setIndex: number; type?: SetType; weightKg: number; reps: number; rpe: number;
   isPR: boolean; completedAt: string;
 };
 
@@ -63,6 +63,19 @@ export type LiveWorkoutProps = {
 
 const roundTo = (n: number, step = 2.5) => Math.max(0, Math.round(n / step) * step);
 const uid = () => Math.random().toString(36).slice(2, 9);
+
+function triggerHaptic(pattern: "set" | "pr") {
+  if (typeof navigator === "undefined" || !("vibrate" in navigator)) return;
+  try {
+    if (pattern === "pr") {
+      navigator.vibrate([60, 40, 80, 40, 140]);
+    } else {
+      navigator.vibrate([30]);
+    }
+  } catch {
+    /* haptic blocked */
+  }
+}
 
 function useElapsed(start: string) {
   const [sec, setSec] = useState(() => Math.max(0, Math.floor((Date.now() - new Date(start).getTime()) / 1000)));
@@ -156,6 +169,7 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
     const optimistic: SessionSet = {
       id: tempId,
       setIndex,
+      type,
       weightKg: weight,
       reps,
       rpe,
@@ -163,6 +177,7 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
       completedAt: new Date().toISOString(),
     };
 
+    triggerHaptic("set");
     setItems((prev) => prev.map((i) => (i.id === active.id ? { ...i, sets: [...i.sets, optimistic] } : i)));
     setRest({
       totalSec: active.restSec,
@@ -219,6 +234,7 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
       );
 
       if (res.isPR) {
+        triggerHaptic("pr");
         setCelebrate({ exercise: active.exercise.name, value: res.e1rm, previous: res.previousBest ?? null, weight, reps });
       }
 
@@ -562,6 +578,7 @@ export function LiveWorkout({ workout, items: initialItems, allExercises, equipm
             setData={{
               id: s.id,
               setIndex: idx,
+              type: s.type,
               weightKg: s.weightKg,
               reps: s.reps,
               rpe: s.rpe,

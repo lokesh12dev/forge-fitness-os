@@ -251,4 +251,27 @@ describe("Phase 4: AI Coach Advanced Intelligence (F2)", () => {
     expect(reply).toContain("Rolling Slide");
     expect(reply).toContain("Antagonist Superset Merge");
   });
+
+  it("auto-swaps exercises for joint-specific soreness (advice.fit)", () => {
+    const reply = coachReply("My shoulder hurts during pressing today", dummyContext);
+    expect(reply).toContain("Soreness-Aware Load Regulation");
+    expect(reply).toContain("Neutral-Grip Dumbbell Floor Press");
+  });
+
+  it("generates a structured superset time-crunch workout for requested minutes", () => {
+    const reply = coachReply("I only have 25 minutes to train", dummyContext);
+    expect(reply).toContain("Time-Crunch Adaptive Plan");
+    expect(reply).toContain("25 Minutes");
+    expect(reply).toContain("Superset Block A");
+  });
+
+  it("builds a full weekly check-in audit and form check response", () => {
+    const audit = coachReply("Give me my weekly check-in summary", dummyContext);
+    expect(audit).toContain("Weekly Check-In Audit");
+    expect(audit).toContain("18-day active streak");
+
+    const form = coachReply("How do I run a form check video?", dummyContext);
+    expect(form).toContain("AI Form Check");
+    expect(form).toContain("/app/form-check");
+  });
 });

@@ -49,3 +49,45 @@ export function SummaryActions({
     </>
   );
 }
+
+export function WorkoutWhatsAppShare({
+  athleteName,
+  workoutName,
+  dateLabel,
+  totalVolumeLabel,
+  durationLabel,
+  setsSummary,
+  avgRpe,
+  prCount,
+  topSetSummary,
+  streakDays,
+}: {
+  athleteName: string;
+  workoutName: string;
+  dateLabel: string;
+  totalVolumeLabel: string;
+  durationLabel: string;
+  setsSummary: string;
+  avgRpe: number;
+  prCount: number;
+  topSetSummary?: string;
+  streakDays: number;
+}) {
+  const handleShare = () => {
+    const text = `🏋️ *FORGE Session Summary · ${athleteName}*\n📌 *${workoutName}* (${dateLabel})\n\n📊 Volume: *${totalVolumeLabel} kg*\n⏱️ Duration: *${durationLabel}*\n✅ Working Sets: *${setsSummary}*${avgRpe ? ` @ Avg RPE ${avgRpe}` : ""}${topSetSummary ? `\n⚡ Top Set: *${topSetSummary}*` : ""}${prCount > 0 ? `\n🏆 New PRs Hit: *${prCount}*` : ""}\n🔥 Streak: *${streakDays}-day consistency*\n\nBuilt with FORGE · Train with precision`;
+    if (typeof window !== "undefined") {
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleShare}
+      title="Share workout summary to WhatsApp (gymsmart.in)"
+      className="press inline-flex h-10 items-center gap-2 rounded-full border border-mint/30 bg-mint/10 px-4 text-[12px] font-semibold text-mint hover:bg-mint/20 transition-colors"
+    >
+      <Share2 className="size-3.5" /> WhatsApp Summary
+    </button>
+  );
+}

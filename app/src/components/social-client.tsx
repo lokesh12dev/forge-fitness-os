@@ -588,3 +588,150 @@ export function ShareCardTrigger({
     </>
   );
 }
+
+/* ───────────────────────────── PR TROPHY WALL & STREAK VISUALIZER (GYM-One) ───────────────────────────── */
+
+export type TrophyWallItem = {
+  id: string;
+  exercise: string;
+  e1rmKg: number;
+  reps: number;
+  athleteName: string;
+  athleteInitials: string;
+  athleteAccent: string;
+  achievedAgo: string;
+};
+
+export function PRTrophyWall({ trophies }: { trophies: TrophyWallItem[] }) {
+  if (!trophies.length) return null;
+  return (
+    <section className="surface rounded-2xl p-4 md:p-5">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="grid size-7 place-items-center rounded-lg bg-amber/15 text-amber">
+            <Trophy className="size-3.5" />
+          </span>
+          <div>
+            <p className="text-[12.5px] font-semibold text-chalk">PR Trophy Wall</p>
+            <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-dim">
+              GYM-One Milestone Hall · Verified e1RMs
+            </p>
+          </div>
+        </div>
+        <Badge tone="amber">{trophies.length} Records</Badge>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+        {trophies.slice(0, 4).map((t, idx) => (
+          <div
+            key={t.id}
+            className="relative overflow-hidden rounded-xl border border-amber/20 bg-amber/[0.035] p-3 transition-colors hover:border-amber/40"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[8px] uppercase tracking-wider text-amber font-bold">
+                #{idx + 1} Trophy
+              </span>
+              <span className="font-mono text-[8px] text-dim">{t.achievedAgo}</span>
+            </div>
+            <p className="mt-1.5 truncate text-[12px] font-semibold text-chalk">{t.exercise}</p>
+            <p className="mt-0.5 font-numeric text-xl font-extrabold text-amber">
+              {Math.round(t.e1rmKg * 10) / 10} <span className="text-[10px] font-normal text-dim">kg e1RM</span>
+            </p>
+            <div className="mt-2 flex items-center gap-1.5 border-t border-white/[0.06] pt-2">
+              <Avatar initials={t.athleteInitials} accent={t.athleteAccent} size={18} />
+              <span className="truncate text-[10px] text-mist">{t.athleteName}</span>
+              <span className="ml-auto font-mono text-[8px] text-dim">{t.reps > 0 ? `${t.reps} reps` : "PR"}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function StreakTimeline({
+  streakDays,
+  weeklySessions,
+}: {
+  streakDays: number;
+  weeklySessions: number;
+}) {
+  const milestones = [7, 14, 21, 30, 60, 100];
+  const nextMilestone = milestones.find((m) => m > streakDays) ?? 120;
+  const pctToNext = Math.min(100, Math.round((streakDays / nextMilestone) * 100));
+
+  const last14 = Array.from({ length: 14 }, (_, idx) => {
+    const daysBack = 13 - idx;
+    const isActive = daysBack < Math.min(14, streakDays);
+    return {
+      idx,
+      label: daysBack === 0 ? "Today" : `-${daysBack}d`,
+      active: isActive,
+    };
+  });
+
+  return (
+    <div className="surface rounded-2xl p-4 md:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <span className="grid size-7 place-items-center rounded-lg bg-flame/15 text-flame">
+            <Flame className="size-3.5" />
+          </span>
+          <div>
+            <p className="text-[12.5px] font-semibold text-chalk">
+              {streakDays}-Day Streak Visualizer
+            </p>
+            <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-dim">
+              {weeklySessions} sessions this week · Next badge at {nextMilestone}d
+            </p>
+          </div>
+        </div>
+        <span className="rounded-full border border-flame/25 bg-flame/10 px-2.5 py-0.5 font-mono text-[9px] font-bold text-flame">
+          {pctToNext}% to {nextMilestone}d
+        </span>
+      </div>
+
+      {/* 14-day interactive flame strip */}
+      <div className="grid grid-cols-7 gap-1.5 sm:grid-cols-14">
+        {last14.map((d) => (
+          <div
+            key={d.idx}
+            className={cn(
+              "flex flex-col items-center justify-center rounded-lg border py-1.5 transition-all",
+              d.active
+                ? "border-flame/40 bg-flame/15 text-flame"
+                : "border-white/[0.06] bg-white/[0.02] text-dim"
+            )}
+            title={d.label}
+          >
+            <Flame className={cn("size-3", d.active ? "fill-flame/40 text-flame" : "opacity-30")} />
+            <span className="mt-1 font-mono text-[7px] uppercase">{d.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Milestone Badges */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-3">
+        <span className="font-mono text-[8px] uppercase tracking-wider text-dim">Streak Tiers</span>
+        <div className="flex flex-wrap gap-1.5">
+          {milestones.map((m) => {
+            const unlocked = streakDays >= m;
+            return (
+              <span
+                key={m}
+                className={cn(
+                  "rounded-md px-2 py-0.5 font-mono text-[8.5px] border",
+                  unlocked
+                    ? "border-acid/40 bg-acid/15 text-acid font-bold"
+                    : "border-white/[0.06] text-dim"
+                )}
+              >
+                {m}d {unlocked ? "✓" : ""}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}

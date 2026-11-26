@@ -6,9 +6,14 @@ import {
   calculateEquipmentBottleneck,
   prescribeProgramToAthlete,
   processMemberCheckIn,
+  evaluateMembershipRenewal,
+  verifyQrBadgeScan,
+  renewMemberPlan,
+  batchPrescribeProgram,
   INITIAL_ATHLETES,
   INITIAL_GYM_FACILITY,
   INITIAL_CHECK_INS,
+  INITIAL_GYM_MEMBERS,
 } from "./b2b-portal";
 
 describe("FORGE B2B Portal Engine", () => {
@@ -116,6 +121,59 @@ describe("FORGE B2B Portal Engine", () => {
       expect(checkIns[0].memberName).toBe("Kavita Rao");
       expect(checkIns[0].checkedInAt).toBeDefined();
       expect(newOccupancy).toBe(47);
+    });
+  });
+
+  describe("evaluateMembershipRenewal & verifyQrBadgeScan (laragym)", () => {
+    const refDate = new Date("2026-11-26T12:00:00Z");
+
+    it("detects active, expiring_soon (<=7d), and expired memberships accurately", () => {
+      expect(evaluateMembershipRenewal("2027-01-15", refDate).status).toBe("active");
+      expect(evaluateMembershipRenewal("2026-11-30", refDate).status).toBe("expiring_soon");
+      expect(evaluateMembershipRenewal("2026-11-22", refDate).status).toBe("expired");
+    });
+
+    it("validates scanned QR badge codes for active, expiring, expired, and unknown badges", () => {
+      const activeScan = verifyQrBadgeScan("FRG-1001", INITIAL_GYM_MEMBERS, refDate);
+      expect(activeScan.matched).toBe(true);
+      expect(activeScan.canEnter).toBe(true);
+      expect(activeScan.status).toBe("active");
+
+      const expiringScan = verifyQrBadgeScan("FRG-1004", INITIAL_GYM_MEMBERS, refDate);
+      expect(expiringScan.matched).toBe(true);
+      expect(expiringScan.canEnter).toBe(true);
+      expect(expiringScan.status).toBe("expiring_soon");
+
+      const expiredScan = verifyQrBadgeScan("FRG-1005", INITIAL_GYM_MEMBERS, refDate);
+      expect(expiredScan.matched).toBe(true);
+      expect(expiredScan.canEnter).toBe(false);
+      expect(expiredScan.status).toBe("expired");
+
+      const unknownScan = verifyQrBadgeScan("FRG-9999", INITIAL_GYM_MEMBERS, refDate);
+      expect(unknownScan.matched).toBe(false);
+      expect(unknownScan.canEnter).toBe(false);
+    });
+
+    it("renews an expired member plan immutably forward from reference date", () => {
+      const expired = INITIAL_GYM_MEMBERS.find((m) => m.qrBadgeCode === "FRG-1005")!;
+      const renewed = renewMemberPlan(expired, "Gold All-Access", 3, refDate);
+      expect(renewed.planName).toBe("Gold All-Access");
+      expect(renewed.expiryDate).toBe("2027-02-26");
+      expect(evaluateMembershipRenewal(renewed.expiryDate, refDate).status).toBe("active");
+    });
+
+    it("applies batch program prescriptions to selected athletes only", () => {
+      const updated = batchPrescribeProgram(
+        INITIAL_ATHLETES,
+        ["ath-2", "ath-5"],
+        "full-body-3x",
+        "Full Body 3x",
+        0.9,
+        "Deload focus"
+      );
+      expect(updated.find((a) => a.id === "ath-2")?.currentProgramId).toBe("full-body-3x");
+      expect(updated.find((a) => a.id === "ath-5")?.currentProgramId).toBe("full-body-3x");
+      expect(updated.find((a) => a.id === "ath-1")?.currentProgramId).toBe("ppl-hypertrophy-6x");
     });
   });
 });

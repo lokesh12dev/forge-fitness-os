@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -113,6 +113,39 @@ export function SettingsClient({
   const [showImportModal, setShowImportModal] = useState(false);
   const [wearables, setWearables] = useState<WearablesSyncState>(INITIAL_WEARABLES_STATE);
   const [syncingWearables, setSyncingWearables] = useState(false);
+  const [measureUnit, setMeasureUnit] = useState<"cm" | "in">("cm");
+  const [defaultBarKg, setDefaultBarKg] = useState<number>(20);
+
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem("forge_measure_unit");
+      if (m === "cm" || m === "in") setMeasureUnit(m);
+      const b = Number(localStorage.getItem("forge_default_bar_kg"));
+      if ([10, 15, 20, 25].includes(b)) setDefaultBarKg(b);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  function updateMeasureUnit(unit: "cm" | "in") {
+    setMeasureUnit(unit);
+    try {
+      localStorage.setItem("forge_measure_unit", unit);
+    } catch {
+      /* ignore */
+    }
+    ping(`Tape measurement unit set to ${unit === "cm" ? "Centimeters (cm)" : "Inches (in)"}.`);
+  }
+
+  function updateDefaultBarWeight(barKg: number) {
+    setDefaultBarKg(barKg);
+    try {
+      localStorage.setItem("forge_default_bar_kg", String(barKg));
+    } catch {
+      /* ignore */
+    }
+    ping(`Default barbell set to ${barKg}kg (synced with Plate Calculator).`);
+  }
 
   function ping(msg: string) {
     setToast(msg);
@@ -298,9 +331,9 @@ export function SettingsClient({
               <Field label="Height" hint="cm">
                 <input name="heightCm" type="number" step="0.5" min={120} max={230} defaultValue={user.heightCm} className={inputCls} />
               </Field>
-              <Field label="Units">
+              <Field label="Weight units">
                 <div className="flex h-10 items-center gap-1 rounded-xl border border-white/[0.08] bg-white/[0.03] p-1">
-                  {[{ v: "kg", l: "Kilograms" }, { v: "lb", l: "Pounds" }].map((u) => (
+                  {[{ v: "kg", l: "Kilograms (kg)" }, { v: "lb", l: "Pounds (lb)" }].map((u) => (
                     <label key={u.v} className="flex-1 cursor-pointer">
                       <input type="radio" name="unitPref" value={u.v} defaultChecked={user.unitPref === u.v} className="peer sr-only" />
                       <span className="flex h-8 items-center justify-center rounded-lg text-[10.5px] font-medium text-dim transition-colors peer-checked:bg-white/10 peer-checked:text-chalk">
@@ -310,9 +343,33 @@ export function SettingsClient({
                   ))}
                 </div>
               </Field>
-              <Field label="Email">
-                <input value={user.email} readOnly className={cn(inputCls, "text-mist")} />
+              <Field label="Tape measurement units" hint="Synced with Progress">
+                <div className="flex h-10 items-center gap-1 rounded-xl border border-white/[0.08] bg-white/[0.03] p-1">
+                  {(
+                    [
+                      { v: "cm", l: "Centimeters (cm)" },
+                      { v: "in", l: "Inches (in)" },
+                    ] as const
+                  ).map((u) => (
+                    <button
+                      key={u.v}
+                      type="button"
+                      onClick={() => updateMeasureUnit(u.v)}
+                      className={cn(
+                        "flex h-8 flex-1 items-center justify-center rounded-lg text-[10.5px] font-medium transition-colors",
+                        measureUnit === u.v ? "bg-acid/15 text-acid font-semibold" : "text-dim hover:text-mist",
+                      )}
+                    >
+                      {u.l}
+                    </button>
+                  ))}
+                </div>
               </Field>
+              <div className="sm:col-span-2">
+                <Field label="Email">
+                  <input value={user.email} readOnly className={cn(inputCls, "text-mist")} />
+                </Field>
+              </div>
             </div>
 
             <div className="mt-5 flex items-center gap-2 rounded-xl border border-white/[0.06] bg-black/15 px-3 py-2.5 text-[10px] text-dim">
@@ -362,6 +419,42 @@ export function SettingsClient({
                   </button>
                 );
               })}
+            </div>
+
+            {/* Default Barbell Specification Synced with Plate Calculator */}
+            <div className="mt-5 rounded-2xl border border-white/[0.07] bg-black/20 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div>
+                  <p className="text-[12px] font-semibold text-chalk">Default Barbell Weight</p>
+                  <p className="text-[10px] text-dim">Used as the starting bar weight in the Plate &amp; 1RM Calculator.</p>
+                </div>
+                <span className="font-mono text-[10px] font-bold text-acid">{defaultBarKg} kg bar</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {[
+                  { weight: 20, label: "20 kg Olympic", note: "Standard men's bar" },
+                  { weight: 15, label: "15 kg Women's", note: "25mm grip shaft" },
+                  { weight: 25, label: "25 kg Squat Bar", note: "Heavy power bar" },
+                  { weight: 10, label: "10 kg Tech / EZ", note: "Technique & curl bar" },
+                ].map((bar) => (
+                  <button
+                    key={bar.weight}
+                    type="button"
+                    onClick={() => updateDefaultBarWeight(bar.weight)}
+                    className={cn(
+                      "rounded-xl border p-2.5 text-left transition-all",
+                      defaultBarKg === bar.weight
+                        ? "border-acid/40 bg-acid/10 text-chalk"
+                        : "border-white/[0.08] bg-white/[0.02] text-dim hover:text-mist",
+                    )}
+                  >
+                    <p className={cn("font-mono text-[11px] font-bold", defaultBarKg === bar.weight ? "text-acid" : "text-chalk")}>
+                      {bar.label}
+                    </p>
+                    <p className="text-[9.5px] text-dim mt-0.5">{bar.note}</p>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] pt-4">

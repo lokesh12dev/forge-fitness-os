@@ -9,8 +9,8 @@ import { joinChallenge } from "@/app/actions";
 import { relativeTime } from "@/lib/date";
 import { Avatar, Badge, ButtonLink, ProgressBar } from "@/components/ui";
 import { Card, CardHeader, PageHeader } from "@/components/page-header";
-import { CheckInButton, PostComposer, ShareCardTrigger, SocialFeed } from "@/components/social-client";
-import type { SocialComment, SocialPost, SocialUser } from "@/components/social-client";
+import { CheckInButton, PRTrophyWall, PostComposer, ShareCardTrigger, SocialFeed, StreakTimeline } from "@/components/social-client";
+import type { SocialComment, SocialPost, SocialUser, TrophyWallItem } from "@/components/social-client";
 
 function toSocialUser(u: {
   id: string; name: string; handle: string; initials: string; accent: string;
@@ -76,6 +76,32 @@ export default async function SocialPage() {
     gym: ws.gyms.find((g) => g.id === c.gymId),
     member: usersMap.get(c.userId),
   }));
+
+  const trophyWall: TrophyWallItem[] = [
+    ...ws.prs.slice(0, 4).map((pr) => ({
+      id: pr.id,
+      exercise: ws.exerciseMap.get(pr.exerciseId)?.name ?? "Lift",
+      e1rmKg: pr.value,
+      reps: pr.reps,
+      athleteName: ws.user.name,
+      athleteInitials: ws.user.initials,
+      athleteAccent: ws.user.accent,
+      achievedAgo: relativeTime(new Date(pr.achievedAt).getTime()),
+    })),
+    ...feedPosts
+      .filter((p) => p.type === "pr")
+      .slice(0, 4)
+      .map((p) => ({
+        id: `post-${p.id}`,
+        exercise: p.title,
+        e1rmKg: Number(p.meta?.e1RM ?? p.meta?.Weight ?? 100) || 100,
+        reps: Number(p.meta?.Reps ?? 1) || 1,
+        athleteName: p.author.name,
+        athleteInitials: p.author.initials,
+        athleteAccent: p.author.accent,
+        achievedAgo: relativeTime(p.createdAt),
+      })),
+  ].slice(0, 4);
 
   return (
     <>
@@ -178,6 +204,11 @@ export default async function SocialPage() {
           </div>
         </Card>
       )}
+
+      <div className="mt-4 space-y-4">
+        <StreakTimeline streakDays={user.streak} weeklySessions={ws.weekWorkouts.length} />
+        <PRTrophyWall trophies={trophyWall} />
+      </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-12">
         {/* FEED */}

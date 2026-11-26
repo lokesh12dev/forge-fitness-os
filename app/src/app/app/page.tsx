@@ -406,9 +406,9 @@ export default async function DashboardPage() {
             title={lowest ? `${muscleLabel(lowest[0])} needs ${lowest[1].recovery < 50 ? "another day" : "a light day"}` : "Fresh and ready"}
             action={<Badge tone={lowest && lowest[1].recovery < 50 ? "flame" : "mint"}>{lowest ? `${lowest[1].recovery}%` : "100%"}</Badge>}
           />
-          <div className="mt-4 flex items-center gap-4">
-            <BodyMap recovery={recovery} className="shrink-0" />
-            <div className="min-w-0 flex-1">
+          <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row">
+            <BodyMap recovery={recovery} showDetailsCard={false} svgHeightClass="max-h-[195px]" className="shrink-0" />
+            <div className="w-full min-w-0 flex-1">
               <RecoveryLegend recovery={recovery} limit={6} />
             </div>
           </div>

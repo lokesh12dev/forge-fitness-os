@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   adaptiveTargetWeight,
+  calculate1RM,
+  calculateAll1RM,
   computeLevelProgress,
   e1rm,
+  estimateLoadForRpe,
   estimateSessionMinutes,
+  generateRepMaxTable,
   plateBreakdown,
   proteinPlan,
   readinessConfidence,
@@ -203,5 +207,53 @@ describe("estimateSessionMinutes", () => {
     ]);
     expect(minutes).toBeGreaterThan(20);
     expect(minutes).toBeLessThan(40);
+  });
+});
+
+describe("1RM Suite & RTS RPE Engine (lyftr)", () => {
+  it("calculates 1RM across all 6 scientific formulas", () => {
+    const epley = calculate1RM(100, 5, "epley");
+    const brzycki = calculate1RM(100, 5, "brzycki");
+    const wathan = calculate1RM(100, 5, "wathan");
+    const lombardi = calculate1RM(100, 5, "lombardi");
+    const mayhew = calculate1RM(100, 5, "mayhew");
+    const oconner = calculate1RM(100, 5, "oconner");
+
+    expect(epley).toBe(116.7);
+    expect(brzycki).toBe(112.5);
+    expect(wathan).toBeCloseTo(116.4, 0);
+    expect(lombardi).toBeCloseTo(117.5, 0);
+    expect(mayhew).toBeCloseTo(118.8, 0);
+    expect(oconner).toBe(112.5);
+  });
+
+  it("calculates composite average 1RM", () => {
+    const all = calculateAll1RM(100, 5);
+    expect(all.average).toBeGreaterThan(112);
+    expect(all.average).toBeLessThan(120);
+    expect(all.epley).toBe(116.7);
+  });
+
+  it("handles 1 rep accurately as the true weight", () => {
+    expect(calculate1RM(140, 1, "epley")).toBe(140);
+    expect(calculate1RM(140, 1, "brzycki")).toBe(140);
+  });
+
+  it("generates 1RM to 12RM rep max table", () => {
+    const table = generateRepMaxTable(100);
+    expect(table).toHaveLength(12);
+    expect(table[0]).toEqual({ reps: 1, pct: 100, weightKg: 100 });
+    expect(table[4]).toEqual({ reps: 5, pct: 87, weightKg: 87.5 });
+    expect(table[9]).toEqual({ reps: 10, pct: 75, weightKg: 75 });
+  });
+
+  it("estimates RTS RPE powerlifting loads", () => {
+    const loadRpe10 = estimateLoadForRpe(100, 5, 10);
+    const loadRpe8 = estimateLoadForRpe(100, 5, 8);
+    const loadRpe6 = estimateLoadForRpe(100, 5, 6);
+
+    expect(loadRpe10).toBe(87.5); // 86.3% -> 87.5kg
+    expect(loadRpe8).toBe(80); // 78.6% -> 80kg
+    expect(loadRpe6).toBe(75); // 73.9% -> 75kg
   });
 });

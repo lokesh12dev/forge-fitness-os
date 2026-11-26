@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowRight, CalendarDays, Check, ChevronDown, Clock, Dumbbell,
-  Flame, Layers, Play, Sparkles, Star, Trophy, Users, Zap
+  Bookmark, Check, Clock, FolderOpen, Play, Star, Zap
 } from "lucide-react";
 import { BUILTIN_PROGRAMS, type BuiltinProgram } from "@/lib/programs-db";
+import { INITIAL_ROUTINE_FOLDERS } from "@/lib/b2b-portal";
 import { ProgressBar } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -28,13 +28,44 @@ export function ProgramsClient({
   userAccent = "#C9F73A",
 }: ProgramsClientProps) {
   const [activeProgramId, setActiveProgramId] = useState<string>("ppl-hypertrophy");
+  const [selectedFolder, setSelectedFolder] = useState<string>("all");
   const [selectedGoal, setSelectedGoal] = useState<string>("all");
   const [selectedDays, setSelectedDays] = useState<number | "all">("all");
+  const [savedIds, setSavedIds] = useState<string[]>(["ppl-hypertrophy", "strength-531-bbb"]);
   const [previewProgram, setPreviewProgram] = useState<BuiltinProgram | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("forge_saved_program_ids");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setSavedIds(parsed);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggleSaved = (id: string) => {
+    setSavedIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      try {
+        localStorage.setItem("forge_saved_program_ids", JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   const activeProgram = BUILTIN_PROGRAMS.find((p) => p.id === activeProgramId) ?? BUILTIN_PROGRAMS[0];
 
   const filteredPrograms = BUILTIN_PROGRAMS.filter((p) => {
+    if (selectedFolder === "saved" && !savedIds.includes(p.id)) return false;
+    if (selectedFolder !== "all" && selectedFolder !== "saved") {
+      const folder = INITIAL_ROUTINE_FOLDERS.find((f) => f.id === selectedFolder);
+      if (folder && !folder.programIds.includes(p.id)) return false;
+    }
     if (selectedGoal !== "all" && p.goal !== selectedGoal) return false;
     if (selectedDays !== "all" && p.daysPerWeek !== selectedDays) return false;
     return true;
@@ -191,7 +222,7 @@ export function ProgramsClient({
             </p>
           </div>
 
-          {/* Goal Filter Chips */}
+          {/* Goal & Days Filter Chips */}
           <div className="flex flex-wrap items-center gap-1.5">
             {["all", "hypertrophy", "strength", "athletic", "bodyweight"].map((g) => (
               <button
@@ -209,6 +240,47 @@ export function ProgramsClient({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Routine Folders Strip (GYM-One) */}
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-2.5">
+          <span className="flex items-center gap-1.5 px-2 font-mono text-[9px] uppercase tracking-wider text-dim">
+            <FolderOpen className="size-3 text-acid" /> Routine Folders:
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedFolder("all")}
+            className={cn(
+              "rounded-xl px-2.5 py-1 font-mono text-[9.5px] transition-colors",
+              selectedFolder === "all" ? "bg-white/15 text-chalk font-bold" : "text-mist hover:text-chalk"
+            )}
+          >
+            All ({BUILTIN_PROGRAMS.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedFolder("saved")}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-xl px-2.5 py-1 font-mono text-[9.5px] transition-colors",
+              selectedFolder === "saved" ? "bg-amber/20 text-amber font-bold" : "text-mist hover:text-chalk"
+            )}
+          >
+            <Bookmark className="size-3" /> Saved ({savedIds.length})
+          </button>
+          {INITIAL_ROUTINE_FOLDERS.map((folder) => (
+            <button
+              key={folder.id}
+              type="button"
+              onClick={() => setSelectedFolder(folder.id)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 font-mono text-[9.5px] transition-colors",
+                selectedFolder === folder.id ? "bg-acid/15 text-acid font-bold" : "text-mist hover:text-chalk"
+              )}
+            >
+              <span className="size-1.5 rounded-full" style={{ background: folder.accent }} />
+              {folder.name}
+            </button>
+          ))}
         </div>
 
         {/* PROGRAM CARDS GRID */}
@@ -230,8 +302,21 @@ export function ProgramsClient({
                     <span className="font-mono text-[8.5px] uppercase tracking-wider text-dim">
                       {p.daysPerWeek} Days/Wk · {p.weeks} Weeks
                     </span>
-                    <div className="flex items-center gap-1 text-amber text-[10px] font-mono font-bold">
-                      <Star className="size-2.5 fill-current" /> {p.rating}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleSaved(p.id)}
+                        title={savedIds.includes(p.id) ? "Remove from Saved folder" : "Bookmark to Saved folder"}
+                        className={cn(
+                          "transition-colors",
+                          savedIds.includes(p.id) ? "text-amber" : "text-dim hover:text-chalk"
+                        )}
+                      >
+                        <Bookmark className={cn("size-3.5", savedIds.includes(p.id) && "fill-current")} />
+                      </button>
+                      <div className="flex items-center gap-1 text-amber text-[10px] font-mono font-bold">
+                        <Star className="size-2.5 fill-current" /> {p.rating}
+                      </div>
                     </div>
                   </div>
 

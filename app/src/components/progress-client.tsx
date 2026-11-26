@@ -1,9 +1,9 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Award, Camera, Check, ChevronRight, Download, FileJson, FileSpreadsheet,
-  Lock, Share2, Shield, Sparkles, TrendingDown, TrendingUp, Trophy, X, Zap,
+  Lock, Ruler, Share2, Shield, Sparkles, TrendingDown, TrendingUp, Trophy, X, Zap,
 } from "lucide-react";
 import { PRCard } from "@/components/pr-card";
 import { type BadgeDefinition } from "@/lib/gamification";
@@ -608,5 +608,249 @@ export function LevelChip({ level }: { level: string }) {
     <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em]", tone)}>
       <Award className="size-2.5" /> {level}
     </span>
+  );
+}
+
+/* ───────────────────────────── ANTHROPOMETRIC BODY MEASUREMENTS (wger) ───────────────────────────── */
+
+export type BodyMeasurementSite = {
+  key: string;
+  label: string;
+  current: number;
+  baseline: number;
+  unit: string;
+  targetDirection: "up" | "down";
+};
+
+const INITIAL_SITES: BodyMeasurementSite[] = [
+  { key: "chest", label: "Chest (Mid-Sternum)", current: 104, baseline: 102, unit: "cm", targetDirection: "up" },
+  { key: "arms", label: "Arms / Biceps (Flexed)", current: 39.2, baseline: 38, unit: "cm", targetDirection: "up" },
+  { key: "waist", label: "Waist (Navel)", current: 81.5, baseline: 84.5, unit: "cm", targetDirection: "down" },
+  { key: "hips", label: "Hips (Gluteal Apex)", current: 98, baseline: 97.5, unit: "cm", targetDirection: "up" },
+  { key: "thighs", label: "Thighs (Mid-Femur)", current: 61.2, baseline: 59.8, unit: "cm", targetDirection: "up" },
+  { key: "calves", label: "Calves (Max Girth)", current: 38.5, baseline: 38.0, unit: "cm", targetDirection: "up" },
+  { key: "neck", label: "Neck (Thyroid Cartilage)", current: 39.0, baseline: 38.8, unit: "cm", targetDirection: "up" },
+  { key: "bodyFat", label: "Body Fat (Caliper 3-Site)", current: 13.8, baseline: 15.6, unit: "%", targetDirection: "down" },
+];
+
+export function AnthropometricMeasurementsCard() {
+  const [sites, setSites] = useState<BodyMeasurementSite[]>(INITIAL_SITES);
+  const [measureUnit, setMeasureUnit] = useState<"cm" | "in">("cm");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editValues, setEditValues] = useState<Record<string, string>>(() =>
+    INITIAL_SITES.reduce((acc, s) => ({ ...acc, [s.key]: String(s.current) }), {})
+  );
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("forge_measure_unit");
+      if (saved === "cm" || saved === "in") {
+        setMeasureUnit(saved);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const formatMetric = (val: number, baseUnit: string) => {
+    if (baseUnit !== "cm" || measureUnit === "cm") return val;
+    return Math.round((val / 2.54) * 10) / 10;
+  };
+
+  const displayUnit = (baseUnit: string) => (baseUnit === "cm" ? measureUnit : baseUnit);
+
+  const toggleMeasureUnit = (unit: "cm" | "in") => {
+    setMeasureUnit(unit);
+    try {
+      localStorage.setItem("forge_measure_unit", unit);
+    } catch {
+      /* ignore */
+    }
+    setEditValues(
+      sites.reduce((acc, s) => ({ ...acc, [s.key]: String(s.unit === "cm" && unit === "in" ? Math.round((s.current / 2.54) * 10) / 10 : s.current) }), {})
+    );
+  };
+
+  const handleOpenModal = () => {
+    setEditValues(
+      sites.reduce(
+        (acc, s) => ({ ...acc, [s.key]: String(formatMetric(s.current, s.unit)) }),
+        {}
+      )
+    );
+    setIsModalOpen(true);
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSites((prev) =>
+      prev.map((s) => {
+        const entered = Number(editValues[s.key]);
+        if (!entered) return s;
+        const normalizedCm = s.unit === "cm" && measureUnit === "in" ? Math.round(entered * 2.54 * 10) / 10 : entered;
+        return { ...s, current: normalizedCm };
+      })
+    );
+    setIsModalOpen(false);
+    setToast("Tape measurements updated successfully!");
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  return (
+    <div className="rounded-3xl border border-white/[0.08] bg-panel/75 p-5 md:p-6 shadow-xl backdrop-blur-md">
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl border border-acid/30 bg-ink-2/95 px-4 py-3 shadow-2xl">
+          <Check className="size-4 text-acid" />
+          <span className="text-[12px] font-medium text-chalk">{toast}</span>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="grid size-6 place-items-center rounded-lg bg-acid/15 text-acid">
+              <Ruler className="size-3.5" />
+            </span>
+            <h3 className="font-display text-base font-bold text-chalk">
+              Anthropometric Tape Tracker
+            </h3>
+            <span className="rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[8px] uppercase tracking-wider text-dim">
+              wger Spec
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] text-mist">
+            Circumference metrics taken at standard anatomical landmarks. Tracks true muscular hypertrophy versus visceral reduction.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-full border border-white/10 bg-black/30 p-0.5">
+            {(["cm", "in"] as const).map((u) => (
+              <button
+                key={u}
+                type="button"
+                onClick={() => toggleMeasureUnit(u)}
+                className={cn(
+                  "rounded-full px-2.5 py-1 font-mono text-[9.5px] uppercase transition-colors",
+                  measureUnit === u ? "bg-acid text-ink font-bold" : "text-dim hover:text-mist"
+                )}
+              >
+                {u}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={handleOpenModal}
+            className="press inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-1.5 text-[11px] font-medium text-mist hover:border-acid/40 hover:text-chalk transition-colors"
+          >
+            <Ruler className="size-3 text-acid" /> Log New Tape Measure
+          </button>
+        </div>
+      </div>
+
+      {/* Grid of Measurements */}
+      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+        {sites.map((site) => {
+          const curVal = formatMetric(site.current, site.unit);
+          const baseVal = formatMetric(site.baseline, site.unit);
+          const unitLbl = displayUnit(site.unit);
+          const delta = Math.round((curVal - baseVal) * 10) / 10;
+          const isGoodDirection =
+            site.targetDirection === "up" ? delta >= 0 : delta <= 0;
+          return (
+            <div
+              key={site.key}
+              className="rounded-2xl border border-white/[0.06] bg-black/25 p-3.5 transition-all hover:border-white/12"
+            >
+              <div className="flex items-start justify-between">
+                <span className="font-mono text-[8.5px] uppercase tracking-wider text-dim">
+                  {site.label}
+                </span>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-mono text-[8px] font-bold",
+                    isGoodDirection
+                      ? "bg-emerald-500/15 text-emerald-400"
+                      : "bg-flame/15 text-flame"
+                  )}
+                >
+                  {delta > 0 ? `+${delta}` : delta} {unitLbl}
+                </span>
+              </div>
+
+              <div className="mt-2 flex items-baseline justify-between">
+                <p className="font-numeric text-xl font-extrabold text-chalk">
+                  {curVal} <span className="text-xs font-normal text-dim">{unitLbl}</span>
+                </p>
+                <span className="font-mono text-[9px] text-dim">
+                  30d ago: {baseVal} {unitLbl}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Logging Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-3xl border border-white/10 bg-panel-2 p-5 shadow-2xl animate-scale-in"
+          >
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Ruler className="size-4 text-acid" />
+                <h4 className="font-display text-sm font-bold text-chalk">Record Body Tape Measures</h4>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="grid size-6 place-items-center rounded-full bg-white/5 text-mist hover:text-chalk"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSave} className="space-y-3">
+              <div className="grid grid-cols-2 gap-2.5 max-h-[50vh] overflow-y-auto no-scrollbar pr-1">
+                {sites.map((s) => (
+                  <div key={s.key}>
+                    <label className="block font-mono text-[8.5px] uppercase tracking-wider text-dim mb-1">
+                      {s.label.split("(")[0].trim()} ({displayUnit(s.unit)})
+                    </label>
+                    <input
+                      type="number"
+                      step={0.1}
+                      value={editValues[s.key] ?? ""}
+                      onChange={(e) =>
+                        setEditValues((prev) => ({ ...prev, [s.key]: e.target.value }))
+                      }
+                      className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-1.5 font-numeric text-xs text-chalk focus:border-acid focus:outline-none"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-3 border-t border-white/[0.08] flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="rounded-full border border-white/10 px-4 py-2 font-mono text-[11px] text-mist hover:text-chalk"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-full bg-acid px-5 py-2 font-mono text-[11px] font-bold text-ink hover:bg-[#d8ff5e]"
+                >
+                  Save Tape Log
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

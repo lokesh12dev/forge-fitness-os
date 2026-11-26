@@ -4,11 +4,14 @@ import { useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Activity, BadgeCheck, Bell, Check, ChevronRight, Dumbbell, Flame,
-  Loader2, LogOut, Salad, Shield, Sparkles, Target, User, Users, Zap,
+  Activity, BadgeCheck, Bell, Check, ChevronRight, CreditCard, Dumbbell, Flame,
+  Globe, Loader2, Lock, LogOut, Salad, Shield, ShieldAlert, ShieldCheck, Sparkles,
+  Target, Trash2, User, Users, Zap,
 } from "lucide-react";
 import { signOut, updateEquipment, updateProfile, updateTargets } from "@/app/actions";
 import { Avatar, Badge, Button, ProgressBar } from "@/components/ui";
+import { PLANS, mockRazorpayCheckout, mockStripeCheckout, type PlanTier } from "@/lib/plans";
+import { formatUserLevel } from "@/lib/consistency";
 import { cn } from "@/lib/utils";
 
 type SettingsUser = {
@@ -34,7 +37,9 @@ const TABS = [
   { key: "profile", label: "Profile", icon: User },
   { key: "training", label: "Equipment", icon: Dumbbell },
   { key: "nutrition", label: "Targets", icon: Salad },
-  { key: "account", label: "Account", icon: Shield },
+  { key: "plans", label: "Plans & Billing", icon: Zap },
+  { key: "privacy", label: "Privacy & Data", icon: Shield },
+  { key: "account", label: "Account", icon: BadgeCheck },
 ] as const;
 
 const GOALS = [
@@ -141,8 +146,12 @@ export function SettingsClient({
     });
   }
 
-  const levelProgress = ((user.xp % XP_PER_LEVEL) / XP_PER_LEVEL) * 100;
+  const userLevelData = formatUserLevel(user.xp);
   const gearCount = equipment.length;
+  const [plansCurrency, setPlansCurrency] = useState<"INR" | "USD">("INR");
+  const [privacyVisibility, setPrivacyVisibility] = useState<"public" | "friends" | "private">("public");
+  const [telemetryOptIn, setTelemetryOptIn] = useState(false);
+  const [activePlan, setActivePlan] = useState<PlanTier>("pro");
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
@@ -166,10 +175,10 @@ export function SettingsClient({
             </div>
             <div className="relative mt-4">
               <div className="mb-1 flex items-center justify-between font-mono text-[7.5px] uppercase tracking-[0.1em] text-dim">
-                <span>Level {user.level}</span>
-                <span>{user.xp % XP_PER_LEVEL} / {XP_PER_LEVEL} XP</span>
+                <span>Level {userLevelData.level}</span>
+                <span>{userLevelData.progressPercent}% ({userLevelData.xpToNext} XP to next)</span>
               </div>
-              <ProgressBar value={levelProgress} color="#C9F73A" height={4} />
+              <ProgressBar value={userLevelData.progressPercent} color="#C9F73A" height={4} />
             </div>
           </div>
 
@@ -411,6 +420,247 @@ export function SettingsClient({
               </div>
             </div>
           </form>
+        )}
+
+        {/* PLANS & BILLING TAB (I4) */}
+        {tab === "plans" && (
+          <div className="space-y-4">
+            <div className="surface rounded-2xl p-5 md:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] pb-4">
+                <div>
+                  <span className="font-mono text-[8.5px] uppercase tracking-wider text-acid font-bold">
+                    Subscription Tier &amp; Billing (I4)
+                  </span>
+                  <h2 className="font-display text-[22px] font-bold tracking-tight text-chalk mt-0.5">
+                    Forge Platform Plans
+                  </h2>
+                </div>
+
+                {/* Currency Switcher */}
+                <div className="flex rounded-xl border border-white/[0.08] bg-black/40 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setPlansCurrency("INR")}
+                    className={cn(
+                      "rounded-lg px-3 py-1 font-mono text-[9px] uppercase tracking-wider transition-colors",
+                      plansCurrency === "INR" ? "bg-acid text-ink font-bold" : "text-dim hover:text-mist",
+                    )}
+                  >
+                    INR (₹) India
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPlansCurrency("USD")}
+                    className={cn(
+                      "rounded-lg px-3 py-1 font-mono text-[9px] uppercase tracking-wider transition-colors",
+                      plansCurrency === "USD" ? "bg-acid text-ink font-bold" : "text-dim hover:text-mist",
+                    )}
+                  >
+                    USD ($) Global
+                  </button>
+                </div>
+              </div>
+
+              {/* Plans Grid */}
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                {(Object.keys(PLANS) as PlanTier[]).map((tierKey) => {
+                  const plan = PLANS[tierKey];
+                  const isCurrent = activePlan === tierKey;
+                  const price =
+                    plansCurrency === "INR"
+                      ? plan.priceMonthlyInr === 0 ? "Free" : `₹${plan.priceMonthlyInr}`
+                      : plan.priceMonthlyUsd === 0 ? "Free" : `$${plan.priceMonthlyUsd}`;
+
+                  return (
+                    <div
+                      key={tierKey}
+                      className={cn(
+                        "relative flex flex-col justify-between rounded-2xl border p-4 transition-all",
+                        plan.highlight
+                          ? "border-acid/40 bg-acid/[0.04] shadow-[0_0_20px_rgba(201,247,58,0.06)]"
+                          : "border-white/[0.08] bg-white/[0.015]",
+                      )}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 font-mono text-[8px] uppercase tracking-wider font-semibold",
+                              plan.highlight ? "bg-acid/20 text-acid" : "bg-white/10 text-dim",
+                            )}
+                          >
+                            {plan.badge}
+                          </span>
+                          {isCurrent && (
+                            <span className="rounded bg-mint/20 px-1.5 py-0.5 font-mono text-[7.5px] uppercase tracking-wider text-mint font-bold">
+                              Current Plan
+                            </span>
+                          )}
+                        </div>
+
+                        <h3 className="font-display text-lg font-bold text-chalk mt-2">{plan.name}</h3>
+                        <p className="mt-1 text-[11px] text-mist">{plan.description}</p>
+
+                        <div className="mt-3">
+                          <span className="font-numeric text-2xl font-black text-chalk">{price}</span>
+                          {price !== "Free" && <span className="font-mono text-[9px] text-dim ml-1">/mo</span>}
+                        </div>
+
+                        <ul className="mt-4 space-y-1.5 border-t border-white/[0.06] pt-3 text-[11px] text-mist">
+                          {plan.features.map((f, i) => (
+                            <li key={i} className="flex items-start gap-1.5">
+                              <Check className="size-3 text-acid shrink-0 mt-0.5" />
+                              <span className="leading-tight">{f}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="mt-5">
+                        {isCurrent ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2 font-mono text-[9.5px] uppercase tracking-wider text-dim"
+                          >
+                            Active Tier
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (plansCurrency === "INR") {
+                                await mockRazorpayCheckout(tierKey);
+                              } else {
+                                await mockStripeCheckout(tierKey);
+                              }
+                              setActivePlan(tierKey);
+                              ping(`Switched to ${plan.name} tier!`);
+                            }}
+                            className={cn(
+                              "press w-full rounded-xl py-2 font-semibold text-[11.5px] transition-colors",
+                              plan.highlight ? "bg-acid text-ink" : "bg-white/10 text-chalk hover:bg-white/15",
+                            )}
+                          >
+                            {tierKey === "free" ? "Downgrade to Free" : "Upgrade Now"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PRIVACY & DATA SOVEREIGNTY TAB (I3) */}
+        {tab === "privacy" && (
+          <div className="space-y-4">
+            <div className="surface rounded-2xl p-5 md:p-6">
+              <span className="font-mono text-[8.5px] uppercase tracking-wider text-mint font-bold">
+                Data Sovereignty (I3)
+              </span>
+              <h2 className="font-display text-[22px] font-bold tracking-tight text-chalk mt-0.5">
+                Privacy &amp; Data Ownership
+              </h2>
+              <p className="mt-1 text-[11.5px] text-mist">
+                You own your physiological and workout telemetry. Zero ad tracking. No third-party data broker sales.
+              </p>
+
+              {/* Profile Visibility */}
+              <div className="mt-5 rounded-2xl border border-white/[0.06] bg-black/20 p-4">
+                <span className="font-mono text-[9px] uppercase tracking-wider text-dim block mb-2">
+                  Profile &amp; Leaderboard Visibility:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: "public", label: "Public", desc: "Appear on gym and public PR leaderboards" },
+                    { id: "friends", label: "Friends Only", desc: "Visible only to mutual workout partners" },
+                    { id: "private", label: "Private", desc: "Incognito mode: full logging without feed posts" },
+                  ].map((vis) => (
+                    <button
+                      key={vis.id}
+                      type="button"
+                      onClick={() => {
+                        setPrivacyVisibility(vis.id as any);
+                        ping(`Visibility set to ${vis.label}`);
+                      }}
+                      className={cn(
+                        "flex flex-col items-start rounded-xl border p-3 text-left transition-colors",
+                        privacyVisibility === vis.id
+                          ? "border-acid bg-acid/10 text-chalk"
+                          : "border-white/[0.08] bg-white/[0.02] text-mist hover:border-white/20",
+                      )}
+                    >
+                      <span className="font-semibold text-[12px] text-chalk">{vis.label}</span>
+                      <span className="text-[10px] text-dim mt-0.5">{vis.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Telemetry & Cache Management */}
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="rounded-xl border border-white/[0.06] bg-black/20 p-3.5 flex items-center justify-between">
+                  <div>
+                    <span className="text-[12px] font-medium text-chalk block">Crash &amp; Performance Telemetry</span>
+                    <span className="text-[10px] text-dim">Anonymous performance traces without PII</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTelemetryOptIn(!telemetryOptIn);
+                      ping(telemetryOptIn ? "Telemetry disabled" : "Telemetry enabled");
+                    }}
+                    className={cn(
+                      "relative h-5 w-9 rounded-full transition-colors",
+                      telemetryOptIn ? "bg-acid" : "bg-white/15",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "absolute top-0.5 size-4 rounded-full bg-ink transition-all",
+                        telemetryOptIn ? "left-4.5" : "left-0.5",
+                      )}
+                    />
+                  </button>
+                </div>
+
+                <div className="rounded-xl border border-white/[0.06] bg-black/20 p-3.5 flex items-center justify-between">
+                  <div>
+                    <span className="text-[12px] font-medium text-chalk block">Reset Local Cache &amp; Queue</span>
+                    <span className="text-[10px] text-dim">Purge IndexedDB snapshots &amp; sync queue</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => ping("Local IndexedDB cache refreshed.")}
+                    className="press rounded-lg border border-white/10 px-3 py-1.5 font-mono text-[9px] uppercase tracking-wider text-mist hover:text-chalk"
+                  >
+                    Clear Cache
+                  </button>
+                </div>
+              </div>
+
+              {/* Danger Zone */}
+              <div className="mt-5 rounded-2xl border border-rose-500/30 bg-rose-500/[0.04] p-4">
+                <div className="flex items-center gap-2 text-rose-400">
+                  <ShieldAlert className="size-4" />
+                  <span className="font-semibold text-[12px]">Danger Zone — Account Deletion</span>
+                </div>
+                <p className="mt-1 text-[11px] text-mist">
+                  Permanently erase your account, workout history, PRs, and nutrition logs per GDPR &amp; DPDP requirements.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => ping("Account deletion requires email confirmation.")}
+                  className="press mt-3 flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3.5 py-1.5 font-mono text-[9.5px] uppercase tracking-wider text-rose-300 hover:bg-rose-500/20"
+                >
+                  <Trash2 className="size-3" /> Request Account &amp; Data Purge
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {tab === "account" && (

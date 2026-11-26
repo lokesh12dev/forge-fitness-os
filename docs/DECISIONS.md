@@ -185,4 +185,54 @@ Each entry records a decision made during development, including context, option
 - Implemented `parseWorkoutVoiceCommand()` supporting 61+ syntax variations: shorthand (`100x8@8`), plate slang (`two plates = 100kg`, `three plates = 140kg`), spoken numbers (`one hundred twenty`), imperial conversions (`225 lbs`), and RIR notation (`1 rir -> RPE 9`).
 - Enforces an explicit `VoiceConfirmSheet` requiring single-tap user verification before writing to local state or sync queue.
 
+---
+
+## D-019 — Indian & Regional Food Database with Authentic IFCT Servings (D1, D2)
+
+**Date:** 2026-11-26
+**Context:** Western macro trackers (MyFitnessPal, MacroFactor) fail in India by lacking standard regional dishes and cultural portion units (`katori`, `roti`, `piece`).
+**Decision:**
+- Implemented `FOOD_DATABASE` in `app/src/lib/food-db.ts` containing authentic nutritional data derived from Indian Food Composition Tables (IFCT 2017) and verified commercial brands.
+- Built-in coverage for staple foods (Dal Tadka, Paneer Bhurji, Soya Chunks, Chicken Biryani, Rohu Fish, Moong Dal Khichdi, Idli, Dosa, Sattu) with cultural serving units: `1 katori (150g)`, `1 medium roti (35g)`, `1 scoop (30g)`.
+- Integrated `resolveBarcode()` with real verified EAN/UPC barcodes (e.g. Amul High Protein Lassi `8901262010052`, ON Gold Standard Whey `748927056488`, Epigamia Greek Yogurt `8906074210411`, Fortune Soya Chunks `8906007280016`).
+- Built `BarcodeScannerModal` featuring an animated viewfinder laser beam, instant camera viewfinder mock, numeric search fallback, and 1-tap logging.
+
+---
+
+## D-020 — Mifflin-St Jeor TDEE Engine & Smart Protein Optimizer (D3, D4)
+
+**Date:** 2026-11-26
+**Context:** Lifters struggle with generic calorie calculators and frequently find themselves with a 30–50g protein deficit at the end of the day without knowing what to eat within their remaining calorie budget.
+**Decision:**
+- Implemented standard Mifflin-St Jeor BMR formulas in `app/src/lib/nutrition-engine.ts`:
+  - Male: $BMR = 10 \times \text{weightKg} + 6.25 \times \text{heightCm} - 5 \times \text{age} + 5$
+  - Female: $BMR = 10 \times \text{weightKg} + 6.25 \times \text{heightCm} - 5 \times \text{age} - 161$
+- Goal calorie adjustments: Fat loss (-500 kcal deficit with elevated protein at 2.2g/kg), Maintenance (TDEE with 2.0g/kg protein), Lean bulk (+300 kcal surplus with 2.0g/kg protein).
+- Implemented `hitRemainingProtein()` optimizer that ranks foods by protein density ($g \text{ protein} / 100 \text{ kcal}$) constrained by remaining daily calorie budget, supporting vegetarian and vegan dietary filters.
+- Built concentric multi-ring animated SVG (`MacroRings`) displaying Calories (white), Protein (acid lime `#C9F73A`), Carbs (sky blue `#6EA8FF`), and Fat (amber `#FFD166`).
+
+---
+
+## D-021 — 7-Day Smoothed Moving Average for Weight Tracking (E1, E2)
+
+**Date:** 2026-11-26
+**Context:** Daily scale weight fluctuates up to ±1.5kg due to sodium intake, glycogen hydration, and bowel transit time, causing unnecessary psychological distress and false program adjustments.
+**Decision:**
+- Implemented `calculateWeightMovingAverage()` using a rolling 7-day trailing window to dampen short-term noise and reveal true physiological mass trends.
+- Upgraded `PerformancePanel` in `app/src/components/progress-client.tsx` with multi-range period selection (`4w · 1M`, `8w · 2M`, `12w · 3M`, `24w · 6M`).
+- Displayed prominent "7-Day Smoothed" badge with delta vs raw scale weight.
+
+---
+
+## D-022 — Server-Authoritative Gamification Badges & Platform Plans (G1, I3, I4)
+
+**Date:** 2026-11-26
+**Context:** Badges, streaks, and subscription tiers must be evaluated deterministically and server-authoritatively to prevent client-side spoofing, while preserving full user data sovereignty.
+**Decision:**
+- Implemented `evaluateBadges()` in `app/src/lib/gamification.ts` covering key strength & consistency milestones: `century_club` (100+ workouts), `iron_streak_14` (14-day streak), `double_bw_squat` (2x bodyweight squat), `volume_titan` (50,000+ kg weekly volume), `protein_champion` (7 consecutive days hitting protein target).
+- Implemented `isFeatureUnlocked()` in `app/src/lib/plans.ts` with tiers: Free (unlimited logging forever), Pro (AI adaptive coach, photo-to-macro, form check, advanced analytics), and Gym B2B Partner (client roster, attendance tracking).
+- Implemented mock payment adapters for Razorpay (India UPI/cards) and Stripe (Global subscriptions) with INR (₹799/yr) and USD ($9.99/mo) currency switching.
+- Implemented 1-click unencumbered training data export (CSV & JSON) and local IndexedDB cache purge for complete user data sovereignty.
+
+
 

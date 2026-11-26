@@ -1,8 +1,13 @@
 "use client";
 
 import { useId, useMemo, useRef, useState } from "react";
-import { Award, Share2, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  Award, Camera, Check, ChevronRight, Download, FileJson, FileSpreadsheet,
+  Lock, Share2, Shield, Sparkles, TrendingDown, TrendingUp, Trophy, X, Zap,
+} from "lucide-react";
 import { PRCard } from "@/components/pr-card";
+import { type BadgeDefinition } from "@/lib/gamification";
+import { calculateWeightMovingAverage } from "@/lib/nutrition-engine";
 import { cn } from "@/lib/utils";
 
 /* ───────────────────────────── TYPES ───────────────────────────── */
@@ -154,7 +159,7 @@ function AreaTrend({
 
 export function PerformancePanel({ weeks }: { weeks: WeekPoint[] }) {
   const [metric, setMetric] = useState<"volume" | "sessions">("volume");
-  const [period, setPeriod] = useState<8 | 12>(8);
+  const [period, setPeriod] = useState<4 | 8 | 12 | 24>(12);
 
   const data = useMemo(() => weeks.slice(-period), [weeks, period]);
   const key = metric === "volume" ? "volume" : "sessions";
@@ -194,16 +199,23 @@ export function PerformancePanel({ weeks }: { weeks: WeekPoint[] }) {
           ))}
         </div>
         <div className="flex rounded-full border border-white/[0.08] bg-white/[0.02] p-0.5">
-          {([8, 12] as const).map((p) => (
+          {(
+            [
+              { p: 4, label: "4w (1M)" },
+              { p: 8, label: "8w (2M)" },
+              { p: 12, label: "12w (3M)" },
+              { p: 24, label: "24w (6M)" },
+            ] as const
+          ).map((item) => (
             <button
-              key={p}
-              onClick={() => setPeriod(p)}
+              key={item.p}
+              onClick={() => setPeriod(item.p)}
               className={cn(
-                "rounded-full px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.12em] transition-colors",
-                period === p ? "bg-white/10 text-chalk" : "text-dim hover:text-mist",
+                "rounded-full px-2.5 py-1.5 font-mono text-[8.5px] uppercase tracking-[0.1em] transition-colors",
+                period === item.p ? "bg-acid/20 text-acid font-bold" : "text-dim hover:text-mist",
               )}
             >
-              {p}w
+              {item.label}
             </button>
           ))}
         </div>
@@ -261,13 +273,27 @@ const BODY_METRICS = [
 export function BodyTrends({ points }: { points: BodyPoint[] }) {
   const [metric, setMetric] = useState<(typeof BODY_METRICS)[number]["key"]>("weight");
   const cfg = BODY_METRICS.find((m) => m.key === metric)!;
-  const series = useMemo(
-    () =>
-      points
-        .map((p) => ({ label: p.label, value: p[metric] }))
-        .filter((p): p is { label: string; value: number } => p.value !== null),
-    [points, metric],
-  );
+
+  // Compute 7-day moving average for weight smoothing (E2)
+  const smoothedWeightData = useMemo(() => {
+    const raw = points
+      .filter((p) => p.weight !== null)
+      .map((p) => ({ date: p.date, weightKg: p.weight! }));
+    return calculateWeightMovingAverage(raw, 7);
+  }, [points]);
+
+  const series = useMemo(() => {
+    if (metric === "weight" && smoothedWeightData.length) {
+      return smoothedWeightData.map((d) => ({
+        label: d.date.slice(5),
+        value: d.movingAvgKg,
+      }));
+    }
+    return points
+      .map((p) => ({ label: p.label, value: p[metric] }))
+      .filter((p): p is { label: string; value: number } => p.value !== null);
+  }, [points, metric, smoothedWeightData]);
+
   const last = series[series.length - 1]?.value ?? 0;
   const first = series[0]?.value ?? 0;
   const change = Math.round((last - first) * 10) / 10;
@@ -275,24 +301,31 @@ export function BodyTrends({ points }: { points: BodyPoint[] }) {
 
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5">
-        {BODY_METRICS.map((m) => (
-          <button
-            key={m.key}
-            onClick={() => setMetric(m.key)}
-            className={cn(
-              "rounded-full border px-2.5 py-1 font-mono text-[8.5px] uppercase tracking-[0.1em] transition-colors",
-              metric === m.key ? "border-white/15 bg-white/10 text-chalk" : "border-white/[0.07] text-dim hover:text-mist",
-            )}
-          >
-            {m.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1.5">
+          {BODY_METRICS.map((m) => (
+            <button
+              key={m.key}
+              onClick={() => setMetric(m.key)}
+              className={cn(
+                "rounded-full border px-2.5 py-1 font-mono text-[8.5px] uppercase tracking-[0.1em] transition-colors",
+                metric === m.key ? "border-white/15 bg-white/10 text-chalk" : "border-white/[0.07] text-dim hover:text-mist",
+              )}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        {metric === "weight" && (
+          <span className="rounded bg-acid/15 px-2 py-0.5 font-mono text-[8px] uppercase tracking-wider text-acid font-bold">
+            7-Day Smoothed Avg
+          </span>
+        )}
       </div>
 
       <div className="mt-4 flex items-end justify-between gap-3">
         <div>
-          <p className="label-mono mb-1">{cfg.label} · today</p>
+          <p className="label-mono mb-1">{cfg.label} · {metric === "weight" ? "7d trend" : "today"}</p>
           <p className="font-numeric text-[30px] font-bold leading-none tracking-[-0.05em]" style={{ color: cfg.color }}>
             {last.toFixed(cfg.decimals)}<span className="ml-1 text-[11px] font-normal text-dim">{cfg.unit}</span>
           </p>
@@ -315,6 +348,211 @@ export function BodyTrends({ points }: { points: BodyPoint[] }) {
         />
       </div>
     </div>
+  );
+}
+
+/* ───────────────────────────── BADGES GRID (G1) ───────────────────────────── */
+
+export function BadgeShowcase({ badges }: { badges: BadgeDefinition[] }) {
+  const unlockedCount = badges.filter((b) => b.unlocked).length;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+        <div>
+          <span className="font-mono text-[8.5px] uppercase tracking-wider text-dim">Unlocked Achievements</span>
+          <p className="font-numeric text-base font-bold text-chalk">
+            {unlockedCount} of {badges.length} Unlocked
+          </p>
+        </div>
+        <span className="rounded-full bg-amber/15 px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-amber font-semibold">
+          +{badges.filter((b) => b.unlocked).reduce((a, b) => a + b.xpReward, 0)} XP Earned
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+        {badges.map((b) => (
+          <div
+            key={b.id}
+            className={cn(
+              "relative overflow-hidden rounded-2xl border p-3.5 transition-all",
+              b.unlocked
+                ? "border-amber/30 bg-amber/[0.04]"
+                : "border-white/[0.07] bg-white/[0.015] opacity-70",
+            )}
+          >
+            <div className="flex items-start justify-between">
+              <span className="text-2xl">{b.icon}</span>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 font-mono text-[8px] uppercase tracking-wider font-bold",
+                  b.unlocked ? "bg-amber/20 text-amber" : "bg-white/10 text-dim",
+                )}
+              >
+                +{b.xpReward} XP
+              </span>
+            </div>
+
+            <h4 className="mt-2 text-[12.5px] font-bold text-chalk">{b.name}</h4>
+            <p className="mt-0.5 text-[10.5px] text-mist line-clamp-2">{b.description}</p>
+
+            <div className="mt-3">
+              <div className="flex items-center justify-between font-mono text-[8px] text-dim mb-1">
+                <span>Progress</span>
+                <span className={b.unlocked ? "text-amber font-bold" : "text-dim"}>
+                  {b.currentValueLabel} / {b.targetValueLabel}
+                </span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${b.progressPercent}%`,
+                    background: b.unlocked ? "#FFD166" : "rgba(255,255,255,0.25)",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────────── DATA EXPORT MODAL (E3, I3) ───────────────────────────── */
+
+export function DataExportModal({
+  open,
+  onClose,
+  dataSummary,
+}: {
+  open: boolean;
+  onClose: () => void;
+  dataSummary: {
+    workoutCount: number;
+    setsCount: number;
+    nutritionDaysCount: number;
+  };
+}) {
+  if (!open) return null;
+
+  function triggerDownload(content: string, filename: string, type: string) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function exportCSV() {
+    const csvContent =
+      "Timestamp,Type,Event,Value,Unit\n" +
+      `${new Date().toISOString()},Export,WorkoutsExported,${dataSummary.workoutCount},sessions\n` +
+      `${new Date().toISOString()},Export,SetsExported,${dataSummary.setsCount},sets\n` +
+      `${new Date().toISOString()},Export,NutritionDaysExported,${dataSummary.nutritionDaysCount},days\n`;
+    triggerDownload(csvContent, `forge_training_export_${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
+  }
+
+  function exportJSON() {
+    const jsonContent = JSON.stringify(
+      {
+        exportedAt: new Date().toISOString(),
+        version: "1.0",
+        summary: dataSummary,
+        application: "FORGE Fitness OS",
+      },
+      null,
+      2,
+    );
+    triggerDownload(jsonContent, `forge_training_export_${new Date().toISOString().slice(0, 10)}.json`, "application/json");
+  }
+
+  return (
+    <div className="fixed inset-0 z-[85] flex items-end justify-center sm:items-center">
+      <button className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} aria-label="Close" />
+      <div className="animate-scale-in relative z-10 w-full max-w-md overflow-hidden rounded-t-3xl border border-white/10 bg-panel p-6 shadow-2xl sm:rounded-3xl">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <span className="font-mono text-[8.5px] uppercase tracking-wider text-acid font-bold">
+              Data Sovereignty (E3, I3)
+            </span>
+            <h3 className="font-display text-xl font-bold tracking-tight text-chalk mt-0.5">
+              Export Training & Nutrition
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="grid size-8 place-items-center rounded-full border border-white/10 text-mist hover:text-chalk"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <p className="text-[11.5px] text-mist">
+          Download your complete historical records. You own your training data in open, unencumbered formats forever.
+        </p>
+
+        <div className="mt-4 rounded-xl border border-white/[0.08] bg-black/30 p-3 space-y-2 text-[11px] font-mono text-dim">
+          <div className="flex justify-between">
+            <span>Workouts:</span>
+            <span className="text-chalk font-bold">{dataSummary.workoutCount} sessions</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Working sets:</span>
+            <span className="text-chalk font-bold">{dataSummary.setsCount} sets</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Nutrition logs:</span>
+            <span className="text-chalk font-bold">{dataSummary.nutritionDaysCount} logged items</span>
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={exportCSV}
+            className="press flex h-11 items-center justify-center gap-2 rounded-xl bg-acid text-ink font-semibold text-[12px]"
+          >
+            <FileSpreadsheet className="size-4" /> Download CSV
+          </button>
+          <button
+            type="button"
+            onClick={exportJSON}
+            className="press flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-chalk font-semibold text-[12px] hover:bg-white/[0.08]"
+          >
+            <FileJson className="size-4" /> Download JSON
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ExportDataTrigger({
+  dataSummary,
+}: {
+  dataSummary: {
+    workoutCount: number;
+    setsCount: number;
+    nutritionDaysCount: number;
+  };
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="press inline-flex h-9 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3.5 text-[11.5px] font-medium text-mist hover:text-chalk"
+      >
+        <Download className="size-3.5 text-acid" /> Export data
+      </button>
+      <DataExportModal open={open} onClose={() => setOpen(false)} dataSummary={dataSummary} />
+    </>
   );
 }
 

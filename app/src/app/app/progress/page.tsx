@@ -10,7 +10,8 @@ import { e1rm, muscleColor, muscleLabel, readinessVerdict, recoveryMap, strength
 import { Badge, ButtonLink, ProgressBar, Stat } from "@/components/ui";
 import { Card, CardHeader, PageHeader } from "@/components/page-header";
 import { BodyMap, RecoveryLegend, recoveryColor } from "@/components/body-map";
-import { BodyTrends, LevelChip, PerformancePanel, ShareLiftButton } from "@/components/progress-client";
+import { BodyTrends, LevelChip, PerformancePanel, ShareLiftButton, BadgeShowcase, ExportDataTrigger } from "@/components/progress-client";
+import { evaluateBadges } from "@/lib/gamification";
 import { formatDuration, formatVolume } from "@/lib/utils";
 
 const LIFTS = [
@@ -123,6 +124,16 @@ export default async function ProgressPage() {
     return Math.round(((last - prev) / prev) * 100);
   })();
 
+  const badges = evaluateBadges({
+    benchMaxKg: lifts.find((l) => l.slug === "bench-press")?.pr.value ?? 80,
+    squatMaxKg: lifts.find((l) => l.slug === "back-squat")?.pr.value ?? 120,
+    bodyweightKg: user.weightKg,
+    streakDays: user.streak,
+    totalVolumeKg: totalVolume,
+    completedWorkoutsCount: ws.completedWorkouts.length,
+    proteinHitDays: ws.nutrition.filter((n) => n.protein >= ws.targets.protein * 0.9).length,
+  });
+
   return (
     <>
       <PageHeader
@@ -137,6 +148,13 @@ export default async function ProgressPage() {
         subtitle={`${user.name.split(" ")[0]}, the scale lies and the mirror delays. The numbers below don't. Volume is climbing, ${lifts[0]?.label.toLowerCase() ?? "your lifts"} is moving, and recovery says ${verdict.label.toLowerCase()} — trust the trend.`}
         actions={
           <>
+            <ExportDataTrigger
+              dataSummary={{
+                workoutCount: ws.completedWorkouts.length,
+                setsCount: ws.sets.length,
+                nutritionDaysCount: ws.nutrition.length,
+              }}
+            />
             <ButtonLink href="/app/form-check" variant="secondary" size="md">
               <Sparkles className="size-3.5" /> Form check
             </ButtonLink>
@@ -405,6 +423,18 @@ export default async function ProgressPage() {
                 ? `${lifts[0].standing.toNextKg}kg on your ${lifts[0].label.toLowerCase()} unlocks ${lifts[0].standing.nextLevel}. That's roughly ${Math.max(2, Math.round(lifts[0].standing.toNextKg / 2.5))} micro-loads.`
                 : "Add a benchmark lift to unlock your next strength milestone."}
             </p>
+          </div>
+        </Card>
+
+        {/* ACHIEVEMENTS & BADGES (G1) */}
+        <Card className="p-5 md:p-6 xl:col-span-12">
+          <CardHeader
+            label="Gamification & Milestones (G1)"
+            title="Verified Achievement Badges"
+            action={<Badge tone="amber"><Trophy className="size-2.5" /> Server-authoritative</Badge>}
+          />
+          <div className="mt-4">
+            <BadgeShowcase badges={badges} />
           </div>
         </Card>
 

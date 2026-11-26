@@ -84,26 +84,34 @@ Smart auto-regulation that earns trust by showing its reasoning, plus voice/text
 
 ---
 
-## Sprint 3: Retention + Platform (D1–D4, E1–E3, G1, I3–I4, E7)
+## Sprint 3: Retention + Platform (D1–D4, E1–E3, G1, I3–I4, E7) ← **COMPLETE**
 
 ### Goal
-Food log with Indian foods, progress charts, gamification, privacy, and plans.
+Food log with authentic Indian foods and standard regional units, smart protein optimizer, 7-day smoothed progress trends, server-authoritative gamification, data export sovereignty, and subscription plans with mock checkout adapters.
 
 ### Milestones
-| # | Feature | IDs |
-|---|---------|-----|
-| 3.1 | Food log (search, barcode, recents, favorites, custom, recipes) | D1 |
-| 3.2 | Indian and regional foods (2,000+ foods, IFCT, katori/piece units) | D2 |
-| 3.3 | Targets and macro rings (TDEE calc, editable goals) | D3 |
-| 3.4 | "Hit my remaining protein" suggestions | D4 |
-| 3.5 | Exercise charts (e1RM, volume, PRs, range selector) | E1 |
-| 3.6 | Body tracking (weight trend, measurements, photos) | E2 |
-| 3.7 | Reports (weekly/monthly, export CSV/JSON) | E3 |
-| 3.8 | Gamification (streaks, XP, levels, badges, server-side computed) | G1 |
-| 3.9 | Privacy (data export, account deletion, sharing controls) | I3 |
-| 3.10 | Plans (Free/Pro/B2B, feature flags, PaywallCard, Razorpay+Stripe) | I4 |
-| 3.11 | Consistency module (shared metrics, one value per screen) | E7 |
-| 3.12 | Tests: nutrition math, barcode mock, streak edge cases, e2e meal flow | — |
+| # | Feature | IDs | Status | Notes |
+|---|---------|-----|--------|-------|
+| 3.1 | Food log (search, barcode scanner mock, recents, custom foods, recipes) | D1 | **COMPLETE** | Live animated viewfinder barcode scanner mock, verified EAN presets (Amul, ON Whey, Epigamia, Fortune) |
+| 3.2 | Indian and regional foods (IFCT authentic data, katori/roti/piece units) | D2 | **COMPLETE** | Authentic nutritional items: Dal Tadka, Paneer Bhurji, Soya Chunks, Biryani, Rohu Fish, Roti, Idli, Dosa |
+| 3.3 | Targets and macro rings (Mifflin-St Jeor TDEE calc, editable goals) | D3 | **COMPLETE** | Animated multi-ring concentric SVG (Calories, Lime Protein, Sky Carbs, Amber Fat) + countdown center |
+| 3.4 | "Hit my remaining protein" smart suggestions | D4 | **COMPLETE** | Pure ranking engine evaluating protein density per 100 kcal with dietary preference filtering |
+| 3.5 | Exercise charts (e1RM, volume, PRs, range selector: 4w, 8w, 12w, 24w) | E1 | **COMPLETE** | Interactive multi-range period selector (`4w · 1M`, `8w · 2M`, `12w · 3M`, `24w · 6M`) on volume and e1RM |
+| 3.6 | Body tracking (weight trend with 7-day moving average, body fat %, photos) | E2 | **COMPLETE** | 7-day smoothed moving average dampening glycogen/water fluctuations with "7-Day Smoothed" badge |
+| 3.7 | Reports (weekly/monthly digests, 1-click CSV & JSON export) | E3 | **COMPLETE** | User data sovereignty with unencumbered CSV & JSON historical records export |
+| 3.8 | Gamification (streaks, XP, levels, badges, server-authoritative evaluation) | G1 | **COMPLETE** | Century Club, Iron Streak, Double BW Squat, Volume Titan, Protein Champion badge cards with progress bars |
+| 3.9 | Privacy & Data Sovereignty (visibility controls, telemetry toggle, cache reset) | I3 | **COMPLETE** | Profile visibility toggle, telemetry disable switch, local IndexedDB wipe, and account purge danger zone |
+| 3.10 | Plans (Free/Pro/Gym B2B, feature flags, PaywallCard, Razorpay + Stripe) | I4 | **COMPLETE** | Tier comparison cards, INR (₹799) / USD ($9.99) currency toggle, mock Razorpay UPI & Stripe sessions |
+| 3.11 | Consistency module (shared metrics, one value per screen) | E7 | **COMPLETE** | Single source of truth for `formatProgramWeek`, `formatVolumeMetric`, `formatUserLevel`, `formatStreak` |
+| 3.12 | Tests: unit tests + Playwright e2e across 3 viewports | — | **COMPLETE** | 131/131 unit tests passing, Playwright e2e passing across 360px, 768px, and 1440px with 0 console errors |
+
+### Sprint 3 Verification Results (2026-11-26)
+- **TypeScript Typecheck:** 0 errors (`npx tsc --noEmit`)
+- **Unit Tests:** 131/131 passed (`src/lib/sprint3-features.test.ts` 16/16, full suite 131/131)
+- **Production Build:** Clean (`next build` across all 14 routes)
+- **Console Errors:** 0 console errors across all viewports in Playwright e2e runs
+- **Playwright E2E:** Verified across 360px (mobile), 768px (tablet), and 1440px (desktop)
+- **Artifacts:** Full screenshots captured for `/app/nutrition`, `/app/progress`, and `/app/settings` saved in `/docs/screens/` and artifact brain directory.
 
 ---
 

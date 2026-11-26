@@ -66,6 +66,12 @@ export default async function NutritionPage() {
       burned={burned}
       streak={user.streak}
       week={week}
+      userProfile={{
+        weightKg: user.weightKg,
+        heightCm: user.heightCm,
+        sex: (user.sex as "male" | "female") || "male",
+        age: 26,
+      }}
     />
   );
 }

@@ -224,6 +224,78 @@ Beginner → Novice → Intermediate → Advanced → Elite
 
 ---
 
+## 14. Mifflin-St Jeor TDEE & Macro Targets (D3)
+
+Standard Mifflin-St Jeor equations calculate Basal Metabolic Rate (BMR):
+
+```
+Male BMR   = 10 × weightKg + 6.25 × heightCm - 5 × age + 5
+Female BMR = 10 × weightKg + 6.25 × heightCm - 5 × age - 161
+```
+
+**Activity Multipliers:**
+- `sedentary`: 1.20
+- `light`: 1.375 (1–3 training days/wk)
+- `moderate`: 1.55 (3–5 training days/wk)
+- `heavy`: 1.725 (6–7 hard training days/wk)
+- `athlete`: 1.90 (2x daily / physical job)
+
+**Goal Caloric Adjustments & Macro Splits:**
+- **Fat Loss (`cut`):** `TDEE - 500 kcal`
+  - Protein: `2.2 g/kg` bodyweight (spares lean mass in deficit)
+  - Fat: `25%` of total daily calories
+  - Carbs: Remainder of daily calories (`(calories - (protein × 4 + fat × 9)) / 4`)
+- **Maintenance (`maintain`):** `TDEE`
+  - Protein: `2.0 g/kg` bodyweight
+  - Fat: `25%` of total daily calories
+  - Carbs: Remainder of calories
+- **Lean Bulk (`bulk`):** `TDEE + 300 kcal`
+  - Protein: `2.0 g/kg` bodyweight
+  - Fat: `25%` of total daily calories
+  - Carbs: Remainder of calories
+
+---
+
+## 15. Smart Protein Optimizer: `hitRemainingProtein()` (D4)
+
+When a lifter has an evening protein deficit, `hitRemainingProtein(remainingGrams, remainingCalories, options)` generates actionable food items:
+
+```
+proteinDensity = (serving.protein / serving.calories) × 100
+```
+
+1. Filters available foods by dietary restriction (`vegetarian`, `vegan`, or `all`).
+2. Scales servings to deliver between 15g and the exact deficit remaining.
+3. Drops items that would exceed remaining calorie budget (unless calories remaining is severely restricted, in which case lowest calorie-per-gram options are prioritized).
+4. Sorts descending by protein density per 100 kcal.
+5. Returns top recommendations with exact grams, calories, and formatted serving label (e.g. `1 scoop (30g)`, `1.5 katori (225g)`).
+
+---
+
+## 16. 7-Day Moving Average Weight Smoothing (E2)
+
+Daily bodyweight is subject to acute fluctuations from sodium, carbohydrates, hydration, and digestion. `calculateWeightMovingAverage(dataPoints, windowSize = 7)` calculates:
+
+```
+smoothedWeight_t = (1 / k) × Σ weight_i    for i ∈ [t - k + 1, t]
+```
+
+- Operates across non-null scale weigh-ins.
+- Returns a 7-day trailing average curve.
+- Outputs the delta between the instantaneous scale weight and the 7-day trend, insulating lifters from emotional scale spikes.
+
+---
+
+## 17. Consistency Module Formatters (E7)
+
+Single source of truth in `app/src/lib/consistency.ts`:
+- `formatProgramWeek(current, total)`: Guarantees uniform `"Week X of Y"` across dashboard, train, and settings.
+- `formatVolumeMetric(val, type)`: Distinguishes projected load (`"14.7k kg proj."`) from historical volume (`"11.5k kg load"`).
+- `formatUserLevel(xp)`: Uses canonical square-root formula without hardcoded modulos.
+- `formatStreak(days)`: Formats streak count and consistency state across all widgets.
+
+---
+
 ## Contract for UI code
 
 1. Never compute level, e1RM, readiness, or target weights inline in a component.

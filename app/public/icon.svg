@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="forge-gold" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFF0BA"/>
+      <stop offset="35%" stop-color="#E4B865"/>
+      <stop offset="72%" stop-color="#C88D36"/>
+      <stop offset="100%" stop-color="#8A571A"/>
+    </linearGradient>
+    <linearGradient id="forge-bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#141513"/>
+      <stop offset="100%" stop-color="#070807"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#forge-bg)"/>
+  <rect x="1" y="1" width="62" height="62" rx="15" stroke="url(#forge-gold)" stroke-opacity="0.35" stroke-width="1.5"/>
+  <path d="M21 15H51L47.5 23H26.5L24.5 28.5H43.5L40 36.5H21.5L15 50H7.5L18.5 15H21Z" fill="url(#forge-gold)"/>
+  <path d="M19 15H51L47.5 23H22.5L19 15Z" fill="#FFF4C8" fill-opacity="0.28"/>
+</svg>

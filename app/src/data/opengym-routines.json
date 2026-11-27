@@ -1,0 +1,1814 @@
+[
+  {
+    "file": "starter/5x5.json",
+    "title": "5×5 strength",
+    "goal": "strength",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 50,
+    "tags": [
+      "barbell",
+      "linear progression"
+    ],
+    "description": "Five sets of five on the barbell lifts, three days a week. Few exercises, heavy weights, and a little more on the bar each time.",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "builtin": "5x5"
+  },
+  {
+    "file": "starter/bands.json",
+    "title": "Resistance bands",
+    "goal": "general",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 35,
+    "tags": [
+      "home",
+      "travel",
+      "bands"
+    ],
+    "description": "A set of bands fits in a drawer and still works every muscle. Two sessions taken in turns, three days a week.",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "builtin": "bands"
+  },
+  {
+    "file": "starter/dumbbells.json",
+    "title": "Dumbbells only",
+    "goal": "general",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 40,
+    "tags": [
+      "home",
+      "dumbbells"
+    ],
+    "description": "A pair of dumbbells and nothing else. Two full-body sessions that cover squats, hinges, presses and rows.",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "builtin": "dumbbells"
+  },
+  {
+    "file": "starter/full-body.json",
+    "title": "Full body",
+    "goal": "general",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 45,
+    "tags": [
+      "gym",
+      "first plan"
+    ],
+    "description": "Three full-body days with the big lifts up front. The plan to start with when you have a gym and no idea where to begin.",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "builtin": "full-body"
+  },
+  {
+    "file": "starter/home-bw.json",
+    "title": "Bodyweight at home",
+    "goal": "general",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 35,
+    "tags": [
+      "home",
+      "no equipment"
+    ],
+    "description": "Two short sessions for the living-room floor, taken in turns. Push-ups, squats, rows under a table and a plank to finish.",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "builtin": "home-bw"
+  },
+  {
+    "file": "starter/hotel.json",
+    "title": "Hotel room",
+    "goal": "general",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 30,
+    "tags": [
+      "travel",
+      "no equipment"
+    ],
+    "description": "One session for a hotel room between the bed and the desk. Quiet enough that the neighbours never find out.",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "builtin": "hotel"
+  },
+  {
+    "file": "starter/ppl.json",
+    "title": "Push, pull, legs",
+    "goal": "muscle",
+    "level": "intermediate",
+    "split": "ppl",
+    "duration": 60,
+    "tags": [
+      "gym",
+      "classic"
+    ],
+    "description": "The split everyone has heard of, for good reason. Pressing on Monday, pulling on Wednesday, legs on Friday, and a full rest in between.",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "builtin": "ppl"
+  },
+  {
+    "file": "starter/upper-lower.json",
+    "title": "Upper / lower",
+    "goal": "muscle",
+    "level": "intermediate",
+    "split": "upper-lower",
+    "duration": 55,
+    "tags": [
+      "gym",
+      "four days"
+    ],
+    "description": "Four days, each muscle twice a week. Two upper days and two lower days that swap the main lift, so nothing gets stale.",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "builtin": "upper-lower"
+  },
+  {
+    "file": "opengym/bar-and-floor.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "title": "Bar and floor, getting stronger",
+    "goal": "strength",
+    "level": "intermediate",
+    "split": "upper-lower",
+    "duration": 50,
+    "tags": [
+      "calisthenics",
+      "pull-up bar",
+      "dip bars"
+    ],
+    "description": "For when ten push-ups got easy. Low-rep pull-ups and dips, pistol work and hard core holds, four days a week on a bar and the floor.",
+    "sessions": [
+      {
+        "name": "Strength A",
+        "exercises": [
+          {
+            "id": "0652",
+            "sets": 5,
+            "reps": 5,
+            "rest": 150,
+            "note": "Add a backpack with books once 5 × 5 feels easy."
+          },
+          {
+            "id": "0251",
+            "sets": 4,
+            "reps": 8,
+            "rest": 120
+          },
+          {
+            "id": "1762",
+            "sets": 3,
+            "reps": 6,
+            "rest": 90,
+            "note": "Each leg, holding a door frame."
+          },
+          {
+            "id": "3419",
+            "sets": 4,
+            "sec": 20,
+            "rest": 60
+          },
+          {
+            "id": "0283",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          }
+        ]
+      },
+      {
+        "name": "Strength B",
+        "exercises": [
+          {
+            "id": "1326",
+            "sets": 4,
+            "reps": 8,
+            "rest": 120
+          },
+          {
+            "id": "2921",
+            "sets": 4,
+            "reps": 8,
+            "rest": 90
+          },
+          {
+            "id": "3743",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90,
+            "note": "Each leg."
+          },
+          {
+            "id": "0472",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60
+          },
+          {
+            "id": "0499",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "1246",
+            "sets": 3,
+            "sec": 30,
+            "rest": 45
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        1,
+        0
+      ],
+      [
+        2,
+        1
+      ],
+      [
+        4,
+        0
+      ],
+      [
+        5,
+        1
+      ]
+    ]
+  },
+  {
+    "file": "opengym/body-part-split.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "title": "Five days, one muscle at a time",
+    "goal": "muscle",
+    "level": "intermediate",
+    "split": "bro-split",
+    "duration": 60,
+    "tags": [
+      "gym",
+      "five days"
+    ],
+    "description": "Chest Monday, back Tuesday, and so on to arms on Friday. One muscle group a day, worked from several angles, with the weekend off.",
+    "sessions": [
+      {
+        "name": "Chest",
+        "exercises": [
+          {
+            "id": "0025",
+            "sets": 4,
+            "reps": 8,
+            "rest": 150
+          },
+          {
+            "id": "0314",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0308",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "0251",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0662",
+            "sets": 2,
+            "reps": 20,
+            "rest": 60,
+            "note": "Burnout: as many clean reps as you have."
+          }
+        ]
+      },
+      {
+        "name": "Back",
+        "exercises": [
+          {
+            "id": "0652",
+            "sets": 4,
+            "reps": 8,
+            "rest": 120
+          },
+          {
+            "id": "0027",
+            "sets": 4,
+            "reps": 8,
+            "rest": 120
+          },
+          {
+            "id": "2330",
+            "sets": 3,
+            "reps": 12,
+            "rest": 90
+          },
+          {
+            "id": "1323",
+            "sets": 3,
+            "reps": 12,
+            "rest": 90
+          },
+          {
+            "id": "0406",
+            "sets": 3,
+            "reps": 15,
+            "rest": 60
+          }
+        ]
+      },
+      {
+        "name": "Shoulders",
+        "exercises": [
+          {
+            "id": "1162",
+            "sets": 4,
+            "reps": 8,
+            "rest": 120
+          },
+          {
+            "id": "0334",
+            "sets": 4,
+            "reps": 15,
+            "rest": 60
+          },
+          {
+            "id": "0178",
+            "sets": 3,
+            "reps": 15,
+            "rest": 45
+          },
+          {
+            "id": "5609",
+            "sets": 3,
+            "reps": 15,
+            "rest": 45
+          },
+          {
+            "id": "0348",
+            "sets": 3,
+            "reps": 15,
+            "rest": 45
+          }
+        ]
+      },
+      {
+        "name": "Legs",
+        "exercises": [
+          {
+            "id": "0043",
+            "sets": 4,
+            "reps": 8,
+            "rest": 180
+          },
+          {
+            "id": "0085",
+            "sets": 3,
+            "reps": 10,
+            "rest": 120
+          },
+          {
+            "id": "0739",
+            "sets": 3,
+            "reps": 12,
+            "rest": 90
+          },
+          {
+            "id": "0586",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "0605",
+            "sets": 4,
+            "reps": 15,
+            "rest": 45
+          }
+        ]
+      },
+      {
+        "name": "Arms",
+        "exercises": [
+          {
+            "id": "0031",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60
+          },
+          {
+            "id": "0241",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "0313",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "0814",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60
+          },
+          {
+            "id": "0294",
+            "sets": 2,
+            "reps": 15,
+            "rest": 45
+          },
+          {
+            "id": "0200",
+            "sets": 2,
+            "reps": 15,
+            "rest": 45
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        1,
+        0
+      ],
+      [
+        2,
+        1
+      ],
+      [
+        3,
+        2
+      ],
+      [
+        4,
+        3
+      ],
+      [
+        5,
+        4
+      ]
+    ]
+  },
+  {
+    "file": "opengym/circuit-25.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "title": "Twenty-five minute circuit",
+    "goal": "endurance",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 25,
+    "tags": [
+      "home",
+      "no equipment",
+      "conditioning",
+      "short"
+    ],
+    "description": "Six moves, short rests, four rounds. Breathing hard is the plan. Needs a towel and about two square metres of floor.",
+    "sessions": [
+      {
+        "name": "Circuit",
+        "note": "Go through all six, then start again. Four rounds.",
+        "exercises": [
+          {
+            "id": "3094",
+            "sets": 4,
+            "sec": 40,
+            "rest": 20
+          },
+          {
+            "id": "1197",
+            "sets": 4,
+            "reps": 20,
+            "rest": 20
+          },
+          {
+            "id": "0662",
+            "sets": 4,
+            "reps": 12,
+            "rest": 20
+          },
+          {
+            "id": "0630",
+            "sets": 4,
+            "sec": 30,
+            "rest": 20
+          },
+          {
+            "id": "1160",
+            "sets": 4,
+            "reps": 10,
+            "rest": 30
+          },
+          {
+            "id": "0463",
+            "sets": 4,
+            "sec": 30,
+            "rest": 30
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        1,
+        0
+      ],
+      [
+        3,
+        0
+      ],
+      [
+        6,
+        0
+      ]
+    ]
+  },
+  {
+    "file": "opengym/desk-reset.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "title": "Twenty minutes for desk backs",
+    "goal": "general",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 20,
+    "tags": [
+      "home",
+      "mobility",
+      "short"
+    ],
+    "description": "A short floor routine for people who sit all day. Wakes up the glutes, opens the hips and teaches the core to hold your back still.",
+    "sessions": [
+      {
+        "name": "Reset",
+        "exercises": [
+          {
+            "id": "1053",
+            "sets": 2,
+            "sec": 45,
+            "rest": 15,
+            "note": "Each side."
+          },
+          {
+            "id": "1241",
+            "sets": 3,
+            "reps": 10,
+            "rest": 30
+          },
+          {
+            "id": "0276",
+            "sets": 3,
+            "reps": 10,
+            "rest": 30
+          },
+          {
+            "id": "2471",
+            "sets": 3,
+            "reps": 15,
+            "rest": 30
+          },
+          {
+            "id": "0715",
+            "sets": 2,
+            "sec": 30,
+            "rest": 20
+          },
+          {
+            "id": "4553",
+            "sets": 2,
+            "reps": 8,
+            "rest": 30
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        1,
+        0
+      ],
+      [
+        3,
+        0
+      ],
+      [
+        5,
+        0
+      ]
+    ]
+  },
+  {
+    "file": "opengym/dumbbell-sweat.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "title": "Sweat with two dumbbells",
+    "goal": "fatloss",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 35,
+    "tags": [
+      "home",
+      "dumbbells",
+      "conditioning"
+    ],
+    "description": "Strength moves with short rests, so the heart rate never quite settles. Keep the weights moderate and the pace honest.",
+    "sessions": [
+      {
+        "name": "Dumbbell circuit",
+        "exercises": [
+          {
+            "id": "1760",
+            "sets": 3,
+            "reps": 15,
+            "rest": 45
+          },
+          {
+            "id": "0293",
+            "sets": 3,
+            "reps": 12,
+            "rest": 45
+          },
+          {
+            "id": "0336",
+            "sets": 3,
+            "reps": 12,
+            "rest": 45,
+            "note": "Each leg."
+          },
+          {
+            "id": "0426",
+            "sets": 3,
+            "reps": 12,
+            "rest": 45
+          },
+          {
+            "id": "1459",
+            "sets": 3,
+            "reps": 12,
+            "rest": 45
+          },
+          {
+            "id": "10182",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        1,
+        0
+      ],
+      [
+        3,
+        0
+      ],
+      [
+        5,
+        0
+      ]
+    ]
+  },
+  {
+    "file": "opengym/ganzkoerper-zuhause.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "de",
+    "title": "Ganzkörper zu Hause in 30 Minuten",
+    "goal": "general",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 30,
+    "tags": [
+      "zuhause",
+      "ohne geräte"
+    ],
+    "description": "Zwei kurze Einheiten für Wohnzimmer und Küchentisch, im Wechsel an drei Tagen. Kein Gerät nötig, nur ein stabiler Tisch und zwei Stühle.",
+    "sessions": [
+      {
+        "name": "Tag A",
+        "exercises": [
+          {
+            "id": "0662",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "1197",
+            "sets": 3,
+            "reps": 20,
+            "rest": 60
+          },
+          {
+            "id": "3381",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60,
+            "note": "Unter einem stabilen Tisch."
+          },
+          {
+            "id": "0612",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60,
+            "note": "Pro Bein."
+          },
+          {
+            "id": "0715",
+            "sets": 3,
+            "sec": 30,
+            "rest": 30
+          }
+        ]
+      },
+      {
+        "name": "Tag B",
+        "exercises": [
+          {
+            "id": "2921",
+            "sets": 3,
+            "reps": 8,
+            "rest": 60
+          },
+          {
+            "id": "0781",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "3387",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60
+          },
+          {
+            "id": "2471",
+            "sets": 3,
+            "reps": 15,
+            "rest": 45
+          },
+          {
+            "id": "0276",
+            "sets": 3,
+            "reps": 10,
+            "rest": 45
+          },
+          {
+            "id": "0463",
+            "sets": 3,
+            "sec": 45,
+            "rest": 30
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        1,
+        0
+      ],
+      [
+        3,
+        1
+      ],
+      [
+        5,
+        0
+      ]
+    ]
+  },
+  {
+    "file": "opengym/glutes-first.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "title": "Lower body, glutes first",
+    "goal": "muscle",
+    "level": "intermediate",
+    "split": "upper-lower",
+    "duration": 55,
+    "tags": [
+      "gym",
+      "glutes",
+      "four days"
+    ],
+    "description": "An upper and lower split where the lower days start with hip thrusts and hinges. Four days, with enough upper work to keep things even.",
+    "sessions": [
+      {
+        "name": "Lower A",
+        "exercises": [
+          {
+            "id": "1060",
+            "sets": 4,
+            "reps": 10,
+            "rest": 120
+          },
+          {
+            "id": "0085",
+            "sets": 3,
+            "reps": 10,
+            "rest": 120
+          },
+          {
+            "id": "2290",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90,
+            "note": "Each leg."
+          },
+          {
+            "id": "1409",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "0605",
+            "sets": 3,
+            "reps": 15,
+            "rest": 45
+          }
+        ]
+      },
+      {
+        "name": "Upper A",
+        "exercises": [
+          {
+            "id": "0289",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "2330",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0426",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "1323",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "0334",
+            "sets": 3,
+            "reps": 15,
+            "rest": 45
+          }
+        ]
+      },
+      {
+        "name": "Lower B",
+        "exercises": [
+          {
+            "id": "0043",
+            "sets": 3,
+            "reps": 8,
+            "rest": 150
+          },
+          {
+            "id": "0431",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90,
+            "note": "Each leg."
+          },
+          {
+            "id": "1061",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90,
+            "note": "Each leg."
+          },
+          {
+            "id": "0586",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "0703",
+            "sets": 3,
+            "reps": 12,
+            "rest": 45
+          }
+        ]
+      },
+      {
+        "name": "Upper B",
+        "exercises": [
+          {
+            "id": "0314",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0293",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "5609",
+            "sets": 3,
+            "reps": 15,
+            "rest": 45
+          },
+          {
+            "id": "0313",
+            "sets": 3,
+            "reps": 12,
+            "rest": 45
+          },
+          {
+            "id": "0241",
+            "sets": 3,
+            "reps": 12,
+            "rest": 45
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        1,
+        0
+      ],
+      [
+        2,
+        1
+      ],
+      [
+        4,
+        2
+      ],
+      [
+        5,
+        3
+      ]
+    ]
+  },
+  {
+    "file": "opengym/linear-strength.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "title": "Three lifts a day, a bit more each time",
+    "goal": "strength",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 50,
+    "tags": [
+      "barbell",
+      "linear progression"
+    ],
+    "description": "Two short barbell days taken in turns. Squat every session, alternate the presses and pulls, and add a small plate whenever all the sets went well.",
+    "about": "This is the shape most first strength programmes share: three sessions a week, squats every time, and progress measured in kilos rather than in how tired you feel.\n\nStart lighter than your ego wants. Add 2.5 kg to the squat and deadlift, and 1 to 2.5 kg to the presses, every session you finish all the reps. When a lift stalls three times in a row, take ten percent off and build back up.",
+    "sessions": [
+      {
+        "name": "Day A",
+        "exercises": [
+          {
+            "id": "0043",
+            "sets": 3,
+            "reps": 5,
+            "rest": 180
+          },
+          {
+            "id": "0025",
+            "sets": 3,
+            "reps": 5,
+            "rest": 180
+          },
+          {
+            "id": "0027",
+            "sets": 3,
+            "reps": 5,
+            "rest": 150
+          }
+        ]
+      },
+      {
+        "name": "Day B",
+        "exercises": [
+          {
+            "id": "0043",
+            "sets": 3,
+            "reps": 5,
+            "rest": 180
+          },
+          {
+            "id": "1162",
+            "sets": 3,
+            "reps": 5,
+            "rest": 180
+          },
+          {
+            "id": "0032",
+            "sets": 1,
+            "reps": 5,
+            "rest": 240,
+            "note": "One heavy set after warm-ups. That is the whole point."
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        1,
+        0
+      ],
+      [
+        3,
+        1
+      ],
+      [
+        5,
+        0
+      ]
+    ]
+  },
+  {
+    "file": "opengym/one-kettlebell.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "title": "One kettlebell, three days",
+    "goal": "general",
+    "level": "intermediate",
+    "split": "full-body",
+    "duration": 35,
+    "tags": [
+      "home",
+      "kettlebell"
+    ],
+    "description": "Everything you can do with a single bell: swings for the engine, get-ups for the shoulders, and goblet squats for the legs. Takes up less floor than a yoga mat.",
+    "sessions": [
+      {
+        "name": "Swing day",
+        "exercises": [
+          {
+            "id": "0549",
+            "sets": 5,
+            "reps": 15,
+            "rest": 60
+          },
+          {
+            "id": "0534",
+            "sets": 4,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0540",
+            "sets": 3,
+            "reps": 8,
+            "rest": 90,
+            "note": "Each side."
+          },
+          {
+            "id": "0541",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60,
+            "note": "Each side."
+          }
+        ]
+      },
+      {
+        "name": "Get-up day",
+        "exercises": [
+          {
+            "id": "4057",
+            "sets": 3,
+            "reps": 3,
+            "rest": 90,
+            "note": "Each side, slowly. It is a lift, not a race."
+          },
+          {
+            "id": "3322",
+            "sets": 3,
+            "reps": 12,
+            "rest": 90
+          },
+          {
+            "id": "3732",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60
+          },
+          {
+            "id": "0554",
+            "sets": 2,
+            "reps": 6,
+            "rest": 60
+          },
+          {
+            "id": "1568",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        1,
+        0
+      ],
+      [
+        3,
+        1
+      ],
+      [
+        5,
+        0
+      ]
+    ]
+  },
+  {
+    "file": "opengym/ppl-six-days.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "title": "Push, pull, legs, twice",
+    "goal": "muscle",
+    "level": "advanced",
+    "split": "ppl",
+    "duration": 65,
+    "tags": [
+      "gym",
+      "six days",
+      "volume"
+    ],
+    "description": "Six days on, one off. Every muscle twice a week, with a heavier day and a lighter, pumpier day for each, for people who like living at the gym.",
+    "about": "The first three days lead with a heavy compound lift in low reps; the second three use dumbbells, cables and machines for more reps. Keep a rep or two in the tank on the accessories, you will be back for more in three days.\n\nIf six days turns out to be one too many, drop the last legs day and you have a perfectly respectable five-day plan.",
+    "sessions": [
+      {
+        "name": "Push, heavy",
+        "exercises": [
+          {
+            "id": "0025",
+            "sets": 4,
+            "reps": 6,
+            "rest": 150
+          },
+          {
+            "id": "1162",
+            "sets": 3,
+            "reps": 8,
+            "rest": 120
+          },
+          {
+            "id": "0047",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0334",
+            "sets": 4,
+            "reps": 15,
+            "rest": 60
+          },
+          {
+            "id": "0241",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          }
+        ]
+      },
+      {
+        "name": "Pull, heavy",
+        "exercises": [
+          {
+            "id": "0032",
+            "sets": 3,
+            "reps": 5,
+            "rest": 180
+          },
+          {
+            "id": "0652",
+            "sets": 4,
+            "reps": 8,
+            "rest": 120
+          },
+          {
+            "id": "0027",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "5609",
+            "sets": 3,
+            "reps": 15,
+            "rest": 60
+          },
+          {
+            "id": "0031",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60
+          }
+        ]
+      },
+      {
+        "name": "Legs, heavy",
+        "exercises": [
+          {
+            "id": "0043",
+            "sets": 4,
+            "reps": 6,
+            "rest": 180
+          },
+          {
+            "id": "0085",
+            "sets": 3,
+            "reps": 10,
+            "rest": 120
+          },
+          {
+            "id": "0739",
+            "sets": 3,
+            "reps": 12,
+            "rest": 90
+          },
+          {
+            "id": "0586",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "0605",
+            "sets": 4,
+            "reps": 15,
+            "rest": 45
+          }
+        ]
+      },
+      {
+        "name": "Push, volume",
+        "exercises": [
+          {
+            "id": "0289",
+            "sets": 4,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0426",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0251",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0178",
+            "sets": 3,
+            "reps": 15,
+            "rest": 45
+          },
+          {
+            "id": "0200",
+            "sets": 3,
+            "reps": 12,
+            "rest": 45
+          }
+        ]
+      },
+      {
+        "name": "Pull, volume",
+        "exercises": [
+          {
+            "id": "2330",
+            "sets": 4,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "1323",
+            "sets": 4,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0293",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "0348",
+            "sets": 3,
+            "reps": 15,
+            "rest": 45
+          },
+          {
+            "id": "0313",
+            "sets": 3,
+            "reps": 12,
+            "rest": 45
+          }
+        ]
+      },
+      {
+        "name": "Legs, volume",
+        "exercises": [
+          {
+            "id": "2290",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90,
+            "note": "Each leg."
+          },
+          {
+            "id": "1060",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0585",
+            "sets": 3,
+            "reps": 15,
+            "rest": 60
+          },
+          {
+            "id": "0586",
+            "sets": 3,
+            "reps": 15,
+            "rest": 60
+          },
+          {
+            "id": "0605",
+            "sets": 4,
+            "reps": 15,
+            "rest": 45
+          },
+          {
+            "id": "0472",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        1,
+        0
+      ],
+      [
+        2,
+        1
+      ],
+      [
+        3,
+        2
+      ],
+      [
+        4,
+        3
+      ],
+      [
+        5,
+        4
+      ],
+      [
+        6,
+        5
+      ]
+    ]
+  },
+  {
+    "file": "opengym/pullup-bar-basics.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "title": "Pull-up bar basics",
+    "goal": "general",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 40,
+    "tags": [
+      "home",
+      "pull-up bar"
+    ],
+    "description": "Three short sessions for a doorway bar and the floor. Pulling, pushing, legs and core, no gym membership needed.",
+    "sessions": [
+      {
+        "name": "Bar A",
+        "exercises": [
+          {
+            "id": "0652",
+            "sets": 3,
+            "reps": 6,
+            "rest": 120,
+            "note": "No pull-up yet? Jump up and lower yourself as slowly as you can."
+          },
+          {
+            "id": "0662",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "1197",
+            "sets": 3,
+            "reps": 15,
+            "rest": 60
+          },
+          {
+            "id": "9819",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60
+          },
+          {
+            "id": "0463",
+            "sets": 3,
+            "sec": 40,
+            "rest": 45
+          }
+        ]
+      },
+      {
+        "name": "Bar B",
+        "exercises": [
+          {
+            "id": "1326",
+            "sets": 3,
+            "reps": 6,
+            "rest": 120
+          },
+          {
+            "id": "2921",
+            "sets": 3,
+            "reps": 8,
+            "rest": 90
+          },
+          {
+            "id": "0781",
+            "sets": 3,
+            "reps": 10,
+            "rest": 60,
+            "note": "Each leg."
+          },
+          {
+            "id": "2471",
+            "sets": 3,
+            "reps": 15,
+            "rest": 60
+          },
+          {
+            "id": "0715",
+            "sets": 2,
+            "sec": 30,
+            "rest": 30
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        1,
+        0
+      ],
+      [
+        3,
+        1
+      ],
+      [
+        5,
+        0
+      ]
+    ]
+  },
+  {
+    "file": "opengym/ten-sets-of-ten.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "title": "Ten sets of ten",
+    "goal": "muscle",
+    "level": "advanced",
+    "split": "other",
+    "duration": 75,
+    "tags": [
+      "gym",
+      "volume",
+      "short block"
+    ],
+    "description": "One big lift, ten sets of ten, then a little extra. An old bodybuilding idea for a four to six week block when growth has stalled.",
+    "about": "Pick a weight you could lift about twenty times and keep it for all ten sets, resting 90 seconds. The first sets feel too easy. Sets nine and ten do not.\n\nRun it for four to six weeks at most, then go back to something with fewer sets. Your joints will thank you.",
+    "sessions": [
+      {
+        "name": "Chest and back",
+        "exercises": [
+          {
+            "id": "0025",
+            "sets": 10,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0027",
+            "sets": 10,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0334",
+            "sets": 3,
+            "reps": 15,
+            "rest": 45
+          }
+        ]
+      },
+      {
+        "name": "Legs",
+        "exercises": [
+          {
+            "id": "0043",
+            "sets": 10,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0586",
+            "sets": 10,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0605",
+            "sets": 3,
+            "reps": 15,
+            "rest": 45
+          }
+        ]
+      },
+      {
+        "name": "Shoulders and arms",
+        "exercises": [
+          {
+            "id": "0426",
+            "sets": 10,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0031",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          },
+          {
+            "id": "0241",
+            "sets": 3,
+            "reps": 12,
+            "rest": 60
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        1,
+        0
+      ],
+      [
+        3,
+        1
+      ],
+      [
+        5,
+        2
+      ]
+    ]
+  },
+  {
+    "file": "opengym/twice-a-week.json",
+    "author": {
+      "name": "openGym",
+      "url": "https://opengym.ch/"
+    },
+    "license": "CC-BY-4.0",
+    "added": "2026-11-08",
+    "language": "en",
+    "title": "Twice a week, still counts",
+    "goal": "general",
+    "level": "beginner",
+    "split": "full-body",
+    "duration": 40,
+    "tags": [
+      "gym",
+      "busy",
+      "two days"
+    ],
+    "description": "For weeks that only have room for two gym visits. Two full-body sessions that hit everything, so missing the third day is no longer a thing.",
+    "sessions": [
+      {
+        "name": "Full body A",
+        "exercises": [
+          {
+            "id": "0043",
+            "sets": 3,
+            "reps": 8,
+            "rest": 150
+          },
+          {
+            "id": "0025",
+            "sets": 3,
+            "reps": 8,
+            "rest": 120
+          },
+          {
+            "id": "2330",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0463",
+            "sets": 3,
+            "sec": 45,
+            "rest": 45
+          }
+        ]
+      },
+      {
+        "name": "Full body B",
+        "exercises": [
+          {
+            "id": "0032",
+            "sets": 3,
+            "reps": 5,
+            "rest": 180
+          },
+          {
+            "id": "0426",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "1323",
+            "sets": 3,
+            "reps": 10,
+            "rest": 90
+          },
+          {
+            "id": "0612",
+            "sets": 2,
+            "reps": 10,
+            "rest": 60,
+            "note": "Each leg."
+          }
+        ]
+      }
+    ],
+    "schedule": [
+      [
+        2,
+        0
+      ],
+      [
+        5,
+        1
+      ]
+    ]
+  }
+]

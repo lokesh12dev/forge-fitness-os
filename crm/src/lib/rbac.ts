@@ -24,6 +24,17 @@ export type CrmPermission =
   | "checkin:operate"
   | "checkin:override"
   | "audit:read"
+  | "leads:read"
+  | "leads:write"
+  | "leads:roi"
+  | "inbox:read"
+  | "inbox:write"
+  | "campaigns:broadcast"
+  | "automations:manage"
+  | "retention:read"
+  | "retention:outreach"
+  | "loyalty:read"
+  | "loyalty:manage"
   | "portal:self";
 
 const ROLE_PERMISSIONS: Record<CrmRole, ReadonlySet<CrmPermission>> = {
@@ -46,6 +57,17 @@ const ROLE_PERMISSIONS: Record<CrmRole, ReadonlySet<CrmPermission>> = {
     "checkin:operate",
     "checkin:override",
     "audit:read",
+    "leads:read",
+    "leads:write",
+    "leads:roi",
+    "inbox:read",
+    "inbox:write",
+    "campaigns:broadcast",
+    "automations:manage",
+    "retention:read",
+    "retention:outreach",
+    "loyalty:read",
+    "loyalty:manage",
   ]),
   MANAGER: new Set<CrmPermission>([
     "dashboard:ops",
@@ -64,6 +86,17 @@ const ROLE_PERMISSIONS: Record<CrmRole, ReadonlySet<CrmPermission>> = {
     "checkin:operate",
     "checkin:override",
     "audit:read",
+    "leads:read",
+    "leads:write",
+    "leads:roi",
+    "inbox:read",
+    "inbox:write",
+    "campaigns:broadcast",
+    "automations:manage",
+    "retention:read",
+    "retention:outreach",
+    "loyalty:read",
+    "loyalty:manage",
   ]),
   FRONTDESK: new Set<CrmPermission>([
     "dashboard:ops",
@@ -76,21 +109,32 @@ const ROLE_PERMISSIONS: Record<CrmRole, ReadonlySet<CrmPermission>> = {
     "billing:cash_close",
     "checkin:operate",
     "checkin:override",
+    "leads:read",
+    "leads:write",
+    "inbox:read",
+    "inbox:write",
+    "retention:read",
+    "retention:outreach",
+    "loyalty:read",
+    "loyalty:manage",
   ]),
-  // Trainer strictly has NO finance/billing/invoice permissions
+  // Trainer strictly has NO finance/billing/ROI/broadcasts/automations permissions
   TRAINER: new Set<CrmPermission>([
     "dashboard:ops",
     "members:read",
     "members:health:read",
     "checkin:operate",
+    "leads:read",
+    "retention:read",
   ]),
-  // Accountant is strictly read-only on finance, billing, expenses & audit
+  // Accountant is strictly read-only on finance, billing, ROI, expenses & audit
   ACCOUNTANT: new Set<CrmPermission>([
     "dashboard:finance",
     "plans:read",
     "billing:read",
     "expenses:read",
     "audit:read",
+    "leads:roi",
   ]),
   MEMBER: new Set<CrmPermission>(["portal:self"]),
 };

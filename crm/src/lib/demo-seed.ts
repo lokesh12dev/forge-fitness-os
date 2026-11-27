@@ -170,6 +170,8 @@ export async function seedFullDemoWorkspace(prisma: PrismaClient, targetOrgId?: 
 
   const trainerUserIds: string[] = [];
   let ownerUserId = "";
+  let frontDeskUserId = "";
+  let managerUserId = "";
 
   for (const s of staffDefs) {
     const user = await prisma.user.upsert({
@@ -194,8 +196,12 @@ export async function seedFullDemoWorkspace(prisma: PrismaClient, targetOrgId?: 
       },
     });
     if (s.role === "OWNER" && !ownerUserId) ownerUserId = user.id;
+    if (s.role === "FRONTDESK" && !frontDeskUserId) frontDeskUserId = user.id;
+    if (s.role === "MANAGER" && !managerUserId) managerUserId = user.id;
     if (s.role === "TRAINER") trainerUserIds.push(user.id);
   }
+  if (!frontDeskUserId) frontDeskUserId = ownerUserId;
+  if (!managerUserId) managerUserId = ownerUserId;
 
   // Branch holidays
   await prisma.branchHoliday.createMany({
@@ -274,6 +280,8 @@ export async function seedFullDemoWorkspace(prisma: PrismaClient, targetOrgId?: 
     status: MemberStatus;
     expiryDate: Date;
     lastVisitedAt: Date;
+    dob: Date;
+    createdAt: Date;
     groupId: string | null;
     assignedTrainerId: string;
     referralCode: string;
@@ -320,6 +328,16 @@ export async function seedFullDemoWorkspace(prisma: PrismaClient, targetOrgId?: 
 
     const expiryDate = new Date(now.getTime() + expiryOffsetDays * 86_400_000);
     const lastVisitedAt = new Date(now.getTime() - lastVisitOffsetDays * 86_400_000);
+    const joinMonthsAgo = i % 6;
+    const joinedAt =
+      i >= 585
+        ? new Date(now.getTime() - (1 + (i % 10)) * 86_400_000) // recent NEW_JOINERS
+        : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - joinMonthsAgo, 3 + (i % 20)));
+    const dobYear = 1986 + (i % 16);
+    const dob =
+      i < 4
+        ? new Date(Date.UTC(dobYear, now.getUTCMonth(), now.getUTCDate())) // today's birthdays
+        : new Date(Date.UTC(dobYear, i % 12, 1 + (i % 28)));
     const trainerId = trainerUserIds[i % Math.max(1, trainerUserIds.length)] ?? ownerUserId;
     const tagPool =
       status === "EXPIRING"
@@ -350,6 +368,8 @@ export async function seedFullDemoWorkspace(prisma: PrismaClient, targetOrgId?: 
       status,
       expiryDate,
       lastVisitedAt,
+      dob,
+      createdAt: joinedAt,
       groupId: i < 4 ? familyGroup.id : i % 80 === 10 ? corpGroup.id : null,
       assignedTrainerId: trainerId,
       referralCode: `REF${String(2000 + i)}`,
@@ -366,12 +386,27 @@ export async function seedFullDemoWorkspace(prisma: PrismaClient, targetOrgId?: 
   const noteRows = [];
   const commRows = [];
 
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < memberRowsData.length; i++) {
     const m = memberRowsData[i]!;
-    consentRows.push(
-      { orgId: org.id, branchId: m.branchId, memberId: m.id, channel: "WHATSAPP" as const, granted: true, source: "Front-desk signup" },
-      { orgId: org.id, branchId: m.branchId, memberId: m.id, channel: "HEALTH_DATA" as const, granted: true, source: "DPDP Health Consent" }
-    );
+    consentRows.push({
+      orgId: org.id,
+      branchId: m.branchId,
+      memberId: m.id,
+      channel: "WHATSAPP" as const,
+      granted: i % 8 !== 7, // ~87.5% opted in, 12.5% opted out for realistic broadcast filtering
+      source: i % 8 === 7 ? "Member STOP opt-out" : "Front-desk signup",
+    });
+    if (i < 60) {
+      consentRows.push({
+        orgId: org.id,
+        branchId: m.branchId,
+        memberId: m.id,
+        channel: "HEALTH_DATA" as const,
+        granted: true,
+        source: "DPDP Health Consent",
+      });
+    }
+    if (i >= 60) continue;
     measurementRows.push(
       {
         orgId: org.id,
@@ -656,16 +691,27 @@ export async function seedFullDemoWorkspace(prisma: PrismaClient, targetOrgId?: 
     await prisma.checkIn.createMany({ data: batch });
   }
 
-  // 7. Seed 300 Leads across all 7 stages + Staff Tasks
+  // 7. Seed 300 Leads across all 7 stages + Tasks + Source Ad Spend + Phase 2 Growth Engine
+  const lostReasons = [
+    "Price / budget mismatch",
+    "Joined competitor closer to home",
+    "Schedule conflict — morning slots full",
+    "Travelling for 6 weeks",
+  ];
   const leadData = [];
+  const leadTaskData = [];
   for (let i = 0; i < 300; i++) {
+    const id = `lead_${org.id.slice(-6)}_${String(i + 1).padStart(4, "0")}`;
     const branch = i % 2 === 0 ? branchA : branchB;
     const fn = FIRST_NAMES[(i * 7) % FIRST_NAMES.length]!;
     const ln = LAST_NAMES[(i * 3) % LAST_NAMES.length]!;
     const stage = LEAD_STAGES[i % LEAD_STAGES.length]!;
     const daysAgo = Math.floor(rand() * 60);
     const createdAt = i < 14 ? new Date(now.getTime() - i * 3600_000) : new Date(now.getTime() - daysAgo * 86_400_000);
+    const convertedMember = stage === "WON" ? memberRowsData[(i * 7) % 395] : undefined;
+
     leadData.push({
+      id,
       orgId: org.id,
       branchId: branch.id,
       fullName: `${fn} ${ln}`,
@@ -673,13 +719,368 @@ export async function seedFullDemoWorkspace(prisma: PrismaClient, targetOrgId?: 
       email: `lead.${fn.toLowerCase()}.${i}@mail.in`,
       source: LEAD_SOURCES[i % LEAD_SOURCES.length]!,
       stage,
-      score: 40 + (i % 55),
-      trialAt: stage === "TRIAL_BOOKED" ? new Date(now.getTime() + ((i % 3) * 3600_000)) : null,
-      ownerId: ownerUserId,
+      score: stage === "LOST" ? 10 : Math.min(98, 42 + (i % 55)),
+      trialAt:
+        stage === "TRIAL_BOOKED"
+          ? new Date(now.getTime() + (2 + (i % 48)) * 3600_000)
+          : stage === "TRIAL_DONE"
+          ? new Date(now.getTime() - (1 + (i % 5)) * 86_400_000)
+          : null,
+      lostReason: stage === "LOST" ? lostReasons[i % lostReasons.length]! : null,
+      ownerId: i % 3 === 0 ? frontDeskUserId : i % 3 === 1 ? managerUserId : ownerUserId,
+      convertedMemberId: convertedMember?.id ?? null,
+      notes: stage === "NEGOTIATION" ? "Asked for 2-installment UPI option on Strength Quarterly." : null,
       createdAt,
     });
+
+    if (i < 24 && stage !== "WON" && stage !== "LOST") {
+      leadTaskData.push({
+        orgId: org.id,
+        branchId: branch.id,
+        leadId: id,
+        title:
+          stage === "TRIAL_BOOKED"
+            ? "Confirm trial mat & coach slot 2h prior"
+            : stage === "NEGOTIATION"
+            ? "Send EARLYBIRD15 + UPI split quote"
+            : "Intro call & book tour walkthrough",
+        dueAt: new Date(now.getTime() + (i % 6) * 3600_000),
+        status: i < 4 ? ("DONE" as const) : ("OPEN" as const),
+        assignedToId: i % 2 === 0 ? frontDeskUserId : ownerUserId,
+      });
+    }
   }
   await prisma.lead.createMany({ data: leadData });
+  await prisma.leadTask.createMany({ data: leadTaskData });
+
+  // Source Ad Spend Campaigns (for Source ROI report)
+  const monthYm = now.toISOString().slice(0, 7);
+  await prisma.adSpendCampaign.createMany({
+    data: [
+      { orgId: org.id, branchId: branchA.id, source: "Instagram", monthYm, spendPaise: 3200000, note: "Meta Reels transformation ads BLR+MUM" },
+      { orgId: org.id, branchId: branchA.id, source: "Google", monthYm, spendPaise: 2800000, note: "Local high-intent gym keywords" },
+      { orgId: org.id, branchId: branchA.id, source: "Justdial", monthYm, spendPaise: 1500000, note: "Justdial verified platinum listing" },
+      { orgId: org.id, branchId: branchA.id, source: "Website", monthYm, spendPaise: 600000, note: "SEO & landing embed" },
+      { orgId: org.id, branchId: branchA.id, source: "WhatsApp", monthYm, spendPaise: 350000, note: "Click-to-WhatsApp enquiry bot" },
+      { orgId: org.id, branchId: branchA.id, source: "Referral", monthYm, spendPaise: 850000, note: "REF500 friend-credit vouchers" },
+      { orgId: org.id, branchId: branchA.id, source: "Walk-in", monthYm, spendPaise: 200000, note: "Street facade signage & QR standee" },
+    ],
+  });
+
+  // Communication Center: Templates, 2-Way Inbox Threads, Broadcast Campaigns
+  await prisma.messageTemplate.createMany({
+    data: [
+      {
+        orgId: org.id,
+        code: "WELCOME_CHECKLIST",
+        name: "Day-1 Welcome & QR Check-In",
+        channel: "WHATSAPP",
+        body: "Welcome to {branch}, {name}! Your {plan} pass is active until {expiry}. Show your FORGE QR at reception.",
+        variables: ["{name}", "{plan}", "{expiry}", "{branch}"],
+        approvalStatus: "APPROVED",
+      },
+      {
+        orgId: org.id,
+        code: "EXPIRY_REMINDER_7D",
+        name: "T-7 Plan Renewal Nudge",
+        channel: "WHATSAPP",
+        body: "Hi {name}, your {plan} expires on {expiry}. Renew now at {branch} desk to keep your streak unbroken.",
+        variables: ["{name}", "{plan}", "{expiry}", "{branch}"],
+        approvalStatus: "APPROVED",
+      },
+      {
+        orgId: org.id,
+        code: "DUES_PAYMENT_LINK",
+        name: "Pending Balance UPI Reminder",
+        channel: "WHATSAPP",
+        body: "Hi {name}, pending balance of {due_amount} is open on your {plan} invoice. Reply LINK for instant UPI checkout.",
+        variables: ["{name}", "{plan}", "{due_amount}"],
+        approvalStatus: "APPROVED",
+      },
+      {
+        orgId: org.id,
+        code: "BIRTHDAY_PERK",
+        name: "Member Birthday Complimentary Guest Pass",
+        channel: "WHATSAPP",
+        body: "Happy Birthday {name}! Enjoy 2 complimentary guest passes + coach Mobility Reset session this week at {branch}.",
+        variables: ["{name}", "{branch}"],
+        approvalStatus: "APPROVED",
+      },
+      {
+        orgId: org.id,
+        code: "WINBACK_COME_BACK",
+        name: "30-Day Win-Back Restart Offer",
+        channel: "WHATSAPP",
+        body: "Hey {name}, we miss you at {branch}! Restart your {plan} this month with ₹500 loyalty credit.",
+        variables: ["{name}", "{plan}", "{branch}"],
+        approvalStatus: "PENDING_META",
+      },
+      {
+        orgId: org.id,
+        code: "SMS_PAYMENT_RECEIPT",
+        name: "GST Invoice Confirmation SMS",
+        channel: "SMS",
+        body: "FORGE CRM: Receipt confirmed for {name} ({plan}). Pending balance: {due_amount}.",
+        variables: ["{name}", "{plan}", "{due_amount}"],
+        approvalStatus: "APPROVED",
+      },
+    ],
+  });
+
+  const inboxTargets = [
+    { idx: 0, unread: 1, msgIn: "Hi team, can I freeze my membership for 5 days next week for travel?", msgOut: "Hi Aarav! Yes, Strength Quarterly includes 15 freeze days with ₹0 fee." },
+    { idx: 1, unread: 2, msgIn: "Can I book my 6 PM assessment slot with Coach Vikram tomorrow?", msgOut: "Confirmed for 6:00 PM at Indiranagar HQ!" },
+    { idx: 396, unread: 1, msgIn: "Saw my T-7 renewal alert. Does REF500 apply on Quarterly?", msgOut: "Yes! REF500 knocks ₹500 off Quarterly and Annual renewals." },
+    { idx: 456, unread: 1, msgIn: "Please resend my UPI split link for the pending balance.", msgOut: "Sending your ₹1,999 UPI payment link right away." },
+    { idx: 2, unread: 0, msgIn: "Thanks, receipt downloaded cleanly!", msgOut: "Happy to help. See you on the barbell floor!" },
+    { idx: 5, unread: 0, msgIn: "What time does Bandra West Club open on Sundays?", msgOut: "Bandra West Club opens 06:00 AM to 10:30 PM on Sundays." },
+    { idx: 12, unread: 1, msgIn: "I referred my colleague Siddharth — how do I check my bonus days?", msgOut: "Your code REF2012 is active — 7 free days credit immediately on his signup!" },
+    { idx: 18, unread: 0, msgIn: "Got the workout tracker PDF, thank you coach!", msgOut: "Keep pushing!" },
+  ];
+
+  for (let t = 0; t < inboxTargets.length; t++) {
+    const spec = inboxTargets[t]!;
+    const mem = memberRowsData[spec.idx]!;
+    const thread = await prisma.inboxThread.create({
+      data: {
+        orgId: org.id,
+        branchId: mem.branchId,
+        memberId: mem.id,
+        contactName: mem.fullName,
+        contactPhone: mem.phone,
+        channel: "WHATSAPP",
+        assignedToId: t % 2 === 0 ? frontDeskUserId : managerUserId,
+        unreadCount: spec.unread,
+        status: "OPEN",
+        lastPreview: spec.unread > 0 ? spec.msgIn : spec.msgOut,
+        lastMessageAt: new Date(now.getTime() - (t * 45 + 10) * 60_000),
+      },
+    });
+    await prisma.inboxMessage.createMany({
+      data: [
+        {
+          orgId: org.id,
+          threadId: thread.id,
+          direction: "OUTBOUND",
+          body: `Hi ${mem.fullName.split(" ")[0]}, welcome to Ironworks Athletics WhatsApp Desk!`,
+          status: "READ",
+          senderName: "Nikhil Verma (Front Desk)",
+          createdAt: new Date(now.getTime() - (t + 2) * 3600_000),
+        },
+        {
+          orgId: org.id,
+          threadId: thread.id,
+          direction: "INBOUND",
+          body: spec.msgIn,
+          status: "DELIVERED",
+          senderName: mem.fullName,
+          createdAt: new Date(now.getTime() - (t * 50 + 25) * 60_000),
+        },
+        ...(spec.unread === 0
+          ? [
+              {
+                orgId: org.id,
+                threadId: thread.id,
+                direction: "OUTBOUND",
+                body: spec.msgOut,
+                status: "READ",
+                senderName: "Siddharth Menon (Owner)",
+                createdAt: new Date(now.getTime() - (t * 45 + 10) * 60_000),
+              },
+            ]
+          : []),
+      ],
+    });
+  }
+
+  await prisma.broadcastCampaign.createMany({
+    data: [
+      {
+        orgId: org.id,
+        branchId: branchA.id,
+        name: "November Renewal Blitz (7d Expiring)",
+        segmentKey: "EXPIRING",
+        channel: "WHATSAPP",
+        templateCode: "EXPIRY_REMINDER_7D",
+        bodyPreview: "Hi {name}, your {plan} expires on {expiry}. Renew at Indiranagar HQ for ₹500 credit.",
+        scheduledAt: new Date(now.getTime() - 2 * 86_400_000),
+        throttlePerMin: 45,
+        status: "DISPATCHED",
+        targetCount: 60,
+        sentCount: 52,
+        deliveredCount: 50,
+        readCount: 41,
+        repliedCount: 14,
+        blockedOptOutCount: 8,
+      },
+      {
+        orgId: org.id,
+        branchId: branchB.id,
+        name: "14-Day Absentee Reactivation Nudge",
+        segmentKey: "INACTIVE",
+        channel: "WHATSAPP",
+        templateCode: "WINBACK_COME_BACK",
+        bodyPreview: "Haven't seen you on the floor in 14d — claim a free 25-min mobility reset session!",
+        scheduledAt: new Date(now.getTime() - 4 * 86_400_000),
+        throttlePerMin: 30,
+        status: "DISPATCHED",
+        targetCount: 48,
+        sentCount: 41,
+        deliveredCount: 39,
+        readCount: 28,
+        repliedCount: 9,
+        blockedOptOutCount: 7,
+      },
+      {
+        orgId: org.id,
+        branchId: null,
+        name: "PT Pack Priority Bench Assessment",
+        segmentKey: "PT_CLIENTS",
+        channel: "WHATSAPP",
+        templateCode: "WELCOME_CHECKLIST",
+        bodyPreview: "Monthly DEXA & barbell strength re-test slots open this weekend.",
+        scheduledAt: new Date(now.getTime() - 6 * 86_400_000),
+        throttlePerMin: 60,
+        status: "DISPATCHED",
+        targetCount: 120,
+        sentCount: 105,
+        deliveredCount: 101,
+        readCount: 84,
+        repliedCount: 22,
+        blockedOptOutCount: 15,
+      },
+      {
+        orgId: org.id,
+        branchId: null,
+        name: "Pending Dues Gentle Reminder",
+        segmentKey: "UNPAID",
+        channel: "WHATSAPP",
+        templateCode: "DUES_PAYMENT_LINK",
+        bodyPreview: "Friendly reminder on open club balance — reply LINK to settle via UPI.",
+        scheduledAt: new Date(now.getTime() - 86_400_000),
+        throttlePerMin: 40,
+        status: "DISPATCHED",
+        targetCount: 55,
+        sentCount: 48,
+        deliveredCount: 47,
+        readCount: 36,
+        repliedCount: 11,
+        blockedOptOutCount: 7,
+      },
+    ],
+  });
+
+  // Automations (all 9+ workflow recipes with cap & quiet hours)
+  const ruleDefs = [
+    { name: "Day-1 Welcome Series", triggerKey: "WELCOME_SERIES", conditionLabel: "Joined <= 2 days ago", delayMinutes: 30, msg: "Welcome to {branch}, {name}! Your {plan} onboarding & trainer intro awaits." },
+    { name: "Expiry Reminder T-7", triggerKey: "EXPIRY_T7", conditionLabel: "Expires in 7 days", delayMinutes: 0, msg: "Hi {name}, 7 days left on {plan} ({expiry}). Renew early to lock bonus days." },
+    { name: "Expiry Reminder T-3", triggerKey: "EXPIRY_T3", conditionLabel: "Expires in 3 days", delayMinutes: 0, msg: "{name}, 3 days remaining on {plan}. Reply RENEW for instant UPI checkout." },
+    { name: "Expiry Alert T-0", triggerKey: "EXPIRY_T0", conditionLabel: "Expires today", delayMinutes: 0, msg: "Heads up {name} — your {plan} ends today at {branch}. Don't lose your streak!" },
+    { name: "Grace Follow-up T+3", triggerKey: "EXPIRY_T_PLUS_3", conditionLabel: "Expired 3 days ago", delayMinutes: 60, msg: "Hi {name}, your gate pass paused 3d ago. Restart today with waived joining fee." },
+    { name: "Payment Due & Failed Auto-Dunning", triggerKey: "PAYMENT_DUE", conditionLabel: "Overdue invoice > ₹0", delayMinutes: 120, msg: "Hi {name}, pending {due_amount} on your {plan} cycle. Tap LINK to clear via UPI." },
+    { name: "Missed Workout Nudge (7+ Days)", triggerKey: "MISSED_WORKOUT", conditionLabel: "No visit >= 7 days", delayMinutes: 0, msg: "Missed you at {branch}, {name}! Want Coach Vikram to prep an express 35-min session?" },
+    { name: "Birthday Gift Perk", triggerKey: "BIRTHDAY", conditionLabel: "DOB matches today", delayMinutes: 0, msg: "Happy Birthday {name}! Show this message at desk for 2 complimentary guest passes." },
+    { name: "Win-Back After 30 Days", triggerKey: "WINBACK_30D", conditionLabel: "Expired >= 30 days", delayMinutes: 0, msg: "Hey {name}, come back to {branch}! Enjoy 15% off with EARLYBIRD15 this week." },
+    { name: "5th Visit Milestone Feedback", triggerKey: "FEEDBACK_5TH_VISIT", conditionLabel: "Total visits >= 5", delayMinutes: 180, msg: "High-five on check-in #5, {name}! Rate your {branch} floor experience 1-5." },
+    { name: "Referral Thank-You Credit", triggerKey: "REFERRAL_THANKYOU", conditionLabel: "Referred friend joined", delayMinutes: 15, msg: "Thanks for growing the pack, {name}! 7 free days added to your {plan}." },
+  ];
+
+  for (let r = 0; r < ruleDefs.length; r++) {
+    const rd = ruleDefs[r]!;
+    const rule = await prisma.automationRule.create({
+      data: {
+        orgId: org.id,
+        branchId: null,
+        name: rd.name,
+        triggerKey: rd.triggerKey,
+        conditionLabel: rd.conditionLabel,
+        actionChannel: "WHATSAPP",
+        messageTemplate: rd.msg,
+        delayMinutes: rd.delayMinutes,
+        maxPerMemberDays: 7,
+        quietStartHour: 21,
+        quietEndHour: 8,
+        isActive: true,
+      },
+    });
+    if (r < 6) {
+      await prisma.automationRun.create({
+        data: {
+          orgId: org.id,
+          branchId: branchA.id,
+          ruleId: rule.id,
+          mode: "LIVE",
+          matchedCount: 18 + r * 4,
+          dispatchedCount: 15 + r * 3,
+          skippedOptOutCount: 2,
+          skippedCapCount: 1,
+          skippedQuietHours: false,
+          previewSummaryJson: { sample: "Delivered via Mock WhatsApp Cloud Adapter" },
+          executedAt: new Date(now.getTime() - (r + 1) * 12 * 3600_000),
+        },
+      });
+    }
+  }
+
+  // Referrals & Loyalty Points Leaderboard
+  const loyaltyAccountsData = [];
+  const loyaltyLedgerData = [];
+  const tierMap = ["GOLD", "SILVER", "BRONZE", "IRON"] as const;
+  for (let i = 0; i < 45; i++) {
+    const m = memberRowsData[i]!;
+    const lifetime =
+      i < 8
+        ? 3200 + (8 - i) * 350 // GOLD
+        : i < 20
+        ? 1650 + (20 - i) * 80 // SILVER
+        : i < 34
+        ? 600 + (34 - i) * 55 // BRONZE
+        : 125 + i * 10; // IRON
+    const tier =
+      lifetime >= 3000
+        ? tierMap[0]
+        : lifetime >= 1500
+        ? tierMap[1]
+        : lifetime >= 500
+        ? tierMap[2]
+        : tierMap[3];
+    loyaltyAccountsData.push({
+      orgId: org.id,
+      branchId: m.branchId,
+      memberId: m.id,
+      pointsBalance: Math.max(50, lifetime - 150),
+      lifetimePoints: lifetime,
+      tier,
+    });
+    loyaltyLedgerData.push({
+      orgId: org.id,
+      branchId: m.branchId,
+      memberId: m.id,
+      pointsDelta: lifetime,
+      reason: "Cumulative check-in streaks & on-time renewals",
+      refId: m.memberCode,
+      createdAt: new Date(now.getTime() - i * 86_400_000),
+    });
+  }
+  await prisma.loyaltyAccount.createMany({ data: loyaltyAccountsData });
+  await prisma.loyaltyLedger.createMany({ data: loyaltyLedgerData });
+
+  const referralRewardsData = [];
+  for (let i = 0; i < 12; i++) {
+    const referrer = memberRowsData[i]!;
+    const referred = memberRowsData[100 + i]!;
+    referralRewardsData.push({
+      orgId: org.id,
+      branchId: referrer.branchId,
+      referrerMemberId: referrer.id,
+      referredMemberId: referred.id,
+      freeDaysGranted: 7,
+      discountPaiseGranted: 50000,
+      status: "CREDITED",
+      createdAt: new Date(now.getTime() - (i + 1) * 3 * 86_400_000),
+    });
+  }
+  await prisma.referralReward.createMany({ data: referralRewardsData });
 
   await prisma.staffTask.createMany({
     data: [

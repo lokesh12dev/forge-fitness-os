@@ -163,6 +163,20 @@ enum LeadStage {
   LOST
 }
 
+enum TemplateApprovalStatus {
+  APPROVED
+  PENDING_META
+  REJECTED
+  DRAFT
+}
+
+enum LoyaltyTier {
+  IRON
+  BRONZE
+  SILVER
+  GOLD
+}
+
 model Organization {
   id            String   @id @default(cuid())
   name          String
@@ -204,8 +218,18 @@ model Organization {
   consents      ConsentRecord[]
   measurements  MemberMeasurement[]
   documents     MemberDocument[]
-  notes         MemberNote[]
-  leads         Lead[]
+  notes           MemberNote[]
+  leads           Lead[]
+  leadTasks       LeadTask[]
+  adSpends        AdSpendCampaign[]
+  templates       MessageTemplate[]
+  inboxThreads    InboxThread[]
+  broadcasts      BroadcastCampaign[]
+  automations     AutomationRule[]
+  automationRuns  AutomationRun[]
+  loyaltyAccounts LoyaltyAccount[]
+  loyaltyLedgers  LoyaltyLedger[]
+  referralRewards ReferralReward[]
 }
 
 model Branch {
@@ -245,8 +269,17 @@ model Branch {
   consents      ConsentRecord[]
   measurements  MemberMeasurement[]
   documents     MemberDocument[]
-  notes         MemberNote[]
-  leads         Lead[]
+  notes           MemberNote[]
+  leads           Lead[]
+  leadTasks       LeadTask[]
+  adSpends        AdSpendCampaign[]
+  inboxThreads    InboxThread[]
+  broadcasts      BroadcastCampaign[]
+  automations     AutomationRule[]
+  automationRuns  AutomationRun[]
+  loyaltyAccounts LoyaltyAccount[]
+  loyaltyLedgers  LoyaltyLedger[]
+  referralRewards ReferralReward[]
 
   @@unique([orgId, code])
   @@index([orgId])
@@ -287,8 +320,10 @@ model User {
   cashClosed       CashReconciliation[]
   expensesCreated  Expense[]
   notesAuthored    MemberNote[]
-  assignedTasks    StaffTask[]
-  ownedLeads       Lead[]
+  assignedTasks        StaffTask[]
+  ownedLeads           Lead[]
+  assignedLeadTasks    LeadTask[]
+  assignedInboxThreads InboxThread[]
 }
 
 model OrgMembership {
@@ -425,6 +460,11 @@ model Member {
   comms           CommunicationLog[]
   tasks           StaffTask[]
   convertedLeads  Lead[]
+  inboxThreads    InboxThread[]
+  loyaltyAccount  LoyaltyAccount?
+  loyaltyEntries  LoyaltyLedger[]
+  rewardsEarned   ReferralReward[] @relation("ReferrerRewards")
+  rewardsFromSelf ReferralReward[] @relation("ReferredMemberRewards")
 
   @@unique([orgId, memberCode])
   @@unique([orgId, qrToken])
@@ -911,6 +951,7 @@ model Lead {
   stage             LeadStage @default(NEW)
   score             Int       @default(50)
   trialAt           DateTime?
+  lostReason        String?
   ownerId           String?
   convertedMemberId String?
   notes             String?
@@ -921,7 +962,223 @@ model Lead {
   branch          Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
   owner           User?        @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   convertedMember Member?      @relation(fields: [convertedMemberId], references: [id], onDelete: SetNull)
+  tasks           LeadTask[]
 
   @@index([orgId, branchId, stage])
   @@index([orgId, createdAt])
+}
+
+model LeadTask {
+  id           String     @id @default(cuid())
+  orgId        String
+  branchId     String
+  leadId       String
+  title        String
+  dueAt        DateTime
+  status       TaskStatus @default(OPEN)
+  assignedToId String?
+  createdAt    DateTime   @default(now())
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch     Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  lead       Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo User?        @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, branchId, status])
+  @@index([leadId])
+}
+
+model AdSpendCampaign {
+  id         String   @id @default(cuid())
+  orgId      String
+  branchId   String?
+  source     String
+  monthYm    String
+  spendPaise Int
+  note       String?
+  createdAt  DateTime @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, source])
+}
+
+model MessageTemplate {
+  id             String                 @id @default(cuid())
+  orgId          String
+  code           String
+  name           String
+  channel        CommChannel
+  body           String
+  variables      String[]
+  approvalStatus TemplateApprovalStatus @default(APPROVED)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, code])
+}
+
+model InboxThread {
+  id            String      @id @default(cuid())
+  orgId         String
+  branchId      String
+  memberId      String?
+  contactName   String
+  contactPhone  String
+  channel       CommChannel @default(WHATSAPP)
+  assignedToId  String?
+  unreadCount   Int         @default(0)
+  status        String      @default("OPEN")
+  lastPreview   String
+  lastMessageAt DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+
+  org        Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch     Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member     Member?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  assignedTo User?          @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  messages   InboxMessage[]
+
+  @@index([orgId, branchId, lastMessageAt])
+}
+
+model InboxMessage {
+  id         String   @id @default(cuid())
+  orgId      String
+  threadId   String
+  direction  String   // INBOUND | OUTBOUND
+  body       String
+  status     String   @default("DELIVERED")
+  senderName String
+  createdAt  DateTime @default(now())
+
+  thread InboxThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
+
+model BroadcastCampaign {
+  id                 String      @id @default(cuid())
+  orgId              String
+  branchId           String?
+  name               String
+  segmentKey         String      // EXPIRING | INACTIVE | BIRTHDAY | UNPAID | PT_CLIENTS | NEW_JOINERS
+  channel            CommChannel @default(WHATSAPP)
+  templateCode       String?
+  bodyPreview        String
+  scheduledAt        DateTime
+  throttlePerMin     Int         @default(45)
+  status             String      @default("DISPATCHED")
+  targetCount        Int         @default(0)
+  sentCount          Int         @default(0)
+  deliveredCount     Int         @default(0)
+  readCount          Int         @default(0)
+  repliedCount       Int         @default(0)
+  blockedOptOutCount Int         @default(0)
+  createdAt          DateTime    @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, createdAt])
+}
+
+model AutomationRule {
+  id               String      @id @default(cuid())
+  orgId            String
+  branchId         String?
+  name             String
+  triggerKey       String
+  conditionLabel   String
+  actionChannel    CommChannel @default(WHATSAPP)
+  messageTemplate  String
+  delayMinutes     Int         @default(0)
+  maxPerMemberDays Int         @default(7)
+  quietStartHour   Int         @default(21)
+  quietEndHour     Int         @default(8)
+  isActive         Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+
+  org    Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch?         @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  runs   AutomationRun[]
+
+  @@index([orgId, triggerKey])
+}
+
+model AutomationRun {
+  id                 String   @id @default(cuid())
+  orgId              String
+  branchId           String?
+  ruleId             String
+  mode               String   // DRY_RUN | LIVE
+  matchedCount       Int
+  dispatchedCount    Int
+  skippedOptOutCount Int
+  skippedCapCount    Int
+  skippedQuietHours  Boolean  @default(false)
+  previewSummaryJson Json?
+  executedAt         DateTime @default(now())
+
+  org    Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  rule   AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, executedAt])
+}
+
+model LoyaltyAccount {
+  id             String      @id @default(cuid())
+  orgId          String
+  branchId       String
+  memberId       String      @unique
+  pointsBalance  Int         @default(0)
+  lifetimePoints Int         @default(0)
+  tier           LoyaltyTier @default(IRON)
+  updatedAt      DateTime    @updatedAt
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, branchId, lifetimePoints])
+}
+
+model LoyaltyLedger {
+  id          String   @id @default(cuid())
+  orgId       String
+  branchId    String
+  memberId    String
+  pointsDelta Int
+  reason      String
+  refId       String?
+  createdAt   DateTime @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, memberId, createdAt])
+}
+
+model ReferralReward {
+  id                   String   @id @default(cuid())
+  orgId                String
+  branchId             String
+  referrerMemberId     String
+  referredMemberId     String
+  freeDaysGranted      Int      @default(7)
+  discountPaiseGranted Int      @default(50000)
+  status               String   @default("CREDITED")
+  createdAt            DateTime @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch   Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  referrer Member       @relation("ReferrerRewards", fields: [referrerMemberId], references: [id], onDelete: Cascade)
+  referred Member       @relation("ReferredMemberRewards", fields: [referredMemberId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, referrerMemberId])
 }

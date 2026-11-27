@@ -5,10 +5,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clsx } from "clsx";
 import {
+  Award,
   Building2,
   CreditCard,
   LayoutGrid,
   LogOut,
+  Menu,
+  MessageSquare,
   Moon,
   Plus,
   QrCode,
@@ -16,7 +19,10 @@ import {
   Settings,
   Sun,
   Tag,
+  Target,
+  TrendingDown,
   Users,
+  Workflow,
   X,
 } from "lucide-react";
 import { signOutAction, switchActiveBranchAction } from "@/app/actions/crm-actions";
@@ -115,9 +121,16 @@ export function CrmShell({
       ? results
       : { members: [], invoices: [] };
 
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+
   const navItems = [
     { href: "/app", label: "TODAY.", icon: LayoutGrid, show: true },
     { href: "/app/members", label: "MEMBERS", icon: Users, show: hasPermission(role, "members:read") },
+    { href: "/app/leads", label: "LEADS", icon: Target, show: hasPermission(role, "leads:read") || hasPermission(role, "leads:roi") },
+    { href: "/app/inbox", label: "INBOX", icon: MessageSquare, show: hasPermission(role, "inbox:read") || hasPermission(role, "campaigns:broadcast") },
+    { href: "/app/automations", label: "AUTOMATE", icon: Workflow, show: hasPermission(role, "automations:manage") },
+    { href: "/app/retention", label: "RETENTION", icon: TrendingDown, show: hasPermission(role, "retention:read") },
+    { href: "/app/loyalty", label: "LOYALTY", icon: Award, show: hasPermission(role, "loyalty:read") },
     { href: "/app/plans", label: "PLANS", icon: Tag, show: hasPermission(role, "plans:read") },
     { href: "/app/billing", label: "BILLING", icon: CreditCard, show: canAccessFinance(role) },
     { href: "/app/checkin", label: "CHECK-IN", icon: QrCode, show: hasPermission(role, "checkin:operate") },
@@ -296,10 +309,12 @@ export function CrmShell({
       {/* Mobile Bottom Tab Bar (390px, >= 48px touch targets) */}
       <nav
         className="no-print md:hidden fixed bottom-0 inset-x-0 z-50 bg-[#151515] text-[#FFFFFF] border-t-[3px] border-[#151515] grid"
-        style={{ gridTemplateColumns: `repeat(${Math.min(5, navItems.length)}, minmax(0, 1fr))` }}
+        style={{
+          gridTemplateColumns: `repeat(${Math.min(4, navItems.length) + (navItems.length > 4 ? 1 : 0)}, minmax(0, 1fr))`,
+        }}
         aria-label="Mobile Navigation"
       >
-        {navItems.slice(0, 5).map((item) => {
+        {navItems.slice(0, 4).map((item) => {
           const Icon = item.icon;
           const isActive =
             item.href === "/app" ? pathname === "/app" : pathname.startsWith(item.href);
@@ -307,6 +322,7 @@ export function CrmShell({
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => setMobileMoreOpen(false)}
               className={clsx(
                 "min-h-[54px] flex flex-col items-center justify-center gap-1 border-r border-[#FFFFFF]/15 px-1 text-[12px] font-bold uppercase",
                 isActive ? "bg-[#C8372B] text-[#FFFFFF]" : "text-[#FFFFFF]"
@@ -317,7 +333,68 @@ export function CrmShell({
             </Link>
           );
         })}
+        {navItems.length > 4 && (
+          <button
+            type="button"
+            onClick={() => setMobileMoreOpen((v) => !v)}
+            className={clsx(
+              "min-h-[54px] flex flex-col items-center justify-center gap-1 px-1 text-[12px] font-bold uppercase",
+              mobileMoreOpen ? "bg-[#2B4BCC] text-[#FFFFFF]" : "text-[#EBC95B]"
+            )}
+            aria-expanded={mobileMoreOpen}
+            aria-label="More navigation routes"
+          >
+            <Menu className="size-4" />
+            <span>MORE</span>
+          </button>
+        )}
       </nav>
+
+      {/* Mobile Overflow Route Grid Sheet */}
+      {mobileMoreOpen && (
+        <div
+          className="no-print md:hidden fixed inset-0 z-[48] bg-[#151515]/75 flex items-end pb-[57px]"
+          onClick={() => setMobileMoreOpen(false)}
+        >
+          <div
+            className="w-full bg-[var(--bg-paper)] text-[var(--fg-ink)] border-t-[3px] border-[var(--border-ink)] p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="bauhaus-label text-[#C8372B]">{"// ALL MODULES"}</span>
+              <button
+                type="button"
+                onClick={() => setMobileMoreOpen(false)}
+                className="min-w-[40px] min-h-[40px] grid place-items-center border-2 border-[var(--border-ink)]"
+                aria-label="Close mobile menu"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive =
+                  item.href === "/app" ? pathname === "/app" : pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMoreOpen(false)}
+                    className={clsx(
+                      "min-h-[48px] flex items-center gap-2 border-2 border-[var(--border-ink)] px-3 text-[12px] font-bold uppercase",
+                      isActive ? "bg-[#C8372B] text-[#FFFFFF]" : "bg-[var(--bg-surface)]"
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Global Search Palette Modal */}
       {searchOpen && (

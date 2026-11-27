@@ -58,7 +58,14 @@ export function StatTile({
       </div>
 
       <div className="mt-3">
-        <p className="font-headline tabular-nums text-[32px] md:text-[40px] leading-[0.95] break-words">
+        <p
+          className={clsx(
+            "font-headline tabular-nums leading-[0.95]",
+            typeof value === "string" && value.length >= 7 && !value.startsWith("₹")
+              ? "text-[24px] lg:text-[28px] xl:text-[32px]"
+              : "text-[32px] md:text-[40px] break-words"
+          )}
+        >
           {value}
         </p>
         {subtext && <p className={clsx("mt-2 text-[12px] font-medium line-clamp-2", mutedText)}>{subtext}</p>}

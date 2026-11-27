@@ -8,6 +8,7 @@ import { e1rm, readinessVerdict, recoveryMap } from "@/lib/engine";
 import { Badge, ProgressBar } from "@/components/ui";
 import { Card, CardHeader, PageHeader } from "@/components/page-header";
 import { CoachChat, type ChatMessage, type CoachContextSnapshot } from "@/components/coach-client";
+import { AiHubPanels } from "@/components/ai/ai-hub-panels";
 
 export default async function CoachPage() {
   const user = await requireUser();
@@ -291,6 +292,8 @@ export default async function CoachPage() {
           </Card>
         </div>
       </div>
+
+      <AiHubPanels />
     </>
   );
 }

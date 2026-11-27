@@ -1529,61 +1529,6 @@ export async function upsertBranchWithGeoAction(input: {
   return { ok: true as const };
 }
 
-export async function upsertBranchHolidayAction(input: {
-  branchId: string;
-  title: string;
-  date: string;
-}) {
-  const ctx = await requireAuthContext({ permission: "settings:admin", branchId: input.branchId });
-  const cleanTitle = input.title.trim();
-  if (cleanTitle.length < 2 || !/^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
-    return { ok: false as const, error: "Provide valid holiday title and YYYY-MM-DD date." };
-  }
-  const holiday = await prisma.branchHoliday.create({
-    data: {
-      orgId: ctx.org.id,
-      branchId: input.branchId,
-      title: cleanTitle,
-      date: new Date(`${input.date}T00:00:00Z`),
-    },
-  });
-  await recordAuditLog({
-    orgId: ctx.org.id,
-    branchId: input.branchId,
-    actorUserId: ctx.user.id,
-    actorRole: ctx.role,
-    action: "BRANCH_HOLIDAY_CREATED",
-    resourceType: "BranchHoliday",
-    resourceId: holiday.id,
-    diff: { title: cleanTitle, date: input.date },
-    ip: ctx.clientIp,
-  });
-  revalidatePath("/app/settings");
-  return { ok: true as const, id: holiday.id };
-}
-
-export async function deleteBranchHolidayAction(holidayId: string) {
-  const ctx = await requireAuthContext({ permission: "settings:admin" });
-  const holiday = await prisma.branchHoliday.findFirst({
-    where: { id: holidayId, orgId: ctx.org.id },
-  });
-  if (!holiday) return { ok: false as const, error: "Holiday not found." };
-  await prisma.branchHoliday.delete({ where: { id: holiday.id } });
-  await recordAuditLog({
-    orgId: ctx.org.id,
-    branchId: holiday.branchId,
-    actorUserId: ctx.user.id,
-    actorRole: ctx.role,
-    action: "BRANCH_HOLIDAY_DELETED",
-    resourceType: "BranchHoliday",
-    resourceId: holiday.id,
-    diff: { title: holiday.title },
-    ip: ctx.clientIp,
-  });
-  revalidatePath("/app/settings");
-  return { ok: true as const };
-}
-
 export async function inviteOrUpdateStaffMemberAction(input: {
   name: string;
   email: string;

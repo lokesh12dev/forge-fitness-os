@@ -152,6 +152,15 @@ export function OnboardingClient() {
                     className="w-full min-h-[48px] border-2 border-[var(--border-ink)] bg-[var(--bg-paper)] px-3 text-[14px] uppercase"
                   />
                 </div>
+                <div>
+                  <label className="bauhaus-label block mb-1.5">Merchant UPI VPA</label>
+                  <input
+                    value={form.upiVpa}
+                    onChange={(e) => setForm({ ...form, upiVpa: e.target.value })}
+                    placeholder="clubname@icici"
+                    className="w-full min-h-[48px] border-2 border-[var(--border-ink)] bg-[var(--bg-paper)] px-3 text-[14px] font-mono"
+                  />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="bauhaus-label block mb-1.5">Currency</label>

@@ -389,9 +389,87 @@ export async function startRoutineWorkout(input: {
   return { ok: true as const, workoutId, reused: false };
 }
 
+export async function saveBuiltRoutine(input: {
+  name: string;
+  focus?: string;
+  slots: Array<{
+    exerciseId: string;
+    sets?: number;
+    repsMin?: number;
+    repsMax?: number;
+    restSec?: number;
+    rpeTarget?: number;
+    customExercise?: { name?: string; primaryMuscle?: string; equipment?: string; category?: string; instructions?: string[] };
+  }>;
+}) {
+  const user = await requireUser();
+  const safeSlots = input.slots.length > 0 ? input.slots : [];
+  if (!safeSlots.length) return { ok: false as const, error: "No exercises" };
+
+  for (const s of safeSlots) {
+    await ensureCatalogExerciseInDb(s.exerciseId, s.customExercise);
+  }
+
+  const routineId = rid("rt");
+  const dayId = rid("rd");
+  await db.insert(schema.routines).values({
+    id: routineId,
+    ownerId: user.id,
+    name: input.name || "Custom Routine",
+    subtitle: `${safeSlots.length} exercises · Muscle Explorer`,
+    description: `Built from Explore muscles (${input.focus || "Targeted"}).`,
+    goal: "hypertrophy",
+    level: "Intermediate",
+    daysPerWeek: 1,
+    weeks: 4,
+    accent: "#C9F73A",
+    isPublic: false,
+    enrolled: false,
+    rating: 5.0,
+    members: 1,
+    createdAt: new Date(),
+  });
+
+  await db.insert(schema.routineDays).values({
+    id: dayId,
+    routineId,
+    dayIndex: 0,
+    name: input.name || "Custom Day",
+    focus: input.focus || "Targeted",
+  });
+
+  await db.insert(schema.routineExercises).values(
+    safeSlots.map((s, i) => ({
+      id: rid("re"),
+      routineDayId: dayId,
+      exerciseId: s.exerciseId,
+      position: i,
+      sets: s.sets ?? 3,
+      repsMin: s.repsMin ?? 8,
+      repsMax: s.repsMax ?? 12,
+      restSec: s.restSec ?? 90,
+      rpeTarget: s.rpeTarget ?? 8,
+      supersetGroup: null,
+    })),
+  );
+
+  revalidatePath("/app/programs");
+  revalidatePath("/app");
+  return { ok: true as const, routineId };
+}
+
 export async function updateTargetSets(workoutExerciseId: string, targetSets: number) {
-  await requireUser();
-  await db.update(schema.workoutExercises)
+  const user = await requireUser();
+  const [we] = await db.select().from(schema.workoutExercises).where(eq(schema.workoutExercises.id, workoutExerciseId)).limit(1);
+  if (!we) return { ok: false as const, error: "Not found" };
+  const [workout] = await db
+    .select()
+    .from(schema.workouts)
+    .where(and(eq(schema.workouts.id, we.workoutId), eq(schema.workouts.userId, user.id)))
+    .limit(1);
+  if (!workout) return { ok: false as const, error: "Not found" };
+  await db
+    .update(schema.workoutExercises)
     .set({ targetSets: Math.max(1, Math.min(12, targetSets)) })
     .where(eq(schema.workoutExercises.id, workoutExerciseId));
   return { ok: true as const };

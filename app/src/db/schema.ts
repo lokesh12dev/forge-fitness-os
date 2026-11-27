@@ -409,6 +409,167 @@ export const coachMessages = sqliteTable(
   (t) => [index("coach_messages_user_idx").on(t.userId)],
 );
 
+export const aiConversations = sqliteTable(
+  "ai_conversations",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    module: text("module").notNull(), // schedule | workout | exercise | body | nutrition
+    role: text("role").notNull(), // user | assistant
+    content: text("content").notNull(),
+    status: text("status").notNull().default("complete"), // complete | interrupted
+    planId: text("plan_id"),
+    planJson: text("plan_json"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [
+    index("ai_conv_user_module_idx").on(t.userId, t.module),
+    index("ai_conv_user_module_created_idx").on(t.userId, t.module, t.createdAt),
+  ],
+);
+
+export const aiPlans = sqliteTable(
+  "ai_plans",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    module: text("module").notNull(), // schedule | workout | exercise | body | nutrition
+    title: text("title").notNull(),
+    version: integer("version").notNull().default(1),
+    currentVersionId: text("current_version_id"),
+    parentPlanId: text("parent_plan_id"),
+    provider: text("provider").notNull().default("forge-engine"),
+    status: text("status").notNull().default("draft"), // draft | validated | approved | applied | superseded | archived
+    planJson: text("plan_json").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    appliedAt: integer("applied_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [
+    index("ai_plans_user_module_idx").on(t.userId, t.module),
+    index("ai_plans_user_module_created_idx").on(t.userId, t.module, t.createdAt),
+  ],
+);
+
+export const aiPlanVersions = sqliteTable(
+  "ai_plan_versions",
+  {
+    id: text("id").primaryKey(),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => aiPlans.id, { onDelete: "cascade" }),
+    versionNo: integer("version_no").notNull(),
+    payloadJson: text("payload_json").notNull(),
+    schemaVersion: text("schema_version").notNull().default("2.0"),
+    changeSummary: text("change_summary").notNull().default("Initial draft"),
+    createdBy: text("created_by").notNull().default("ai"), // ai | user
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    appliedAt: integer("applied_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [uniqueIndex("ai_plan_ver_unique_idx").on(t.planId, t.versionNo)],
+);
+
+export const aiUsage = sqliteTable(
+  "ai_usage",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    module: text("module").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    inTokens: integer("in_tokens").notNull().default(0),
+    outTokens: integer("out_tokens").notNull().default(0),
+    latencyMs: integer("latency_ms").notNull().default(0),
+    fellBack: integer("fell_back", { mode: "boolean" }).notNull().default(false),
+    errorCode: text("error_code"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("ai_usage_user_created_idx").on(t.userId, t.createdAt)],
+);
+
+export const coachMemory = sqliteTable(
+  "coach_memory",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    module: text("module").notNull(),
+    kind: text("kind").notNull(), // decision | preference | frequent_swap | injury_note | plan_applied | adherence_summary
+    key: text("key").notNull(),
+    valueJson: text("value_json").notNull(),
+    source: text("source").notNull().default("system"),
+    confidence: real("confidence").notNull().default(1.0),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [uniqueIndex("coach_memory_unique_idx").on(t.userId, t.module, t.kind, t.key)],
+);
+
+export const syncProposals = sqliteTable(
+  "sync_proposals",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    triggerType: text("trigger_type").notNull(),
+    originModule: text("origin_module").notNull(),
+    targetModule: text("target_module").notNull(),
+    targetEntity: text("target_entity").notNull().default("default"),
+    causalChainId: text("causal_chain_id").notNull(),
+    depth: integer("depth").notNull().default(1),
+    status: text("status").notNull().default("pending"), // pending | accepted | edited | dismissed | expired
+    title: text("title").notNull(),
+    rationale: text("rationale").notNull(),
+    payloadJson: text("payload_json").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    resolvedAt: integer("resolved_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [index("sync_proposals_user_status_idx").on(t.userId, t.status, t.createdAt)],
+);
+
+export const aiApplyTokens = sqliteTable("ai_apply_tokens", {
+  token: text("token").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  planId: text("plan_id").notNull(),
+  versionNo: integer("version_no").notNull().default(1),
+  resultJson: text("result_json").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
+
+export const aiGoals = sqliteTable(
+  "ai_goals",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    metric: text("metric").notNull(), // weight_kg | bench_1rm | weekly_sessions | protein_g | custom
+    startValue: real("start_value").notNull(),
+    currentValue: real("current_value").notNull(),
+    targetValue: real("target_value").notNull(),
+    unit: text("unit").notNull().default("kg"),
+    deadline: text("deadline"),
+    relatedPlanId: text("related_plan_id"),
+    milestonesJson: text("milestones_json").notNull().default("[]"),
+    status: text("status").notNull().default("active"), // active | completed | paused
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [
+    index("ai_goals_user_idx").on(t.userId),
+    index("ai_goals_user_created_idx").on(t.userId, t.createdAt),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type Exercise = typeof exercises.$inferSelect;
 export type Routine = typeof routines.$inferSelect;
@@ -423,3 +584,10 @@ export type Post = typeof posts.$inferSelect;
 export type PostComment = typeof postComments.$inferSelect;
 export type Challenge = typeof challenges.$inferSelect;
 export type Gym = typeof gyms.$inferSelect;
+export type AiConversation = typeof aiConversations.$inferSelect;
+export type AiPlanRecord = typeof aiPlans.$inferSelect;
+export type AiPlanVersionRecord = typeof aiPlanVersions.$inferSelect;
+export type AiUsageRecord = typeof aiUsage.$inferSelect;
+export type CoachMemoryRecord = typeof coachMemory.$inferSelect;
+export type SyncProposalRecord = typeof syncProposals.$inferSelect;
+export type AiGoalRecord = typeof aiGoals.$inferSelect;

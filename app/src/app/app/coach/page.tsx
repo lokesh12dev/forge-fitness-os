@@ -9,6 +9,7 @@ import { Badge, ProgressBar } from "@/components/ui";
 import { Card, CardHeader, PageHeader } from "@/components/page-header";
 import { CoachChat, type ChatMessage, type CoachContextSnapshot } from "@/components/coach-client";
 import { AiHubPanels } from "@/components/ai/ai-hub-panels";
+import { SyncInbox } from "@/components/ai/sync-inbox";
 
 export default async function CoachPage() {
   const user = await requireUser();
@@ -291,6 +292,10 @@ export default async function CoachPage() {
             </div>
           </Card>
         </div>
+      </div>
+
+      <div className="mt-4">
+        <SyncInbox />
       </div>
 
       <AiHubPanels />

@@ -15,8 +15,8 @@
 | 6 | **Part E Semantic Validator & Plan Lifecycle** (`semantic-validator.ts`, `ai_plan_versions` diff/restore, idempotent `applyToken`) | `verified` | `npm run typecheck` (0 err) & `npm test` (18 files / 248 tests, including `semantic-validator.test.ts`). |
 | 7 | **Part F Coaches Vertical Slices** (Atlas/Programs, Forge Trainer/Train, Atlas Motion/Exercises, Vitals/Progress, Fuel/Nutrition prompts + UI upgrades) | `verified` | 5 prompt builders in `src/lib/ai/prompts/`, safety pre-check + provenance in `engine.ts`, `Idempotency-Key` + `applyToken` in `ModuleAiCoach`, `export/route.ts` fix, `typecheck` (0 err) & `npm test` (19 files / 252 tests). |
 | 8 | **Part G Cross-Section Sync V2** (`sync_proposals` inbox, 4 scenarios, loop/depth=3/24h dedupe + E2E tests) | `verified` | `src/lib/ai/sync.ts`, `/api/ai/sync`, `SyncInbox` on `/app/coach`, `typecheck` (0 err) & `npm test` (20 files / 254 tests). |
-| 9 | **Part J Extras & Accessibility/Responsive Polish** (Daily Briefing, Weekly/Monthly Reports, Goal Manager, Recommendations, Plan Library) | `doing` | Executing now. |
-| 10 | **Part K & L Verification, Performance & Launch Report** (`typecheck`, `test`, `build`, Playwright desktop+mobile verification, `docs/LAUNCH_REPORT.md`) | `todo` | |
+| 9 | **Part J Extras & Accessibility/Responsive Polish** (Daily Briefing, Weekly/Monthly Reports, Goal Manager, Recommendations, Plan Library) | `verified` | `briefing.ts` provenance-tagged weekly & monthly report builders, `SyncInbox` on `/app/coach`, `typecheck` (0 err), `npm test` (20 files / 254 tests), `next build --webpack` (25/25 routes, exit 0). |
+| 10 | **Part K & L Verification, Performance & Launch Report** (`typecheck`, `test`, `build`, Playwright desktop+mobile verification, `docs/LAUNCH_REPORT.md`) | `doing` | Executing now. |
 
 ---
 
@@ -24,9 +24,9 @@
 - **One AI Engine:** Keep `src/lib/ai/engine.ts` as the single orchestrator wrapping pure `lib/fitness/*` domain math and `lib/ai/providers.ts`.
 - **No Unnecessary Dependencies:** Existing stack (`zod`, `drizzle-orm`, `better-sqlite3`, `lucide-react`, `vitest`) covers all requirements cleanly.
 
-## Active Mini-Spec (Slice 9 — Part J Extras & Accessibility/Responsive Polish)
-- **Goal:** Upgrade `src/lib/ai/briefing.ts` & `/api/ai/briefing` to compute weekly/monthly progress reports via `lib/fitness/progress.ts` with honest provenance (`Not recorded` for missing metrics), and verify `AiHubPanels` + `SyncInbox` + `ModuleAiCoach` accessibility & mobile/desktop responsiveness.
-- **Inputs:** `src/lib/ai/briefing.ts`, `src/app/api/ai/briefing/route.ts`, `src/components/ai/ai-hub-panels.tsx`.
-- **Outputs:** Enhanced briefing & weekly/monthly report payloads with provenance tags, clean ARIA labels, and verified `typecheck` + `npm test`.
-- **Failure Modes:** Unrecorded metrics appearing as fabricated numbers -> prevented by `formatMetricWithProvenance(..., "measured")` returning `"Not recorded"`.
-- **Verification:** `npm run typecheck`, `npm test`, and production webpack build (`BROWSERSLIST="defaults" npx next build --webpack`).
+## Active Mini-Spec (Slice 10 — Part K & L Verification, Performance & Launch Report)
+- **Goal:** Run live server & browser E2E verification across all 5 AI coach modules + `/app/coach`, verify multi-user isolation (404), SSE + idempotency + semantic validator + sync inbox, capture desktop (1280px) & mobile (390px) screenshots under `docs/verification/`, measure latency, and write `docs/LAUNCH_REPORT.md`.
+- **Inputs:** Built `.next` production bundle, `forge.db`, all `/api/ai/*` endpoints.
+- **Outputs:** `docs/verification/*.png`, `docs/LAUNCH_REPORT.md`, final `docs/UPGRADE_PROGRESS.md` (`verified` across all 10 slices).
+- **Failure Modes:** Stale server port or missing screenshots -> prevented by dedicated port `3105` with explicit cleanup and verifying every screenshot file on disk.
+- **Verification:** Live `curl`/fetch checks + Playwright headless screenshots + `npm run typecheck` + `npm test`.

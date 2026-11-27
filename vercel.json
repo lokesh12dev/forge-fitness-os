@@ -1,0 +1,31 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "app": {
+      "root": "app"
+    },
+    "crm": {
+      "root": "crm"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/crm",
+      "destination": {
+        "service": "crm"
+      }
+    },
+    {
+      "source": "/crm/(.*)",
+      "destination": {
+        "service": "crm"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "app"
+      }
+    }
+  ]
+}

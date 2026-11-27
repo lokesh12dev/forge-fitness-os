@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 430" role="img" aria-labelledby="title description">
+  <title id="title">Forge Fitness and Forge CRM</title>
+  <desc id="description">A product banner for adaptive fitness training and gym operations, built by Lokesh.</desc>
+  <defs>
+    <linearGradient id="lime" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#dcff5b"/>
+      <stop offset="1" stop-color="#b7f51f"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f4d66c"/>
+      <stop offset="1" stop-color="#e8bd40"/>
+    </linearGradient>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#a9f629" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#a9f629" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M44 0H0V44" fill="none" stroke="#ffffff" stroke-opacity=".055" stroke-width="1"/>
+    </pattern>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="30"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="430" rx="28" fill="#070908"/>
+  <rect width="1600" height="430" rx="28" fill="url(#grid)"/>
+  <circle cx="1332" cy="212" r="360" fill="url(#halo)" filter="url(#softGlow)"/>
+  <path d="M0 378H1600" stroke="#ffffff" stroke-opacity=".1"/>
+  <path d="M70 0V430M1530 0V430" stroke="#ffffff" stroke-opacity=".06"/>
+
+  <g font-family="Inter, Arial, sans-serif">
+    <text x="104" y="76" fill="#c8ff3d" font-size="16" font-weight="700" letter-spacing="4">PRODUCT ENGINEERING BY LOKESH</text>
+    <text x="98" y="212" fill="#f7f8f5" font-size="128" font-weight="900" letter-spacing="-5">FORGE</text>
+    <text x="104" y="276" fill="#c1c7bf" font-size="25" font-weight="500" letter-spacing="1">FITNESS, TRAINING &amp; GYM OPERATIONS</text>
+    <text x="104" y="344" fill="#ffffff" font-size="39" font-weight="700">Train with intent.</text>
+    <text x="489" y="344" fill="url(#lime)" font-size="39" font-weight="700">Know what comes next.</text>
+
+    <rect x="1142" y="94" width="354" height="246" rx="22" fill="#111512" stroke="#ffffff" stroke-opacity=".14"/>
+    <text x="1176" y="137" fill="#858d83" font-size="13" font-weight="700" letter-spacing="3">ONE FORGE PRODUCT VISION</text>
+    <path d="M1176 158H1462" stroke="#ffffff" stroke-opacity=".13"/>
+    <rect x="1176" y="181" width="5" height="46" rx="2.5" fill="url(#lime)"/>
+    <text x="1197" y="199" fill="#c8ff3d" font-size="13" font-weight="700" letter-spacing="2">01 / ATHLETE</text>
+    <text x="1197" y="222" fill="#f1f2ef" font-size="20" font-weight="600">Adaptive training</text>
+    <rect x="1176" y="252" width="5" height="46" rx="2.5" fill="url(#gold)"/>
+    <text x="1197" y="270" fill="#efd161" font-size="13" font-weight="700" letter-spacing="2">02 / GYM TEAM</text>
+    <text x="1197" y="293" fill="#f1f2ef" font-size="20" font-weight="600">Connected operations</text>
+
+    <text x="104" y="405" fill="#7e867e" font-size="12" font-weight="600" letter-spacing="2">DESIGNED · ARCHITECTED · BUILT BY LOKESH</text>
+    <text x="1496" y="405" text-anchor="end" fill="#7e867e" font-size="12" font-weight="600" letter-spacing="2">FITNESS × CRM</text>
+  </g>
+</svg>

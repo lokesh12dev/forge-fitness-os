@@ -1,214 +1,226 @@
-# FORGE — The Adaptive Training OS
+<p align="center">
+  <img src="assets/readme/forge-banner.svg" alt="Forge Fitness and Forge CRM — train with intent, run with clarity" width="100%" />
+</p>
 
-> A tracker records what happened. **Forge decides what should happen next.**
+<h1 align="center">Forge Fitness + Forge CRM</h1>
 
-Forge is a full-stack, local-first gym super-app: adaptive programming, frictionless set logging, on-device form analysis, photo-to-macro nutrition, a per-muscle recovery model, and a social layer that rewards consistency rather than noise.
+<p align="center">
+  <strong>Training that adapts. Gym operations that connect.</strong><br />
+  A connected product vision for athletes, coaches, gym teams, and owners.
+</p>
 
-Built as a working product demo in Next.js 16, not a clickable mockup. Every screen reads real rows from SQLite; the adaptive engine, PR detection, protein-gap generator and recovery map are deterministic, inspectable code.
+<p align="center">
+  <a href="https://github.com/lokesh12dev"><img alt="Made by Lokesh" src="https://img.shields.io/badge/MADE%20BY-LOKESH-101010?style=for-the-badge&logo=github&logoColor=C8FF3D"></a>
+  <a href="https://forge-fitness-os-xgwy.vercel.app/"><img alt="Open the live Forge demo" src="https://img.shields.io/badge/LIVE-DEMO-C8FF3D?style=for-the-badge&logo=vercel&logoColor=101010"></a>
+  <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-101010?style=for-the-badge&logo=nextdotjs&logoColor=white">
+  <img alt="React 19" src="https://img.shields.io/badge/React-19-101010?style=for-the-badge&logo=react&logoColor=61DAFB">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-101010?style=for-the-badge&logo=typescript&logoColor=3178C6">
+  <img alt="Tailwind CSS 4" src="https://img.shields.io/badge/Tailwind_CSS-4-101010?style=for-the-badge&logo=tailwindcss&logoColor=06B6D4">
+  <img alt="SQLite and Drizzle" src="https://img.shields.io/badge/Fitness-SQLite%20%2B%20Drizzle-C8FF3D?style=for-the-badge&logo=sqlite&logoColor=101010">
+  <img alt="PostgreSQL and Prisma" src="https://img.shields.io/badge/CRM-PostgreSQL%20%2B%20Prisma-E9C85A?style=for-the-badge&logo=postgresql&logoColor=101010">
+</p>
+
+<p align="center">
+  <a href="https://forge-fitness-os-xgwy.vercel.app/">Open the live demo ↗</a> ·
+  <a href="#product-experiences">Explore the product</a> ·
+  <a href="#product-screenshots">View screenshots</a> ·
+  <a href="#run-locally">Run locally</a> ·
+  <a href="PLAN.md">Project plan</a>
+</p>
 
 ---
 
-## Quickstart
+## 🧭 Overview
 
-```bash
+A tracker records what happened. **Forge helps decide what should happen next.**
+
+Forge brings together two focused experiences:
+
+| Product | For | Purpose |
+| --- | --- | --- |
+| **Forge Fitness** | Athletes and coaches | Plan and log training, then connect effort, recovery, nutrition, and progress. |
+| **Forge CRM** | Gym owners and teams | Coordinate members, leads, billing, branches, staff, and day-to-day gym operations. |
+
+The athlete app adapts around a person’s goals, equipment, readiness, and schedule. The owner CRM gives gym teams a shared operating picture across members, revenue, attendance, and coaching. Each experience has its own interface and data layer, with a consistent Forge identity.
+
+## ✨ A product build by Lokesh
+
+**Conceived, designed, and built end to end by Lokesh**, Forge brings product thinking, interface design, application architecture, domain modeling, and implementation into one substantial build.
+
+The work began with a simple question: how can software make the next useful action clearer? For athletes, that means turning training context into a practical session. For gym teams, it means making the people, schedules, and business behind those sessions easier to manage.
+
+Across both experiences, Lokesh shaped the product direction, mapped the workflows, built the visual systems, and carried the details through to working application flows. Forge reflects a hands-on approach to engineering: learn the domain, make the important decisions visible, and give every screen a clear job.
+
+## 🏋️ Product experiences
+
+### Forge Fitness · Adaptive training
+
+Forge Fitness connects planning, training, food, recovery, and progress in one athlete-facing app.
+
+- **Training that responds to context** — readiness signals, RPE, available time, equipment, and movement swaps inform a session as it unfolds.
+- **Focused workout logging** — set tracking, rest timers, plate math, previous-set context, voice and natural-language logging, and personal-record moments.
+- **Nutrition and recovery** — macro and water tracking, meal logging, a photo-to-macro confirmation flow, protein-gap suggestions, and a per-muscle recovery map.
+- **Progress with useful context** — estimated one-rep max, training volume, body metrics, strength standards, streaks, and shareable personal-record cards.
+- **Form check and coaching** — movement cues and a data-grounded coach surface information from the athlete’s training context.
+- **Training community** — check-ins, challenges, a leaderboard, social posts, and gym activity.
+
+### Forge CRM · Gym operations
+
+Forge CRM is a separate owner and management portal built around the workflows of a multi-branch gym.
+
+- **Members and sales** — member records, public enquiries, lead stages, follow-up inbox, membership plans, and conversion workflows.
+- **Billing and finance** — invoices, payment tracking, GST support, reports, and a branch-aware view of revenue.
+- **People and programming** — staff roles, trainer availability, personal-training sessions, classes, and training plans.
+- **Day-to-day operations** — check-ins, QR attendance, inventory, retention, loyalty, and workflow automation.
+- **Multi-branch controls** — organization and branch scoping with role-based access for owners, managers, front desk, trainers, and finance.
+- **Connected services** — PostgreSQL-backed records, Redis and BullMQ jobs, and adapters for payments, messaging, and document storage.
+
+## 📸 Product screenshots
+
+The screenshots below come from the supplied product views. Names, counts, and dashboard figures shown in these views are illustrative demo data.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Forge Fitness · Product landing</strong><br />
+      <img src="assets/readme/forge-landing.jpg" alt="Forge Fitness landing page with adaptive training product introduction" width="100%" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>Forge CRM · Owner overview</strong><br />
+      <img src="assets/readme/forge-crm-overview.jpg" alt="Forge CRM overview for gym operators with a multi-branch dashboard" width="100%" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Forge Fitness · Exercise library</strong><br />
+      <img src="assets/readme/forge-exercise-library.jpg" alt="Forge Fitness exercise library with search and movement categories" width="100%" />
+    </td>
+    <td width="50%" valign="top">
+      <strong>Forge CRM · Trainers and PT</strong><br />
+      <img src="assets/readme/forge-trainers.jpg" alt="Forge CRM trainers and personal-training operations page" width="100%" />
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <strong>Forge Fitness · Plans and pricing</strong><br />
+      <img src="assets/readme/forge-pricing.jpg" alt="Forge Fitness membership plans and pricing page" width="100%" />
+    </td>
+  </tr>
+</table>
+
+## ⚙️ How the two systems fit together
+
+~~~mermaid
+flowchart LR
+  subgraph fitness["Forge Fitness · Athlete experience"]
+    F[Next.js and React app] --> FA[Server actions and training logic]
+    FA --> FD[(SQLite and Drizzle)]
+  end
+
+  subgraph crm["Forge CRM · Gym operations"]
+    C[Next.js and React app] --> CA[Server actions and business rules]
+    CA --> CD[(PostgreSQL and Prisma)]
+    CA --> Q[Redis and BullMQ]
+    Q --> W[Background worker]
+    CA --> S[MinIO document storage]
+  end
+~~~
+
+The Fitness app uses a local SQLite database for a quick, self-contained setup. The CRM runs as its own service with PostgreSQL and Redis-backed background work. The root Vercel configuration routes the <code>/crm</code> path to the CRM service and other paths to the Fitness app.
+
+## 🧰 Technology
+
+| Area | Forge Fitness | Forge CRM |
+| --- | --- | --- |
+| Application | Next.js 16, React 19, TypeScript | Next.js 16, React 19, TypeScript |
+| Styling and icons | Tailwind CSS v4, Lucide | Tailwind CSS v4, Lucide |
+| Data | SQLite, Drizzle ORM, better-sqlite3 | PostgreSQL 16, Prisma |
+| Jobs and storage | — | Redis, BullMQ, MinIO-compatible object storage |
+| Validation | Zod | Zod |
+| Product logic | Training, readiness, recovery, and nutrition workflows | Membership, billing, GST, retention, and branch operations |
+
+## 🚀 Run locally
+
+Each experience can be started independently. Use Node.js 20 or later.
+
+### Forge Fitness
+
+The Fitness app uses SQLite and includes seeded demonstration data.
+
+~~~bash
 cd app
 npm install
-npx drizzle-kit push --force
-npx tsx src/db/seed.ts
+npm run db:push
+npm run db:seed
 npm run dev
-```
+~~~
 
-Open **http://localhost:3000**.
+Open **http://localhost:3000**. Choose the demo athlete **Alex Rivera** or use **alex@forge.app** on the sign-in screen.
 
-| Entry | What you get |
+### Forge CRM
+
+The CRM’s Docker Compose setup starts the web app, PostgreSQL, Redis, MinIO, and the background worker.
+
+~~~bash
+cd crm
+cp .env.example .env
+docker compose up --build
+~~~
+
+Open **http://localhost:3001**. The seeded demo password is **ForgeCrm@2026**.
+
+| Demo login | Role |
 | --- | --- |
-| `/` | Marketing site and an interactive, genuinely adaptive session demo |
-| `/login` | Email sign-in (no password in demo) or one-tap demo athlete |
-| `/app` | Dashboard — readiness, today's session, fuel, recovery, community |
-| `/app/train` | Weekly plan + session launcher |
-| `/app/train/[id]` | Live logging: rest timer, RPE autoreg, plate math, voice log, swaps |
-| `/app/nutrition` | Macro ring, meal log, photo scanner, protein-gap generator |
-| `/app/progress` | e1RM trends, volume, body metrics, strength standards, PR cards |
-| `/app/form-check` | Camera studio with pose overlay, depth/path metrics and cues |
-| `/app/social` | Feed, check-ins, leaderboard, challenges, gym radar |
-| `/app/coach` | Chat grounded in the athlete's real training data |
-| `/app/settings` | Profile, equipment, macro targets, account |
+| owner@ironworks.in | Owner · all branches |
+| manager.blr@ironworks.in | Manager · Indiranagar branch |
+| frontdesk.blr@ironworks.in | Front desk |
+| trainer.blr@ironworks.in | Trainer |
+| accountant@ironworks.in | Accountant · read-only finance |
 
-**Demo athlete:** `alex@forge.app` (or click “Enter as Alex Rivera”).
-The database ships with 7 athletes, 63 exercises, 35 workouts, 561 logged sets, 15 program days, 85 body-metric readings and social data.
+Provider-backed features need their corresponding credentials to connect to external services. The CRM setup and environment variable list are documented in [crm/README.md](crm/README.md).
 
-> Requires Node 20+. SQLite is used for zero-setup local development. No Docker, cloud account or API key needed. Camera form check is a simulation by default; enabling the webcam shows a live pose overlay and never uploads video.
+## 🗂️ Project structure
 
----
+~~~text
+forge-fitness-os/
+├── app/                    # Athlete training, nutrition, recovery, and progress app
+├── crm/                    # Gym owner and operations portal
+├── docs/                   # Product, architecture, data, design, and roadmap docs
+├── tools/                  # Engineering and maintenance utilities
+├── assets/readme/          # README banner and product screenshots
+├── PLAN.md                 # Build plan and milestones
+└── vercel.json             # Routes Fitness and CRM services
+~~~
 
-## Why this exists
+## 📚 Product and engineering notes
 
-The fitness app market is structurally fragmented. A lifter stitches together a logger (Hevy/Strong), a planner (Boostcamp/Fitbod), a food tracker (MyFitnessPal), a wearable and a social app (Strava/Instagram). Each product owns one input and none owns the decision.
-
-Forge closes the loop:
-
-```
-sense → decide → adapt
-  ↑                  │
-  └──── log/feedback ┘
-```
-
-- **Sense:** RPE, sleep, HRV, bodyweight, equipment, available time, logged food, camera joint data.
-- **Decide:** readiness score, per-muscle recovery, session compression, load prescription, protein gap.
-- **Adapt:** swap movements, adjust load/sets/rest, re-plan tomorrow, surface one cue at a time.
-
-The differentiator is not a longer feature list. It is that **inputs change the prescription immediately**, visibly, and explainably.
-
----
-
-## Feature map
-
-| Pillar | In the demo |
+| Document | What it covers |
 | --- | --- |
-| **Adaptive training** | Readiness model from sleep/HRV/soreness; load multiplier; RPE-driven next-set suggestion; “how much time do you have?” compression into supersets with trimmed rest; same-pattern equipment swaps mid-session |
-| **Zero-friction logging** | Optimistic set completion, weight/rep steppers, previous-set ghosts, rest timer, plate breakdown, natural-language and voice parsing (“bench 185 for 8 at RPE 7”), undo, auto PR celebration |
-| **Form intelligence** | Simulated 17-joint squat/bench/deadlift analysis: rep count, depth, torso angle, knee valgus, bar path, tempo, scored rubric, prioritized cues, attach-to-session |
-| **Recovery** | Per-muscle fatigue decay from volume × intensity × recency, front/back body map, “train what's ready” next-session logic |
-| **Nutrition** | Macro ring, water, meal log; photo-to-macro confirmation flow with regional foods; protein-gap generator that builds the smallest meal that closes the day; targets feed the coach |
-| **Progress** | e1RM and volume trends, bodyweight/waist/body-fat, strength standards by sex/bodyweight, level/XP/streak, canvas-rendered Instagram-ready PR cards with native share |
-| **Social** | Posts, comments, likes, follows, live check-ins, gym occupancy radar, leaderboard, joined challenges and streaks |
-| **Coach** | Deterministic, data-grounded chat: cites readiness, protein remaining, recovery, next session and your equipment; quick prompts; persisted history |
-| **Platform** | Responsive app shell, dark premium design system, server actions, typed Drizzle schema, seeded demo, marketing site, auth + session cookie, settings |
+| [Build plan](PLAN.md) | Milestones, status, risks, and next steps |
+| [Product requirements](docs/03-prd.md) | Personas, jobs to be done, requirements, and acceptance criteria |
+| [Architecture](docs/04-architecture.md) | Current demo topology and production service boundaries |
+| [Data model](docs/05-data-model.md) | Entities, indexes, retention, and migrations |
+| [Adaptive systems](docs/06-ai-systems.md) | Readiness, recovery, training adaptation, form flow, and coach |
+| [Design system](docs/07-design-system.md) | Visual tokens, typography, components, motion, and accessibility |
+| [Roadmap](docs/08-roadmap.md) | Product and engineering direction |
+| [Pricing strategy](docs/09-gtm-pricing.md) | Plans, pricing, acquisition, and retention assumptions |
+
+## 🔎 Demo behavior and boundaries
+
+Forge includes real application flows and seeded records, with some capabilities intentionally represented as product demos:
+
+- Fitness sign-in uses a demo session flow; production authentication and account security are documented as future architecture.
+- Form-check metrics and pose feedback use a deterministic demo analysis. The camera preview remains on the device.
+- Food photo recognition and macro suggestions use a curated demo flow; external nutrition provider connections are not configured by default.
+- The Forge Coach uses deterministic responses grounded in the athlete’s saved training data.
+- Fitness demo records are local SQLite data. CRM figures and seeded accounts are demonstration records.
+- CRM payment, messaging, and storage adapters need service credentials for live provider behavior.
+
+This keeps the current experience clear while leaving the deeper implementation notes in the product and architecture documents.
 
 ---
 
-## Stack
-
-| Layer | Choice | Why |
-| --- | --- | --- |
-| UI | Next.js 16 (App Router, Turbopack), React 19, TypeScript | Server components for data-heavy screens, client islands only where interaction demands it |
-| Styling | Tailwind CSS v4 + CSS custom tokens | Fast, consistent design system without a component-library look |
-| Data | SQLite + Drizzle ORM + `better-sqlite3` | Zero-setup demo; SQL-first schema that ports cleanly to Postgres |
-| Charts/art | Hand-built SVG + canvas | No chart bundle; full control of the visual language; PR card is a real PNG export |
-| Icons | Lucide | Consistent 1.5px stroke system |
-| Fonts | Bricolage Grotesque · Inter · JetBrains Mono (`next/font`) | Editorial display, neutral UI, numeric/mono labels |
-| Mutations | React server actions + `revalidatePath` | No hand-written API layer for the demo; progressive-enhancement friendly |
-| Auth | Signed-in user in httpOnly cookie (`forge_uid`) | Demo-only shortcut; production design in `docs/04-architecture.md` |
-
-No `framer-motion`, no `recharts`, no UI kit. The polish is CSS, SVG and interaction design.
-
----
-
-## Architecture (demo)
-
-```mermaid
-flowchart LR
-  B[Browser] -->|RSC / server actions| N[Next.js 16]
-  N --> Q[lib/queries.ts<br/>workspace aggregation]
-  N --> E[lib/engine.ts<br/>readiness · recovery · compression]
-  N --> C[lib/coach.ts<br/>deterministic coach]
-  Q --> D[(SQLite / Drizzle)]
-  E --> D
-  C --> D
-  N -->|canvas PNG| S[Web Share / download]
-```
-
-`getWorkspace(userId)` assembles the athlete's world in one place: user, program, active workout, sets, metrics, nutrition, PRs, social graph, challenges, coach history. Pages stay thin; engine functions stay pure and testable.
-
-Production topology, service boundaries, queues, caching and security are specified in [`docs/04-architecture.md`](docs/04-architecture.md).
-
----
-
-## Project layout
-
-```
-app/
-├── src/
-│   ├── app/
-│   │   ├── page.tsx                 # marketing site
-│   │   ├── login/page.tsx
-│   │   ├── actions.ts               # all server actions
-│   │   └── app/                     # authenticated product
-│   │       ├── page.tsx             # dashboard
-│   │       ├── train/               # plan · live session · summary
-│   │       ├── nutrition/  progress/  social/
-│   │       ├── exercises/  programs/  coach/
-│   │       └── form-check/  settings/
-│   ├── components/                  # ui, charts, body map, feature clients
-│   ├── db/                          # schema, client, 532-line seed
-│   └── lib/                         # engine, queries, auth, coach, date, utils
-├── drizzle.config.ts
-└── forge.db                         # generated local database
-```
-
-~12.6k lines of TypeScript/TSX in `src`.
-
----
-
-## Scripts
-
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Dev server (Turbopack) |
-| `npm run build` | Production build + type check |
-| `npm run start` | Serve production build |
-| `npx drizzle-kit push --force` | Apply schema to SQLite |
-| `npx tsx src/db/seed.ts` | Reset + seed demo data |
-
-Seeding is idempotent: it clears and rebuilds demo rows.
-
----
-
-## Design principles
-
-1. **The number is the hero.** Weight, reps, readiness, protein left — typography does the work; decoration stays quiet.
-2. **One cue, not a report.** Form feedback surfaces the highest-leverage fix, then evidence.
-3. **Never punish a missed session.** Compression and swaps preserve the stimulus instead of breaking the streak.
-4. **Evidence over vibes.** Every adaptive claim shows its inputs (“sleep debt detected”, “last RPE 7.5”).
-5. **Local-first privacy.** Camera video never leaves the device; the demo database is a file you own.
-6. **Accessible by default.** Semantic controls, focus-visible rings, `aria-label`s on icon buttons, reduced-motion respect, contrast-checked text.
-
-Full tokens, type scale and component rules: [`docs/07-design-system.md`](docs/07-design-system.md).
-
----
-
-## Research & documentation
-
-| Document | Contents |
-| --- | --- |
-| [`PLAN.md`](PLAN.md) | Build plan, milestone status, risks, next steps |
-| [`docs/01-market-research.md`](docs/01-market-research.md) | Market size, segments, trends, competitor teardown, whitespace |
-| [`docs/02-competitive-matrix.md`](docs/02-competitive-matrix.md) | Feature-by-feature matrix and positioning |
-| [`docs/03-prd.md`](docs/03-prd.md) | Personas, jobs-to-be-done, requirements, acceptance criteria |
-| [`docs/04-architecture.md`](docs/04-architecture.md) | Demo vs. production architecture, APIs, realtime, security, scale |
-| [`docs/05-data-model.md`](docs/05-data-model.md) | ERD, tables, indexes, retention, migrations |
-| [`docs/06-ai-systems.md`](docs/06-ai-systems.md) | Readiness, recovery, autoregulation, vision, LLM coach, evaluation |
-| [`docs/07-design-system.md`](docs/07-design-system.md) | Tokens, typography, components, motion, accessibility |
-| [`docs/08-roadmap.md`](docs/08-roadmap.md) | 18-month product and engineering roadmap |
-| [`docs/09-gtm-pricing.md`](docs/09-gtm-pricing.md) | Segments, pricing, acquisition, retention, unit economics |
-| [`docs/10-research-repos.md`](docs/10-research-repos.md) | Learnings from 8 open-source repos + licensing notes |
-
----
-
-## Licensing & provenance
-
-Forge is an original implementation. Eight open-source gym/nutrition projects were cloned into `_research/` for feature analysis only; no code was copied.
-
-- **Permissive (MIT):** GymFlow, gymcoach, lyftr, laragym.
-- **Copyleft:** wger and openGym are **AGPL-3.0**; OpenNutriTracker is **GPL-3.0**. Studying behavior is fine; incorporating code would force copyleft obligations on the network service.
-- **Custom:** GYM-One has a restrictive custom license (no integration/rebranding). Treated as reference only.
-
-Details per repo: [`docs/10-research-repos.md`](docs/10-research-repos.md).
-
----
-
-## Known demo limitations
-
-- Auth is a demo cookie; there is no password, OAuth, email verification or rate limiting.
-- Camera analysis is a deterministic simulation of the pose pipeline, not a trained model. The webcam feed is real and local; joint inference is mocked.
-- Food scanning uses a curated regional food set and a simulated recognition step; barcode/OCR and nutrition-provider integration are production work.
-- AI coach replies are deterministic templates over real data, not an LLM call. Production guardrails and tool-calling design are documented.
-- Social features are single-instance SQLite with optimistic UI; no websocket fan-out, moderation queue or object storage.
-- Units: storage is kilograms; the settings preference is persisted but not yet applied across every display.
-- SQLite is intentionally not concurrent-write scalable. Postgres/Redis/ClickHouse migration is specified, not implemented.
-
-These are scoped demo boundaries, not hidden claims. The docs separate “working now” from “production path”.
-
----
-
-**Forge v1.0 · Show up. Level up.**
+<p align="center">
+  <strong>Built with care by Lokesh.</strong><br />
+  <sub>Forge Fitness · Forge CRM · Train with intent. Know what comes next.</sub>
+</p>

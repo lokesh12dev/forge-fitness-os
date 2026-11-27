@@ -230,6 +230,26 @@ model Organization {
   loyaltyAccounts LoyaltyAccount[]
   loyaltyLedgers  LoyaltyLedger[]
   referralRewards ReferralReward[]
+  classTypes      ClassType[]
+  classSessions   ClassSession[]
+  classBookings   ClassBooking[]
+  trainerProfiles TrainerProfile[]
+  ptSessions      PtSession[]
+  workoutTemplates WorkoutDietTemplate[]
+  planAssignments MemberPlanAssignment[]
+  inventoryItems  InventoryItem[]
+  posSales        PosSale[]
+  purchaseOrders  PurchaseOrder[]
+  lockers         LockerUnit[]
+  equipmentAssets EquipmentAsset[]
+  staffShifts     StaffShift[]
+  npsFeedbacks    MemberFeedbackNps[]
+  scheduledReports ScheduledReport[]
+  aiLogs          AiAssistantLog[]
+  importJobs      MigrationImportJob[]
+  apiKeys         ApiKey[]
+  webhookSubs     WebhookSubscription[]
+  dpdpJobs        DataExportDeletionJob[]
 }
 
 model Branch {
@@ -280,6 +300,20 @@ model Branch {
   loyaltyAccounts LoyaltyAccount[]
   loyaltyLedgers  LoyaltyLedger[]
   referralRewards ReferralReward[]
+  classSessions   ClassSession[]
+  classBookings   ClassBooking[]
+  trainerProfiles TrainerProfile[]
+  ptSessions      PtSession[]
+  planAssignments MemberPlanAssignment[]
+  inventoryItems  InventoryItem[]
+  posSales        PosSale[]
+  purchaseOrders  PurchaseOrder[]
+  lockers         LockerUnit[]
+  equipmentAssets EquipmentAsset[]
+  staffShifts     StaffShift[]
+  npsFeedbacks    MemberFeedbackNps[]
+  scheduledReports ScheduledReport[]
+  importJobs      MigrationImportJob[]
 
   @@unique([orgId, code])
   @@index([orgId])
@@ -324,6 +358,14 @@ model User {
   ownedLeads           Lead[]
   assignedLeadTasks    LeadTask[]
   assignedInboxThreads InboxThread[]
+  trainerProfiles      TrainerProfile[]
+  classSessionsLed     ClassSession[]
+  ptSessionsTrained    PtSession[]
+  posSalesMade         PosSale[]
+  staffShifts          StaffShift[]
+  trainingPlansCreated WorkoutDietTemplate[]
+  planAssignmentsLed   MemberPlanAssignment[]
+  aiAssistantLogs      AiAssistantLog[]
 }
 
 model OrgMembership {
@@ -465,6 +507,13 @@ model Member {
   loyaltyEntries  LoyaltyLedger[]
   rewardsEarned   ReferralReward[] @relation("ReferrerRewards")
   rewardsFromSelf ReferralReward[] @relation("ReferredMemberRewards")
+  classBookings   ClassBooking[]
+  ptSessions      PtSession[]
+  planAssignments MemberPlanAssignment[]
+  posSales        PosSale[]
+  lockers         LockerUnit[]
+  npsFeedbacks    MemberFeedbackNps[]
+  dpdpJobs        DataExportDeletionJob[]
 
   @@unique([orgId, memberCode])
   @@unique([orgId, qrToken])
@@ -1181,4 +1230,391 @@ model ReferralReward {
   referred Member       @relation("ReferredMemberRewards", fields: [referredMemberId], references: [id], onDelete: Cascade)
 
   @@index([orgId, referrerMemberId])
+}
+
+/* ─────────────────────────── PHASE 3: OPERATIONS ─────────────────────────── */
+
+model ClassType {
+  id                 String   @id @default(cuid())
+  orgId              String
+  name               String
+  category           String
+  defaultDurationMin Int      @default(50)
+  defaultCapacity    Int      @default(20)
+  noShowFeePaise     Int      @default(25000)
+  cutoffMinutes      Int      @default(120)
+  colorTag           String   @default("BLUE")
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+
+  org      Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sessions ClassSession[]
+
+  @@unique([orgId, name])
+}
+
+model ClassSession {
+  id            String   @id @default(cuid())
+  orgId         String
+  branchId      String
+  classTypeId   String
+  trainerId     String
+  title         String
+  studioRoom    String   @default("Main Studio")
+  startsAt      DateTime
+  endsAt        DateTime
+  capacity      Int
+  cutoffMinutes Int      @default(120)
+  status        String   @default("SCHEDULED")
+  createdAt     DateTime @default(now())
+
+  org       Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch    Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  classType ClassType      @relation(fields: [classTypeId], references: [id], onDelete: Cascade)
+  trainer   User           @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  bookings  ClassBooking[]
+
+  @@index([orgId, branchId, startsAt])
+}
+
+model ClassBooking {
+  id          String    @id @default(cuid())
+  orgId       String
+  branchId    String
+  sessionId   String
+  memberId    String
+  status      String    @default("BOOKED") // BOOKED | WAITLISTED | CHECKED_IN | CANCELLED | NO_SHOW
+  waitlistPos Int?
+  bookedAt    DateTime  @default(now())
+  checkedInAt DateTime?
+  cancelledAt DateTime?
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch  Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  member  Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, memberId])
+  @@index([orgId, branchId, status])
+}
+
+model TrainerProfile {
+  id                 String   @id @default(cuid())
+  orgId              String
+  branchId           String
+  userId             String   @unique
+  specialties        String[]
+  bio                String
+  baseRetainerPaise  Int      @default(3500000)
+  ptSessionRatePaise Int      @default(150000)
+  commissionBps      Int      @default(3500) // 35% of PT fee
+  availabilityJson   Json?
+  isActive           Boolean  @default(true)
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, branchId])
+}
+
+model PtSession {
+  id              String   @id @default(cuid())
+  orgId           String
+  branchId        String
+  trainerId       String
+  memberId        String
+  scheduledAt     DateTime
+  durationMin     Int      @default(60)
+  status          String   @default("SCHEDULED") // SCHEDULED | COMPLETED | NO_SHOW | CANCELLED
+  sessionFeePaise Int      @default(150000)
+  commissionPaise Int      @default(52500)
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch  Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  trainer User         @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  member  Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, branchId, scheduledAt])
+}
+
+model WorkoutDietTemplate {
+  id             String   @id @default(cuid())
+  orgId          String
+  name           String
+  goal           String
+  dietType       String   @default("VEG") // VEG | EGG | NON_VEG | JAIN | VEGAN
+  caloriesTarget Int      @default(2200)
+  proteinGrams   Int      @default(140)
+  workoutsJson   Json
+  mealsJson      Json
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  org         Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy   User                   @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  assignments MemberPlanAssignment[]
+
+  @@index([orgId, dietType])
+}
+
+model MemberPlanAssignment {
+  id         String    @id @default(cuid())
+  orgId      String
+  branchId   String
+  memberId   String
+  templateId String
+  trainerId  String
+  syncToken  String    @unique
+  syncedAt   DateTime?
+  createdAt  DateTime  @default(now())
+
+  org      Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch   Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member   Member              @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  template WorkoutDietTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  trainer  User                @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, memberId])
+}
+
+model InventoryItem {
+  id             String   @id @default(cuid())
+  orgId          String
+  branchId       String
+  sku            String
+  name           String
+  category       String   // SUPPLEMENTS | APPAREL | BEVERAGE | ACCESSORIES
+  unitPricePaise Int
+  costPaise      Int
+  gstRateBps     Int      @default(1800)
+  stockQty       Int      @default(0)
+  reorderLevel   Int      @default(5)
+  supplierName   String
+  isActive       Boolean  @default(true)
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, branchId, sku])
+}
+
+model PosSale {
+  id            String   @id @default(cuid())
+  orgId         String
+  branchId      String
+  memberId      String?
+  invoiceNumber String
+  itemsJson     Json
+  subtotalPaise Int
+  gstPaise      Int
+  totalPaise    Int
+  method        String   @default("UPI")
+  soldById      String
+  soldAt        DateTime @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member Member?      @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  soldBy User         @relation(fields: [soldById], references: [id], onDelete: Cascade)
+
+  @@index([orgId, branchId, soldAt])
+}
+
+model PurchaseOrder {
+  id           String    @id @default(cuid())
+  orgId        String
+  branchId     String
+  poNumber     String
+  supplierName String
+  status       String    @default("ORDERED") // DRAFT | ORDERED | RECEIVED
+  itemsJson    Json
+  totalPaise   Int
+  orderedAt    DateTime  @default(now())
+  receivedAt   DateTime?
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, poNumber])
+}
+
+model LockerUnit {
+  id               String    @id @default(cuid())
+  orgId            String
+  branchId         String
+  code             String
+  size             String    @default("MEDIUM")
+  status           String    @default("AVAILABLE") // AVAILABLE | ASSIGNED | MAINTENANCE
+  assignedMemberId String?
+  expiresAt        DateTime?
+
+  org            Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch         Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  assignedMember Member?      @relation(fields: [assignedMemberId], references: [id], onDelete: SetNull)
+
+  @@unique([orgId, branchId, code])
+}
+
+model EquipmentAsset {
+  id               String    @id @default(cuid())
+  orgId            String
+  branchId         String
+  assetCode        String
+  name             String
+  zone             String
+  brand            String
+  warrantyUntil    DateTime? @db.Date
+  status           String    @default("OPERATIONAL") // OPERATIONAL | NEEDS_SERVICE | OUT_OF_ORDER
+  lastServicedAt   DateTime? @db.Date
+  nextServiceDue   DateTime? @db.Date
+  maintenanceNotes String?
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, branchId, assetCode])
+}
+
+model StaffShift {
+  id           String    @id @default(cuid())
+  orgId        String
+  branchId     String
+  userId       String
+  shiftDate    DateTime  @db.Date
+  startTime    String
+  endTime      String
+  roleLabel    String
+  status       String    @default("SCHEDULED") // SCHEDULED | CLOCKED_IN | CLOCKED_OUT
+  handoverNote String?
+  clockedInAt  DateTime?
+  clockedOutAt DateTime?
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, branchId, shiftDate])
+}
+
+model MemberFeedbackNps {
+  id        String   @id @default(cuid())
+  orgId     String
+  branchId  String
+  memberId  String
+  npsScore  Int
+  category  String
+  comment   String
+  createdAt DateTime @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  member Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+}
+
+/* ─────────────────────────── PHASE 4: INTELLIGENCE & ADMIN ─────────────────────────── */
+
+model ScheduledReport {
+  id                   String    @id @default(cuid())
+  orgId                String
+  branchId             String?
+  name                 String
+  reportType           String
+  cadence              String    // DAILY_9PM | WEEKLY_MON | MONTHLY_1ST
+  recipientPhoneOrEmail String
+  lastSentAt           DateTime?
+  isActive             Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+}
+
+model AiAssistantLog {
+  id              String   @id @default(cuid())
+  orgId           String
+  userId          String
+  prompt          String
+  response        String
+  citationsJson   Json
+  draftActionJson Json?
+  approvalStatus  String   @default("SUGGESTED") // SUGGESTED | APPROVED | DISMISSED
+  tokensUsed      Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+}
+
+model MigrationImportJob {
+  id             String   @id @default(cuid())
+  orgId          String
+  branchId       String
+  sourcePlatform String   // CSV | GYMDESK | MINDBODY | HEVY
+  entityType     String   // MEMBERS | PLANS
+  mode           String   // DRY_RUN | COMMITTED
+  totalRows      Int
+  validRows      Int
+  errorRows      Int
+  summaryJson    Json
+  createdAt      DateTime @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  orgId      String
+  name       String
+  keyPrefix  String
+  keyHash    String    @unique
+  scopes     String[]
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model WebhookSubscription {
+  id             String    @id @default(cuid())
+  orgId          String
+  targetUrl      String
+  events         String[]
+  secretPreview  String
+  isActive       Boolean   @default(true)
+  lastDeliveryAt DateTime?
+  createdAt      DateTime  @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model DataExportDeletionJob {
+  id            String   @id @default(cuid())
+  orgId         String
+  memberId      String
+  kind          String   // DPDP_EXPORT | DPDP_ERASURE
+  status        String   // COMPLETED | ANONYMIZED
+  requestedById String
+  createdAt     DateTime @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  member Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
 }

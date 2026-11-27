@@ -7,16 +7,24 @@ import { clsx } from "clsx";
 import {
   Award,
   Building2,
+  CalendarDays,
+  ClipboardList,
+  Clock,
   CreditCard,
+  Dumbbell,
+  FileBarChart,
   LayoutGrid,
   LogOut,
   Menu,
   MessageSquare,
   Moon,
+  Package,
   Plus,
   QrCode,
   Search,
   Settings,
+  Sliders,
+  Sparkles,
   Sun,
   Tag,
   Target,
@@ -124,16 +132,24 @@ export function CrmShell({
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
 
   const navItems = [
-    { href: "/app", label: "TODAY.", icon: LayoutGrid, show: true },
+    { href: "/app", label: "TODAY.", icon: LayoutGrid, show: role !== "MEMBER" },
     { href: "/app/members", label: "MEMBERS", icon: Users, show: hasPermission(role, "members:read") },
     { href: "/app/leads", label: "LEADS", icon: Target, show: hasPermission(role, "leads:read") || hasPermission(role, "leads:roi") },
     { href: "/app/inbox", label: "INBOX", icon: MessageSquare, show: hasPermission(role, "inbox:read") || hasPermission(role, "campaigns:broadcast") },
     { href: "/app/automations", label: "AUTOMATE", icon: Workflow, show: hasPermission(role, "automations:manage") },
     { href: "/app/retention", label: "RETENTION", icon: TrendingDown, show: hasPermission(role, "retention:read") },
     { href: "/app/loyalty", label: "LOYALTY", icon: Award, show: hasPermission(role, "loyalty:read") },
+    { href: "/app/classes", label: "CLASSES", icon: CalendarDays, show: hasPermission(role, "classes:read") && role !== "MEMBER" },
+    { href: "/app/trainers", label: "TRAINERS", icon: Dumbbell, show: hasPermission(role, "trainers:read") || hasPermission(role, "trainers:payroll") },
+    { href: "/app/training-plans", label: "WORKOUTS", icon: ClipboardList, show: hasPermission(role, "training:read") },
+    { href: "/app/inventory", label: "INVENTORY", icon: Package, show: hasPermission(role, "inventory:read") || hasPermission(role, "equipment:manage") },
+    { href: "/app/staff", label: "SHIFTS", icon: Clock, show: hasPermission(role, "staff:shifts") },
     { href: "/app/plans", label: "PLANS", icon: Tag, show: hasPermission(role, "plans:read") },
     { href: "/app/billing", label: "BILLING", icon: CreditCard, show: canAccessFinance(role) },
     { href: "/app/checkin", label: "CHECK-IN", icon: QrCode, show: hasPermission(role, "checkin:operate") },
+    { href: "/app/reports", label: "REPORTS", icon: FileBarChart, show: hasPermission(role, "reports:read") || hasPermission(role, "reports:export") },
+    { href: "/app/ai", label: "AI COPILOT", icon: Sparkles, show: hasPermission(role, "ai:use") },
+    { href: "/app/settings", label: "ADMIN", icon: Sliders, show: hasPermission(role, "settings:admin") },
     { href: "/onboarding", label: "SETUP", icon: Settings, show: role === "OWNER" },
   ].filter((item) => item.show);
 
@@ -163,7 +179,7 @@ export function CrmShell({
             </div>
           </Link>
 
-          <nav className="p-3 space-y-2" aria-label="Primary CRM Navigation">
+          <nav className="p-3 space-y-2 max-h-[calc(100vh-200px)] overflow-y-auto" aria-label="Primary CRM Navigation">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive =
@@ -357,7 +373,7 @@ export function CrmShell({
           onClick={() => setMobileMoreOpen(false)}
         >
           <div
-            className="w-full bg-[var(--bg-paper)] text-[var(--fg-ink)] border-t-[3px] border-[var(--border-ink)] p-4"
+            className="w-full max-h-[75vh] overflow-y-auto bg-[var(--bg-paper)] text-[var(--fg-ink)] border-t-[3px] border-[var(--border-ink)] p-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">

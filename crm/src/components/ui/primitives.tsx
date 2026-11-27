@@ -61,7 +61,9 @@ export function StatTile({
         <p
           className={clsx(
             "font-headline tabular-nums leading-[0.95]",
-            typeof value === "string" && value.length >= 7 && !value.startsWith("₹")
+            String(value).length >= 9
+              ? "text-[22px] sm:text-[24px] xl:text-[28px]"
+              : String(value).length >= 7
               ? "text-[24px] lg:text-[28px] xl:text-[32px]"
               : "text-[32px] md:text-[40px] break-words"
           )}

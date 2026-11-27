@@ -35,6 +35,20 @@ export type CrmPermission =
   | "retention:outreach"
   | "loyalty:read"
   | "loyalty:manage"
+  | "classes:read"
+  | "classes:manage"
+  | "trainers:read"
+  | "trainers:payroll"
+  | "training:read"
+  | "training:write"
+  | "inventory:read"
+  | "inventory:pos"
+  | "equipment:manage"
+  | "staff:shifts"
+  | "reports:read"
+  | "reports:export"
+  | "ai:use"
+  | "settings:admin"
   | "portal:self";
 
 const ROLE_PERMISSIONS: Record<CrmRole, ReadonlySet<CrmPermission>> = {
@@ -68,6 +82,20 @@ const ROLE_PERMISSIONS: Record<CrmRole, ReadonlySet<CrmPermission>> = {
     "retention:outreach",
     "loyalty:read",
     "loyalty:manage",
+    "classes:read",
+    "classes:manage",
+    "trainers:read",
+    "trainers:payroll",
+    "training:read",
+    "training:write",
+    "inventory:read",
+    "inventory:pos",
+    "equipment:manage",
+    "staff:shifts",
+    "reports:read",
+    "reports:export",
+    "ai:use",
+    "settings:admin",
   ]),
   MANAGER: new Set<CrmPermission>([
     "dashboard:ops",
@@ -97,6 +125,19 @@ const ROLE_PERMISSIONS: Record<CrmRole, ReadonlySet<CrmPermission>> = {
     "retention:outreach",
     "loyalty:read",
     "loyalty:manage",
+    "classes:read",
+    "classes:manage",
+    "trainers:read",
+    "trainers:payroll",
+    "training:read",
+    "training:write",
+    "inventory:read",
+    "inventory:pos",
+    "equipment:manage",
+    "staff:shifts",
+    "reports:read",
+    "reports:export",
+    "ai:use",
   ]),
   FRONTDESK: new Set<CrmPermission>([
     "dashboard:ops",
@@ -117,8 +158,15 @@ const ROLE_PERMISSIONS: Record<CrmRole, ReadonlySet<CrmPermission>> = {
     "retention:outreach",
     "loyalty:read",
     "loyalty:manage",
+    "classes:read",
+    "classes:manage",
+    "trainers:read",
+    "inventory:read",
+    "inventory:pos",
+    "staff:shifts",
+    "reports:read",
   ]),
-  // Trainer strictly has NO finance/billing/ROI/broadcasts/automations permissions
+  // Trainer strictly has NO club finance/payroll/inventory-POS/admin settings permissions
   TRAINER: new Set<CrmPermission>([
     "dashboard:ops",
     "members:read",
@@ -126,8 +174,14 @@ const ROLE_PERMISSIONS: Record<CrmRole, ReadonlySet<CrmPermission>> = {
     "checkin:operate",
     "leads:read",
     "retention:read",
+    "classes:read",
+    "trainers:read",
+    "training:read",
+    "training:write",
+    "reports:read",
+    "ai:use",
   ]),
-  // Accountant is strictly read-only on finance, billing, ROI, expenses & audit
+  // Accountant is strictly read-only on finance, billing, payroll, GSTR/reports, ROI, expenses & audit
   ACCOUNTANT: new Set<CrmPermission>([
     "dashboard:finance",
     "plans:read",
@@ -135,8 +189,11 @@ const ROLE_PERMISSIONS: Record<CrmRole, ReadonlySet<CrmPermission>> = {
     "expenses:read",
     "audit:read",
     "leads:roi",
+    "trainers:payroll",
+    "reports:read",
+    "reports:export",
   ]),
-  MEMBER: new Set<CrmPermission>(["portal:self"]),
+  MEMBER: new Set<CrmPermission>(["portal:self", "classes:read"]),
 };
 
 export class AuthorizationError extends Error {

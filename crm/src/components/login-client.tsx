@@ -16,6 +16,7 @@ const DEMO_ACCOUNTS = [
   { role: "FRONTDESK (BLR)", email: "frontdesk.blr@ironworks.in", phone: "+91 98450 10003" },
   { role: "TRAINER (No Finance)", email: "trainer.blr@ironworks.in", phone: "+91 98450 10004" },
   { role: "ACCOUNTANT (RO Finance)", email: "accountant@ironworks.in", phone: "+91 98450 10005" },
+  { role: "MEMBER (PWA Portal)", email: "member@ironworks.in", phone: "+91 98450 10006" },
 ];
 
 export function LoginClient() {
@@ -40,7 +41,7 @@ export function LoginClient() {
         setErrorMsg(res.error);
         return;
       }
-      router.push("/app");
+      router.push(res.role === "MEMBER" ? "/portal" : "/app");
       router.refresh();
     });
   };
@@ -67,7 +68,7 @@ export function LoginClient() {
         setErrorMsg(res.error);
         return;
       }
-      router.push("/app");
+      router.push(res.role === "MEMBER" ? "/portal" : "/app");
       router.refresh();
     });
   };

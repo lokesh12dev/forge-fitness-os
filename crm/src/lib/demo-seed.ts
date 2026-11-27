@@ -298,7 +298,14 @@ export async function seedFullDemoWorkspace(prisma: PrismaClient, targetOrgId?: 
     const branch = isBranchA ? branchA : branchB;
     const fn = FIRST_NAMES[Math.floor(rand() * FIRST_NAMES.length)]!;
     const ln = LAST_NAMES[Math.floor(rand() * LAST_NAMES.length)]!;
-    const fullName = i === 0 ? "Aarav Sharma" : i === 1 ? "Rhea Kapoor" : `${fn} ${ln}`;
+    const fullName =
+      i === 0
+        ? "Aarav Sharma"
+        : i === 1
+        ? "Rhea Kapoor"
+        : i === 2
+        ? "Karan Sharma"
+        : `${fn} ${ln}`;
 
     let status: MemberStatus;
     let expiryOffsetDays: number;
@@ -357,8 +364,8 @@ export async function seedFullDemoWorkspace(prisma: PrismaClient, targetOrgId?: 
       memberCode: `FM-${String(1001 + i)}`,
       qrToken: `FORGEQR-${org.slug.slice(0, 3).toUpperCase()}-${String(1001 + i)}`,
       fullName,
-      phone: `+91 9${String(100000000 + i * 1497).slice(0, 9)}`,
-      email: `${fn.toLowerCase()}.${ln.toLowerCase()}.${i + 1}@example.in`,
+      phone: i === 2 ? "+91 98450 10006" : `+91 9${String(100000000 + i * 1497).slice(0, 9)}`,
+      email: i === 2 ? "member@ironworks.in" : `${fn.toLowerCase()}.${ln.toLowerCase()}.${i + 1}@example.in`,
       stateCode: branch.stateCode,
       emergencyName: `Family Contact (${ln})`,
       emergencyPhone: `+91 98${String(10000000 + i * 733).slice(0, 8)}`,
@@ -1089,6 +1096,305 @@ export async function seedFullDemoWorkspace(prisma: PrismaClient, targetOrgId?: 
       { orgId: org.id, branchId: branchA.id, title: "Confirm 6 PM Strength Quarterly trial walkthrough", priority: "MEDIUM", dueDate: now, assignedToId: ownerUserId, status: "OPEN" },
       { orgId: org.id, branchId: branchB.id, title: "Verify GSTIN details for Corporate Batch #4", priority: "MEDIUM", dueDate: now, assignedToId: ownerUserId, status: "OPEN" },
     ],
+  });
+
+  // 8. PHASE 3: Classes, Trainers/PT, Training & Indian Diet Plans, POS/Inventory/Lockers/Equipment, Shifts, NPS
+  const classTypes = await Promise.all([
+    prisma.classType.create({ data: { orgId: org.id, name: "MetCon Barbell conditioning", category: "STRENGTH", defaultDurationMin: 50, defaultCapacity: 16, noShowFeePaise: 25000, cutoffMinutes: 120, colorTag: "RED" } }),
+    prisma.classType.create({ data: { orgId: org.id, name: "Athletic Mobility & Kettlebell", category: "MOBILITY", defaultDurationMin: 45, defaultCapacity: 18, noShowFeePaise: 20000, cutoffMinutes: 90, colorTag: "BLUE" } }),
+    prisma.classType.create({ data: { orgId: org.id, name: "Combat HIIT Engine", category: "CARDIO", defaultDurationMin: 45, defaultCapacity: 14, noShowFeePaise: 25000, cutoffMinutes: 120, colorTag: "YELLOW" } }),
+    prisma.classType.create({ data: { orgId: org.id, name: "Olympic Lifting Clinic", category: "OLYMPIC", defaultDurationMin: 60, defaultCapacity: 10, noShowFeePaise: 30000, cutoffMinutes: 180, colorTag: "INK" } }),
+  ]);
+
+  const classSessionData = [];
+  for (let s = 0; s < 8; s++) {
+    const branch = s % 2 === 0 ? branchA : branchB;
+    const ct = classTypes[s % classTypes.length]!;
+    const trainerId = trainerUserIds[s % trainerUserIds.length] ?? ownerUserId;
+    const start = new Date(now.getTime() + (s + 1) * 3 * 3600_000);
+    const end = new Date(start.getTime() + ct.defaultDurationMin * 60_000);
+    const createdSession = await prisma.classSession.create({
+      data: {
+        orgId: org.id,
+        branchId: branch.id,
+        classTypeId: ct.id,
+        trainerId,
+        title: ct.name,
+        studioRoom: s % 2 === 0 ? "Turf Bay A" : "Rig Floor B",
+        startsAt: start,
+        endsAt: end,
+        capacity: s === 1 ? 3 : ct.defaultCapacity, // s===1 full capacity for live waitlist demo!
+        cutoffMinutes: ct.cutoffMinutes,
+        status: "SCHEDULED",
+      },
+    });
+    classSessionData.push(createdSession);
+
+    const bookCount = s === 1 ? 5 : 4;
+    for (let b = 0; b < bookCount; b++) {
+      const m = memberRowsData[s * 6 + b]!;
+      await prisma.classBooking.create({
+        data: {
+          orgId: org.id,
+          branchId: branch.id,
+          sessionId: createdSession.id,
+          memberId: m.id,
+          status: s === 1 && b >= 3 ? "WAITLISTED" : "BOOKED",
+          waitlistPos: s === 1 && b >= 3 ? b - 2 : null,
+        },
+      });
+    }
+  }
+
+  // Trainer Profiles & PT Sessions (all 6 trainers)
+  const specialtySets = [
+    ["Powerlifting", "Hypertrophy", "Knee Rehab"],
+    ["Kettlebell Sport", "Fat Loss", "Mobility"],
+    ["Marathon Endurance", "Olympic Lifts", "HIIT"],
+    ["Strength & Conditioning", "Posture Correctives"],
+    ["Functional Fitness", "Boxing Conditioning"],
+    ["Pilates Core", "Pre/Post Natal Strength"],
+  ];
+  for (let t = 0; t < trainerUserIds.length; t++) {
+    const tUserId = trainerUserIds[t]!;
+    const tBranch = t < 3 ? branchA : branchB;
+    await prisma.trainerProfile.create({
+      data: {
+        orgId: org.id,
+        branchId: tBranch.id,
+        userId: tUserId,
+        specialties: specialtySets[t % specialtySets.length]!,
+        bio: "Certified CSCS & Ironworks senior performance coach.",
+        baseRetainerPaise: 3200000 + t * 250000,
+        ptSessionRatePaise: 150000,
+        commissionBps: 3500 + (t % 2) * 500,
+        availabilityJson: { morning: "06:00-11:00", evening: "16:30-21:00", offDay: t % 2 === 0 ? "Sunday" : "Wednesday" },
+      },
+    });
+
+    for (let ps = 0; ps < 6; ps++) {
+      const mem = memberRowsData[(t * 9 + ps) % 50]!;
+      const status = ps < 4 ? "COMPLETED" : "SCHEDULED";
+      await prisma.ptSession.create({
+        data: {
+          orgId: org.id,
+          branchId: tBranch.id,
+          trainerId: tUserId,
+          memberId: mem.id,
+          scheduledAt: new Date(now.getTime() + (ps < 4 ? -(ps + 1) : ps - 2) * 86_400_000),
+          durationMin: 60,
+          status,
+          sessionFeePaise: 150000,
+          commissionPaise: Math.round((150000 * (3500 + (t % 2) * 500)) / 10_000),
+          notes: status === "COMPLETED" ? "Progressive overload logged + RPE 8 clean bar path." : "Upcoming hypertrophy block session.",
+        },
+      });
+    }
+  }
+
+  // Indian Diet + Workout Plans & Member Assignments (FORGE /app Sync Bridge)
+  const tplVeg = await prisma.workoutDietTemplate.create({
+    data: {
+      orgId: org.id,
+      name: "Vegetarian Hypertrophy 4-Day Push/Pull",
+      goal: "Lean Muscle (+4kg)",
+      dietType: "VEG",
+      caloriesTarget: 2450,
+      proteinGrams: 145,
+      workoutsJson: [
+        { day: "Mon - Upper Push", exercises: ["Barbell Bench Press 4x6", "Incline DB Press 3x10", "Overhead Press 3x8"] },
+        { day: "Tue - Lower Squat", exercises: ["Back Squat 4x6", "Bulgarian Split Squat 3x10", "Calf Raise 4x15"] },
+        { day: "Thu - Upper Pull", exercises: ["Weighted Pull-Up 4x6", "Pendlay Row 3x8", "Face Pull 3x15"] },
+        { day: "Fri - Posterior & Arms", exercises: ["Romanian Deadlift 4x8", "Walking Lunge 3x12", "Hammer Curl 3x12"] },
+      ],
+      mealsJson: [
+        { slot: "Breakfast", items: "Paneer Bhurji (150g low-fat) + 2 Besan Chilla + Chai", macros: "42g P / 48g C / 16g F" },
+        { slot: "Lunch", items: "Rajma Masala + 150g Steamed Jeera Rice + Greek Curd", macros: "36g P / 72g C / 10g F" },
+        { slot: "Post-Workout", items: "1.5 Scoop Whey Isolate + Banana + Almonds", macros: "38g P / 28g C / 6g F" },
+        { slot: "Dinner", items: "150g Soya Chunk / Tofu Sabzi + 2 Multigrain Roti + Salad", macros: "32g P / 44g C / 10g F" },
+      ],
+      createdById: trainerUserIds[0] ?? ownerUserId,
+    },
+  });
+
+  const tplNonVeg = await prisma.workoutDietTemplate.create({
+    data: {
+      orgId: org.id,
+      name: "Non-Veg Fat Loss & Strength Recomp",
+      goal: "Fat Loss (-8kg)",
+      dietType: "NON_VEG",
+      caloriesTarget: 1950,
+      proteinGrams: 160,
+      workoutsJson: [
+        { day: "Full Body A", exercises: ["Trap Bar Deadlift 4x5", "Dumbbell Press 3x10", "Sled Push 6x20m"] },
+        { day: "Full Body B", exercises: ["Goblet Squat 4x10", "Chest Supported Row 4x10", "Assault Bike 12m EMOM"] },
+      ],
+      mealsJson: [
+        { slot: "Breakfast", items: "4 Egg Whites + 2 Whole Eggs Bhurji + 2 Sourdough Toast", macros: "34g P / 30g C / 14g F" },
+        { slot: "Lunch", items: "200g Grilled Tandoori Chicken Breast + Dal + Quinoa", macros: "52g P / 45g C / 9g F" },
+        { slot: "Dinner", items: "200g Pan-Seared Fish / Chicken Tikka + Sautéed Broccoli & Beans", macros: "48g P / 20g C / 11g F" },
+      ],
+      createdById: trainerUserIds[0] ?? ownerUserId,
+    },
+  });
+
+  await prisma.workoutDietTemplate.create({
+    data: {
+      orgId: org.id,
+      name: "Jain Sattvic High-Protein Mobility",
+      goal: "Functional Mobility & Core",
+      dietType: "JAIN",
+      caloriesTarget: 2100,
+      proteinGrams: 120,
+      workoutsJson: [
+        { day: "Core & Mobility", exercises: ["KB Turkish Get-Up 3x5", "Dead Bug 3x12", "Landmine Press 4x10"] },
+      ],
+      mealsJson: [
+        { slot: "Breakfast", items: "Moong Dal Chilla + Low-Fat Paneer 120g + Almond Milk", macros: "32g P / 38g C / 12g F" },
+        { slot: "Lunch", items: "Toor Dal + Jeera Rice + Methi Thepla + Dahi", macros: "28g P / 65g C / 10g F" },
+        { slot: "Post-Workout", items: "Pea & Brown Rice Plant Protein + Chia Seeds", macros: "30g P / 12g C / 5g F" },
+        { slot: "Dinner", items: "Roasted Mung Sprouts Bowl + 100g Tofu + Phulka", macros: "30g P / 40g C / 8g F" },
+      ],
+      createdById: trainerUserIds[0] ?? ownerUserId,
+    },
+  });
+
+  for (let a = 0; a < 10; a++) {
+    const mem = memberRowsData[a]!;
+    await prisma.memberPlanAssignment.create({
+      data: {
+        orgId: org.id,
+        branchId: mem.branchId,
+        memberId: mem.id,
+        templateId: a % 2 === 0 ? tplVeg.id : tplNonVeg.id,
+        trainerId: mem.assignedTrainerId,
+        syncToken: `FRGSYNC-${mem.memberCode}`,
+        syncedAt: new Date(now.getTime() - a * 3600_000),
+      },
+    });
+  }
+
+  // Inventory SKUs, Purchase Orders, POS Retail Sales
+  const skuDefs = [
+    { sku: "WHEY-ISO-1KG", name: "Hydro Whey Isolate 1kg Chocolate", cat: "SUPPLEMENTS", price: 349900, cost: 240000, qty: 24, min: 6, sup: "MuscleBlaze Wholesale" },
+    { sku: "CREATINE-250G", name: "Creapure Micronized Creatine 250g", cat: "SUPPLEMENTS", price: 119900, cost: 72000, qty: 3, min: 8, sup: "MuscleBlaze Wholesale" },
+    { sku: "GRIP-BELT-PRO", name: "10mm Suede Lever Lifting Belt", cat: "ACCESSORIES", price: 429900, cost: 260000, qty: 9, min: 3, sup: "USN Strength Gear" },
+    { sku: "SHAKE-POST-WOD", name: "Cold Protein Shake + Espresso Bar", cat: "BEVERAGE", price: 24900, cost: 9500, qty: 65, min: 15, sup: "Ironworks Cafe Kitchen" },
+    { sku: "TEE-HEAVY-BLK", name: "FORGE Oversized Pump Cover Black", cat: "APPAREL", price: 129900, cost: 65000, qty: 4, min: 10, sup: "Tirupur Athletics Knits" },
+  ];
+  for (const branch of [branchA, branchB]) {
+    for (const sk of skuDefs) {
+      await prisma.inventoryItem.create({
+        data: {
+          orgId: org.id,
+          branchId: branch.id,
+          sku: `${sk.sku}-${branch.code}`,
+          name: sk.name,
+          category: sk.cat,
+          unitPricePaise: sk.price,
+          costPaise: sk.cost,
+          gstRateBps: 1800,
+          stockQty: sk.qty,
+          reorderLevel: sk.min,
+          supplierName: sk.sup,
+        },
+      });
+    }
+    await prisma.purchaseOrder.create({
+      data: {
+        orgId: org.id,
+        branchId: branch.id,
+        poNumber: `PO-${branch.code}-1001`,
+        supplierName: "MuscleBlaze Wholesale",
+        status: "ORDERED",
+        itemsJson: [{ sku: `CREATINE-250G-${branch.code}`, name: "Creapure Micronized Creatine 250g", qty: 20, costPaise: 72000 }],
+        totalPaise: 1440000,
+      },
+    });
+    await prisma.posSale.create({
+      data: {
+        orgId: org.id,
+        branchId: branch.id,
+        memberId: memberRowsData[0]!.id,
+        invoiceNumber: `POS-${branch.code}-001`,
+        itemsJson: [{ name: "Hydro Whey Isolate 1kg Chocolate", qty: 1, unitPricePaise: 349900 }],
+        subtotalPaise: 349900,
+        gstPaise: 62982,
+        totalPaise: 412882,
+        method: "UPI",
+        soldById: frontDeskUserId,
+      },
+    });
+  }
+
+  // Lockers & Equipment Assets
+  for (let l = 1; l <= 12; l++) {
+    const code = `L-${String(l).padStart(2, "0")}`;
+    await prisma.lockerUnit.create({
+      data: {
+        orgId: org.id,
+        branchId: branchA.id,
+        code,
+        size: l <= 4 ? "LARGE" : "MEDIUM",
+        status: l <= 5 ? "ASSIGNED" : l === 12 ? "MAINTENANCE" : "AVAILABLE",
+        assignedMemberId: l <= 5 ? memberRowsData[l - 1]!.id : null,
+        expiresAt: l <= 5 ? new Date(now.getTime() + 45 * 86_400_000) : null,
+      },
+    });
+  }
+
+  await prisma.equipmentAsset.createMany({
+    data: [
+      { orgId: org.id, branchId: branchA.id, assetCode: "EQ-RACK-01", name: "Eleiko Competition Combo Rack #1", zone: "Barbell Platform", brand: "Eleiko", warrantyUntil: new Date("2028-06-30"), status: "OPERATIONAL", lastServicedAt: new Date(now.getTime() - 25 * 86_400_000), nextServiceDue: new Date(now.getTime() + 65 * 86_400_000), maintenanceNotes: "Knurling cleaned & safety pins inspected." },
+      { orgId: org.id, branchId: branchA.id, assetCode: "EQ-TREAD-04", name: "Woodway Curve Non-Motorized Runner", zone: "Conditioning Turf", brand: "Woodway", warrantyUntil: new Date("2027-09-15"), status: "NEEDS_SERVICE", lastServicedAt: new Date(now.getTime() - 100 * 86_400_000), nextServiceDue: new Date(now.getTime() - 5 * 86_400_000), maintenanceNotes: "Bearing tension check overdue — minor belt squeak at sprint." },
+      { orgId: org.id, branchId: branchA.id, assetCode: "EQ-CABLE-02", name: "Technogym Dual Adjustable Pulley", zone: "Cable Stack", brand: "Technogym", warrantyUntil: new Date("2027-12-31"), status: "OPERATIONAL", lastServicedAt: new Date(now.getTime() - 14 * 86_400_000), nextServiceDue: new Date(now.getTime() + 75 * 86_400_000) },
+      { orgId: org.id, branchId: branchB.id, assetCode: "EQ-BIKE-03", name: "Rogue Echo Assault Bike #3", zone: "MetCon Rig", brand: "Rogue", warrantyUntil: new Date("2028-01-20"), status: "OUT_OF_ORDER", lastServicedAt: new Date(now.getTime() - 40 * 86_400_000), nextServiceDue: now, maintenanceNotes: "Console LCD cracked; replacement bracket ordered." },
+    ],
+  });
+
+  // Staff Shifts & Member NPS Feedback
+  await prisma.staffShift.createMany({
+    data: [
+      { orgId: org.id, branchId: branchA.id, userId: frontDeskUserId, shiftDate: now, startTime: "06:00", endTime: "14:00", roleLabel: "Morning Reception", status: "CLOCKED_IN", handoverNote: "All lockers L-01..L-05 keys audited; Petty cash opening ₹5,000.", clockedInAt: new Date(now.getTime() - 3 * 3600_000) },
+      { orgId: org.id, branchId: branchA.id, userId: trainerUserIds[0] ?? ownerUserId, shiftDate: now, startTime: "06:30", endTime: "15:00", roleLabel: "Floor Head Coach", status: "CLOCKED_IN", handoverNote: "Evening MetCon barbells staged on Turf Bay A.", clockedInAt: new Date(now.getTime() - 2 * 3600_000) },
+      { orgId: org.id, branchId: branchA.id, userId: managerUserId, shiftDate: now, startTime: "10:00", endTime: "19:00", roleLabel: "Branch Manager", status: "SCHEDULED" },
+    ],
+  });
+
+  await prisma.memberFeedbackNps.createMany({
+    data: [
+      { orgId: org.id, branchId: branchA.id, memberId: memberRowsData[0]!.id, npsScore: 10, category: "CLASSES", comment: "MetCon Barbell programming is world-class; shower pressure could be slightly hotter." },
+      { orgId: org.id, branchId: branchA.id, memberId: memberRowsData[2]!.id, npsScore: 9, category: "COACHES", comment: "Vikram fixed my squat depth cues on day two!" },
+      { orgId: org.id, branchId: branchB.id, memberId: memberRowsData[3]!.id, npsScore: 6, category: "EQUIPMENT", comment: "Echo Bike #3 screen needs repair — love the studio space otherwise." },
+    ],
+  });
+
+  // 9. PHASE 4: Scheduled Reports, AI Logs, Import Job, API Key & Webhook Subscription
+  await prisma.scheduledReport.createMany({
+    data: [
+      { orgId: org.id, branchId: null, name: "Owner Daily 9 PM Collection & Check-In Pulse", reportType: "DAILY_COLLECTION", cadence: "DAILY_9PM", recipientPhoneOrEmail: "+91 98450 10001" },
+      { orgId: org.id, branchId: null, name: "Monthly GSTR-1 Chartered Accountant Pack", reportType: "GSTR1_REGISTER", cadence: "MONTHLY_1ST", recipientPhoneOrEmail: "accountant@ironworks.in" },
+    ],
+  });
+
+  await prisma.apiKey.create({
+    data: {
+      orgId: org.id,
+      name: "FORGE Member Training App Sync Key",
+      keyPrefix: "frg_live_2026",
+      keyHash: "demo_sha256_seeded_member_sync_key",
+      scopes: ["members:sync", "workouts:read", "checkins:webhook"],
+    },
+  });
+
+  await prisma.webhookSubscription.create({
+    data: {
+      orgId: org.id,
+      targetUrl: "http://localhost:3000/api/crm-webhook",
+      events: ["plan.assigned", "member.renewed", "checkin.logged"],
+      secretPreview: "whsec_••••a8f2",
+      isActive: true,
+    },
   });
 
   await prisma.organization.update({

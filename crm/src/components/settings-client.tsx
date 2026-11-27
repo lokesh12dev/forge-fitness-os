@@ -292,8 +292,8 @@ export function SettingsClient({
                   <input id="org-upi" className="bauhaus-input font-mono" value={orgUpi} onChange={(e) => setOrgUpi(e.target.value)} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <div className="col-span-2">
                   <label htmlFor="org-gst" className="bauhaus-label block mb-1">{"// GSTIN"}</label>
                   <input id="org-gst" className="bauhaus-input font-mono" value={orgGstin} onChange={(e) => setOrgGstin(e.target.value)} />
                 </div>
@@ -310,29 +310,52 @@ export function SettingsClient({
                   <input id="org-bps" type="number" className="bauhaus-input" value={orgGstBps} onChange={(e) => setOrgGstBps(Number(e.target.value) || 0)} />
                 </div>
               </div>
-              <Button
-                variant="primary"
-                disabled={pending}
-                onClick={() => startTransition(async () => {
-                  await updateOrgProfileSettingsAction({
-                    name: orgName,
-                    gstin: orgGstin,
-                    legalStateCode: orgState,
-                    upiVpa: orgUpi,
-                    invoicePrefix: orgPrefix,
-                    defaultGstBps: orgGstBps,
-                  });
-                  setToast({ msg: `Organization tax & UPI (${orgUpi}) settings saved!`, tone: "blue" });
-                  router.refresh();
-                })}
-              >
-                Save Org Profile &amp; UPI VPA
-              </Button>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <Button
+                  variant="primary"
+                  disabled={pending}
+                  onClick={() => startTransition(async () => {
+                    await updateOrgProfileSettingsAction({
+                      name: orgName,
+                      gstin: orgGstin,
+                      legalStateCode: orgState,
+                      upiVpa: orgUpi,
+                      invoicePrefix: orgPrefix,
+                      defaultGstBps: orgGstBps,
+                    });
+                    setToast({ msg: `Organization tax & UPI (${orgUpi}) settings saved!`, tone: "blue" });
+                    router.refresh();
+                  })}
+                >
+                  Save Org Profile &amp; UPI VPA
+                </Button>
+                <a
+                  href={`/enquire/${org.slug}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[12px] font-bold uppercase underline underline-offset-4 text-[#2B4BCC] hover:text-[#C8372B]"
+                >
+                  Open Walk-In Enquiry Page →
+                </a>
+              </div>
             </div>
 
             {/* Branch Upsert + GPS Geofence Editor */}
             <div className="bauhaus-card p-5 space-y-3">
-              <p className="bauhaus-label text-[#C8372B]">{"// ADD / UPDATE BRANCH & GPS GEOFENCE"}</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="bauhaus-label text-[#C8372B]">{"// ADD / UPDATE BRANCH & GPS GEOFENCE"}</p>
+                <select
+                  aria-label="Select branch to edit"
+                  className="bauhaus-input w-auto text-[12px]"
+                  value={selectedBranchEdit}
+                  onChange={(e) => handleSelectBranchForEdit(e.target.value)}
+                >
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.code}>Edit: {b.name} ({b.code})</option>
+                  ))}
+                  <option value="__NEW__">+ Create New Branch</option>
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="br-nm" className="bauhaus-label block mb-1">{"// BRANCH NAME"}</label>
@@ -367,7 +390,7 @@ export function SettingsClient({
               </div>
               <Button
                 variant="secondary"
-                disabled={pending}
+                disabled={pending || !brName.trim() || !brCode.trim()}
                 onClick={() => startTransition(async () => {
                   await upsertBranchWithGeoAction({
                     name: brName,
@@ -401,11 +424,49 @@ export function SettingsClient({
                   </p>
                 </div>
               ))}
-              <p className="bauhaus-label pt-2">{"// BRANCH HOLIDAYS"}</p>
+              <p className="bauhaus-label pt-2">{"// BRANCH HOLIDAYS (CRUD)"}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                <select aria-label="Holiday branch" className="bauhaus-input text-[12px]" value={holBranchId} onChange={(e) => setHolBranchId(e.target.value)}>
+                  {branches.map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}
+                </select>
+                <input aria-label="Holiday title" className="bauhaus-input text-[12px]" placeholder="Holiday Name" value={holTitle} onChange={(e) => setHolTitle(e.target.value)} />
+                <input aria-label="Holiday date" type="date" className="bauhaus-input text-[12px]" value={holDate} onChange={(e) => setHolDate(e.target.value)} />
+                <Button
+                  variant="primary"
+                  density="dense"
+                  disabled={pending}
+                  onClick={() => startTransition(async () => {
+                    const res = await upsertBranchHolidayAction({ branchId: holBranchId, title: holTitle, date: holDate });
+                    if (!res.ok) {
+                      setToast({ msg: res.error, tone: "red" });
+                      return;
+                    }
+                    setToast({ msg: `Added holiday: ${holTitle} (${holDate}).`, tone: "blue" });
+                    router.refresh();
+                  })}
+                >
+                  + Holiday
+                </Button>
+              </div>
               {holidays.map((h) => (
-                <div key={h.id} className="text-[13px] flex justify-between border-b border-[var(--border-ink)]/25 py-1">
+                <div key={h.id} className="text-[13px] flex items-center justify-between border-b border-[var(--border-ink)]/25 py-1.5 gap-2">
                   <span>{h.title} ({h.branchName})</span>
-                  <span className="font-tabular font-bold">{h.date}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-tabular font-bold">{h.date}</span>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      aria-label={`Delete holiday ${h.title}`}
+                      onClick={() => startTransition(async () => {
+                        await deleteBranchHolidayAction(h.id);
+                        setToast({ msg: `Removed holiday ${h.title}.`, tone: "ink" });
+                        router.refresh();
+                      })}
+                      className="border border-[var(--border-ink)] bg-[var(--bg-surface)] text-[#C8372B] p-1 hover:bg-[#C8372B] hover:text-[#FFFFFF]"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
